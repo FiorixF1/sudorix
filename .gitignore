@@ -1,0 +1,6 @@
+*.o
+*_wasm.js
+*.wasm
+
+bin/
+build/
