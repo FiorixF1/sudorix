@@ -23,7 +23,7 @@
 //   out[4] = fromPrev (1 = popped from previously-filled queue, 0 = generated this iteration)
 //
 // State is managed by the caller for sudorix_solver_hint.
-// State is managed by WASM for 
+// State is managed by WASM for sudorix_solver_full and sudorix_solver_next_step.
 // sudorix_solver_next_step requires an initial call to sudorix_solver_init_board.
 //
 // Notes:
@@ -32,571 +32,28 @@
 //   - JS must initialize the board with sudorix_solver_init_board before using sudorix_solver_next_step.
 //   - JS does not need to manage the state when using sudorix_solver_full and sudorix_solver_next_step other than UI purpose.
 
-#include "solver.hpp"
-
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
-
-#include <queue>
-#include <deque>
-#include <set>
 #include <functional>
-#include <stdexcept>
+
+#include "solver.hpp"
+#include "SudokuBoard.hpp"
+#include "EventQueue.hpp"
+#include "utils.hpp"
 
 #ifdef __EMSCRIPTEN__
+  // WASM
   #include <emscripten/emscripten.h>
 #else
+  // native
   #include <cstdio>
   #define EMSCRIPTEN_KEEPALIVE
   #define emscripten_log(x, fmt, ...) printf(fmt, ##__VA_ARGS__);
 #endif
 
-// =========================================================
-// Precomputed indices (rows / cols / boxes)
-// =========================================================
-
-static constexpr int ROW_CELLS[9][9] = {
-    { 0, 1, 2, 3, 4, 5, 6, 7, 8 },
-    { 9, 10, 11, 12, 13, 14, 15, 16, 17 },
-    { 18, 19, 20, 21, 22, 23, 24, 25, 26 },
-    { 27, 28, 29, 30, 31, 32, 33, 34, 35 },
-    { 36, 37, 38, 39, 40, 41, 42, 43, 44 },
-    { 45, 46, 47, 48, 49, 50, 51, 52, 53 },
-    { 54, 55, 56, 57, 58, 59, 60, 61, 62 },
-    { 63, 64, 65, 66, 67, 68, 69, 70, 71 },
-    { 72, 73, 74, 75, 76, 77, 78, 79, 80 }
-  };
-
-static constexpr int COL_CELLS[9][9] = {
-    { 0, 9, 18, 27, 36, 45, 54, 63, 72 },
-    { 1, 10, 19, 28, 37, 46, 55, 64, 73 },
-    { 2, 11, 20, 29, 38, 47, 56, 65, 74 },
-    { 3, 12, 21, 30, 39, 48, 57, 66, 75 },
-    { 4, 13, 22, 31, 40, 49, 58, 67, 76 },
-    { 5, 14, 23, 32, 41, 50, 59, 68, 77 },
-    { 6, 15, 24, 33, 42, 51, 60, 69, 78 },
-    { 7, 16, 25, 34, 43, 52, 61, 70, 79 },
-    { 8, 17, 26, 35, 44, 53, 62, 71, 80 }
-  };
-
-static constexpr int BOX_CELLS[9][9] = {
-    { 0, 1, 2, 9, 10, 11, 18, 19, 20 },
-    { 3, 4, 5, 12, 13, 14, 21, 22, 23 },
-    { 6, 7, 8, 15, 16, 17, 24, 25, 26 },
-    { 27, 28, 29, 36, 37, 38, 45, 46, 47 },
-    { 30, 31, 32, 39, 40, 41, 48, 49, 50 },
-    { 33, 34, 35, 42, 43, 44, 51, 52, 53 },
-    { 54, 55, 56, 63, 64, 65, 72, 73, 74 },
-    { 57, 58, 59, 66, 67, 68, 75, 76, 77 },
-    { 60, 61, 62, 69, 70, 71, 78, 79, 80 }
-  };
-
-static inline uint8_t idxRow(int idx) {
-  return (uint8_t)(idx / 9);
-}
-
-static inline uint8_t idxCol(int idx) {
-  return (uint8_t)(idx % 9);
-}
-
-static inline uint8_t idxBox(int idx) {
-  const uint8_t r = idxRow(idx);
-  const uint8_t c = idxCol(idx);
-  return (uint8_t)((r / 3) * 3 + (c / 3));
-}
-
-// =========================================================
-// Helpers (bitmasks)
-// =========================================================
-
-static inline uint16_t digitToBit(uint8_t d) {
-  // d: 1..9 -> bit (d-1)
-  return (uint16_t)(1u << (d - 1u));
-}
-
-static inline uint8_t countBits9(uint16_t mask) {
-  mask &= 0x1FFu;
-  // builtin popcount if available
-#if defined(__GNUC__) || defined(__clang__)
-  return (uint8_t)__builtin_popcount((unsigned)mask);
-#else
-  uint8_t c = 0;
-  while (mask) {
-    c += (mask & 1u);
-    mask >>= 1u;
-  }
-  return c;
-#endif
-}
-
-static inline uint8_t bitToDigitSingle(uint16_t mask) {
-  // assumes exactly one bit set (1..9)
-#if defined(__GNUC__) || defined(__clang__)
-  return (uint8_t)(__builtin_ctz((unsigned)mask) + 1u);
-#else
-  for (uint8_t d = 1; d <= 9; d++) {
-    if (mask & digitToBit(d)) {
-      return d;
-    }
-  }
-  return 0;
-#endif
-}
-
-// =========================================================
-// Events
-// =========================================================
-
-enum class EventType : uint8_t {
-  None = 0,
-  SetValue = 1,
-  RemoveCandidate = 2
-};
-
-enum class ReasonId : uint8_t {
-  Solver = 0,
-  FullHouse = 1,
-  NakedSingle = 2,
-  HiddenSingle = 3,
-  PointingPair = 4,
-  PointingTriple = 5,
-  LockedCandidates = 6
-};
-
-class Event
-{
-public:
-  EventType type;
-  uint8_t   idx;
-  uint8_t   digit;
-  ReasonId  reason;
-
-  bool operator<(const Event &other) const {
-    return this->getEventId() < other.getEventId();
-  }
-
-private:
-  friend class EventQueue;
-  uint32_t getEventId() const {
-    // make the event comparable by mapping it to a unique integer
-    return (static_cast<uint32_t>(this->type) & 0xFFu) |
-          ((static_cast<uint32_t>(this->idx) & 0xFFu) << 8) |
-          ((static_cast<uint32_t>(this->digit) & 0xFFu) << 16) ;
-  }
-};
-
-// =========================================================
-// Event queue (implementation avoids duplicates)
-// =========================================================
-
-class EventQueue
-{
-public:
-  EventQueue() = default;
-
-  // push solo se l'elemento non è già presente
-  // evita eventi duplicati nella stessa iterazione
-  bool push(const Event &x) {
-    if (s.find(x.getEventId()) != s.end()) {
-      return false;
-    }
-
-    q.push(x);
-    s.insert(x.getEventId());
-    return true;
-  }
-
-  // rimozione coerente queue + set
-  void pop() {
-    if (q.empty()) {
-      throw std::logic_error("EventQueue::pop() on empty queue");
-    }
-
-    const Event &front = q.front();
-    s.erase(front.getEventId());
-    q.pop();
-  }
-
-  const Event &front() const {
-    if (q.empty()) {
-      throw std::logic_error("EventQueue::front() on empty queue");
-    }
-
-    return q.front();
-  }
-
-  bool contains(const Event &x) const {
-    return s.find(x.getEventId()) != s.end();
-  }
-
-  std::size_t size() const noexcept {
-    return q.size();
-  }
-
-  bool empty() const noexcept {
-    return q.empty();
-  }
-
-private:
-  std::queue<Event> q;
-  std::set<uint32_t> s;
-};
-
-static EventQueue g_eventQueue;
-
-// =========================================================
-// SudokuCell / SudokuBoard
-// =========================================================
-
-class SudokuCell
-{
-public:
-  SudokuCell() : value(0), candMask(0) { }
-
-  // --- value ---
-  uint8_t getValue() const {
-    return value;
-  }
-
-  bool isSolved() const {
-    return value != 0;
-  }
-
-  void setValue(uint8_t digit) {
-    value = digit;
-    if (digit != 0) {
-      // When solved, keep only the digit bit as candidates.
-      candMask = digitToBit(digit);
-    }
-  }
-
-  void clearValue() {
-    value = 0;
-  }
-
-  // --- candidates ---
-  uint16_t getCandidateMask() const {
-    return (uint16_t)(candMask & 0x1FFu);
-  }
-
-  void setCandidateMask(uint16_t mask) {
-    candMask = (uint16_t)(mask & 0x1FFu);
-  }
-
-  bool hasCandidate(uint8_t digit) const {
-    return (getCandidateMask() & digitToBit(digit)) != 0;
-  }
-
-  uint8_t countCandidates() const {
-    return countBits9(getCandidateMask());
-  }
-
-  uint8_t getSingleCandidate() const {
-    const uint16_t m = getCandidateMask();
-    if (countBits9(m) == 1) {
-      return bitToDigitSingle(m);
-    }
-    return 0;
-  }
-
-  void enableCandidate(uint8_t digit) {
-    candMask |= digitToBit(digit);
-  }
-
-  bool disableCandidate(uint8_t digit) {
-    const uint16_t bit = digitToBit(digit);
-    const uint16_t before = getCandidateMask();
-    const uint16_t after = (uint16_t)(before & ~bit);
-    if (after != before) {
-      candMask = after;
-      return true;
-    }
-    return false;
-  }
-
-  bool toggleCandidate(uint8_t digit) {
-    const uint16_t bit = digitToBit(digit);
-    const bool wasOn = (candMask & bit) != 0;
-    candMask ^= bit;
-    return !wasOn;
-  }
-
-private:
-  uint8_t  value;     // 0..9
-  uint16_t candMask;  // 9-bit
-};
-
-class SudokuBoard
-{
-public:
-  // empty board
-  SudokuBoard() = default;
-
-  // only values, candidates are calculated automatically
-  int importFromString(const char *values) {
-    // parse: digits 1..9 are values; 0 or '.' are empty; ignore others
-    int tokens = 0;
-    for (int i = 0; values[i] != '\0'; i++) {
-      const char ch = values[i];
-      if (ch >= '1' && ch <= '9') {
-        // given
-        cells[i].setValue(ch - '0');
-        ++tokens;
-      } else if (ch == '0' || ch == '.') {
-        // empty
-        cells[i].setValue(0);
-        ++tokens;
-      } else {
-        // skip character
-        continue;
-      }
-
-      if (tokens == 81) {
-        break;
-      }
-    }
-
-    /* Sudoku incompleto se non ho 81 simboli riconosciuti (0-9 o '.') */
-    if (tokens < 81) {
-      return 0;
-    }
-
-    // calculate candidates
-    _recalcAllCandidatesFromValues();
-
-    return 1;
-  }
-
-  // values and candidates
-  int importFromBuffers(const uint8_t *values, const uint16_t *cands) {
-    // TODO: error handling
-    for (int i = 0; i < 81; i++) {
-      cells[i].setValue(values[i]);
-      // If JS provides candidates for solved cells too, keep them consistent anyway.
-      if (values[i] == 0) {
-        cells[i].setCandidateMask(cands[i]);
-      } else {
-        cells[i].setCandidateMask(digitToBit(values[i]));
-      }
-    }
-    return 1;
-  }
-
-  void exportToBuffers(uint8_t *values, uint16_t *cands) const {
-    for (int i = 0; i < 81; i++) {
-      values[i] = cells[i].getValue();
-      cands[i]  = cells[i].getCandidateMask();
-    }
-  }
-
-  // --- values API ---
-  uint8_t getValue(int idx) const {
-    return cells[idx].getValue();
-  }
-
-  bool isSolved(int idx) const {
-    return cells[idx].isSolved();
-  }
-
-  void setValue(int idx, uint8_t digit) {
-    cells[idx].setValue(digit);
-  }
-
-  void clearValue(int idx) {
-    cells[idx].clearValue();
-  }
-
-  // --- candidates API ---
-  uint16_t getCandidateMask(int idx) const {
-    return cells[idx].getCandidateMask();
-  }
-
-  void setCandidateMask(int idx, uint16_t mask) {
-    cells[idx].setCandidateMask(mask);
-  }
-
-  bool hasCandidate(int idx, uint8_t digit) const {
-    return cells[idx].hasCandidate(digit);
-  }
-
-  uint8_t countCandidates(int idx) const {
-    return cells[idx].countCandidates();
-  }
-
-  uint8_t getSingleCandidate(int idx) const {
-    return cells[idx].getSingleCandidate();
-  }
-
-  void disableCandidate(int idx, uint8_t digit) {
-    cells[idx].disableCandidate(digit);
-  }
-
-  // --- events API ---
-  void applySetValue(int idx, int digit) {
-    // Set + Auto clear 
-    setValue(idx, digit);
-    autoClearPeersAfterPlacement(idx, digit);
-  }
-
-  void applyRemoveCandidate(int idx, int digit) {
-    // Remove + Auto place if applicable
-    disableCandidate(idx, digit);
-    int only = getSingleCandidate(idx);
-    if (only) {
-      return applySetValue(idx, only);
-    }
-  }
-
-  void autoClearPeersAfterPlacement(int idx, int digit) {
-    int r = idxRow(idx);
-    int c = idxCol(idx);
-    int b = idxBox(idx);
-
-    // Rimuove digit dai candidati dei peers non risolti.
-    for (int k = 0; k < 9; k++) {
-      int ir = ROW_CELLS[r][k];
-      if (ir != idx && !isSolved(ir)) {
-        disableCandidate(ir, digit);
-      }
-      int ic = COL_CELLS[c][k];
-      if (ic != idx && !isSolved(ic)) {
-        disableCandidate(ic, digit);
-      }
-      int ib = BOX_CELLS[b][k];
-      if (ib != idx && !isSolved(ib)) {
-        disableCandidate(ib, digit);
-      }
-    }
-  }
-
-  bool isCompletelySolved() {
-    for (const SudokuCell &cell : cells) {
-      if (!cell.isSolved()) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-private:
-  // We keep a local copy (owned) so that solver techniques can mutate freely.
-  SudokuCell cells[81];
-
-  static inline bool isValidIndex(int idx) {
-    return idx >= 0 && idx < 81;
-  }
-
-  bool _recalcAllCandidatesFromValues() {
-    // Reset completo
-    for (int i = 0; i < 81; i++) {
-      setCandidateMask(i, 0);
-    }
-
-    // Precompute delle mask "used" per ogni unità
-    uint16_t rowUsed[9] = {0};
-    uint16_t colUsed[9] = {0};
-    uint16_t boxUsed[9] = {0};
-
-    // 1) Scansione valori e costruzione used masks + verifica conflitti
-    for (int idx = 0; idx < 81; idx++) {
-      int value = getValue(idx);
-      if (value == 0) {
-        continue;
-      }
-      if (value < 1 || value > 9) {
-        return false;
-      }
-
-      uint16_t mask = digitToBit(value);
-      int r = idxRow(idx);
-      int c = idxCol(idx);
-      int b = idxBox(idx);
-
-      if ((rowUsed[r] & mask) != 0) {
-        return false;
-      }
-      if ((colUsed[c] & mask) != 0) {
-        return false;
-      }
-      if ((boxUsed[b] & mask) != 0) {
-        return false;
-      }
-
-      rowUsed[r] = static_cast<uint16_t>(rowUsed[r] | mask);
-      colUsed[c] = static_cast<uint16_t>(colUsed[c] | mask);
-      boxUsed[b] = static_cast<uint16_t>(boxUsed[b] | mask);
-
-      // Cella risolta: candidato unico
-      setCandidateMask(idx, mask);
-    }
-
-    // 2) Celle vuote: candidati = NOT(used in row/col/box)
-    constexpr uint16_t ALL = 0x01FF; // 9 bit a 1
-    for (int idx = 0; idx < 81; idx++) {
-      if (isSolved(idx)) {
-        continue;
-      }
-
-      int r = idxRow(idx);
-      int c = idxCol(idx);
-      int b = idxBox(idx);
-
-      uint16_t used = static_cast<uint16_t>(rowUsed[r] | colUsed[c] | boxUsed[b]);
-      uint16_t allowed = static_cast<uint16_t>(ALL & ~used);
-
-      // Se una cella vuota non ha candidati, griglia inconsistente
-      if (allowed == 0) {
-        return false;
-      }
-
-      setCandidateMask(idx, allowed);
-    }
-
-    return true;
-  }
-};
-
 static SudokuBoard g_sudokuBoard;
-
-// =========================================================
-// Technique helpers
-// =========================================================
-
-static void enqueueSetValue(SudokuBoard &board, int idx, uint8_t digit, ReasonId reason) {
-  if (digit == 0) {
-    return;
-  }
-  if (board.isSolved(idx)) {
-    return;
-  }
-
-  Event ev;
-  ev.type = EventType::SetValue;
-  ev.idx = (uint32_t)idx;
-  ev.digit = (uint32_t)digit;
-  ev.reason = reason;
-  g_eventQueue.push(ev);
-}
-
-static void enqueueRemoveCandidate(SudokuBoard &board, int idx, uint8_t digit, ReasonId reason) {
-  if (digit == 0) {
-    return;
-  }
-  if (board.isSolved(idx)) {
-    return;
-  }
-  if (!board.hasCandidate(idx, digit)) {
-    return;
-  }
-
-  Event ev;
-  ev.type = EventType::RemoveCandidate;
-  ev.idx = (uint32_t)idx;
-  ev.digit = (uint32_t)digit;
-  ev.reason = reason;
-  g_eventQueue.push(ev);
-}
+static EventQueue g_eventQueue;
 
 // =========================================================
 // Techniques
@@ -627,7 +84,7 @@ static void techFullHouse(SudokuBoard &board) {
       const uint16_t missingMask = (uint16_t)(0x1FFu & ~present);
       if (countBits9(missingMask) == 1) {
         missingDigit = bitToDigitSingle(missingMask);
-        enqueueSetValue(board, emptyIdx, missingDigit, ReasonId::FullHouse);
+        g_eventQueue.enqueueSetValue(board, emptyIdx, missingDigit, ReasonId::FullHouse);
       }
     }
   };
@@ -658,7 +115,7 @@ static void techHiddenSingles(SudokuBoard &board) {
         }
       }
       if (foundIdx >= 0) {
-        enqueueSetValue(board, foundIdx, digit, ReasonId::HiddenSingle);
+        g_eventQueue.enqueueSetValue(board, foundIdx, digit, ReasonId::HiddenSingle);
       }
     }
   };
@@ -724,7 +181,7 @@ static void techLockedCandidates(SudokuBoard &board) {
           if (idxBox(idx) == (uint8_t)b) {
             continue;
           }
-          enqueueRemoveCandidate(board, idx, digit, reasonId);
+          g_eventQueue.enqueueRemoveCandidate(board, idx, digit, reasonId);
         }
       }
 
@@ -744,7 +201,7 @@ static void techLockedCandidates(SudokuBoard &board) {
           if (idxBox(idx) == (uint8_t)b) {
             continue;
           }
-          enqueueRemoveCandidate(board, idx, digit, reasonId);
+          g_eventQueue.enqueueRemoveCandidate(board, idx, digit, reasonId);
         }
       }
     }
@@ -758,7 +215,7 @@ static void techNakedSingles(SudokuBoard &board) {
     }
     const uint8_t d = board.getSingleCandidate(i);
     if (d != 0) {
-      enqueueSetValue(board, i, d, ReasonId::NakedSingle);
+      g_eventQueue.enqueueSetValue(board, i, d, ReasonId::NakedSingle);
     }
   }
 }
@@ -773,6 +230,7 @@ static constexpr TechniqueFn TECHNIQUES[] =
   &techNakedSingles
 };
 
+// shared by all interface functions
 static int dequeue_event(SudokuBoard &board, Event &out, uint32_t &fromPrev) {
   // 1) If queue already has pending events from a previous iteration, return one immediately.
   if (!g_eventQueue.empty()) {
@@ -825,8 +283,8 @@ static int dequeue_event(SudokuBoard &board, Event &out, uint32_t &fromPrev) {
 
 extern "C"
 {
-  // Solves an entire Sudoku given its initial representation in one shot
-  // Returns 0 in case of error, else 1
+  // Solves an entire Sudoku given its initial representation in one shot.
+  // Returns 0 in case of error, else 1.
   EMSCRIPTEN_KEEPALIVE
   int sudorix_solver_full(const char *in81, char *out81) {
     if (in81 == nullptr || out81 == nullptr) {
@@ -879,8 +337,8 @@ extern "C"
     return 1;
   }
 
-  // Initializes the board for a step-by-step solution
-  // Returns 0 in case of error, else 1
+  // Initializes the board for a step-by-step solution.
+  // Returns 0 in case of error, else 1.
   EMSCRIPTEN_KEEPALIVE
   int sudorix_solver_init_board(const char *in81) {
     if (in81 == nullptr) {
@@ -900,8 +358,8 @@ extern "C"
     return 1;
   }
 
-  // Performs and returns one step to solve the currently loaded board
-  // Returns 0 in case of error or no event is produced, else 1
+  // Performs and returns one step to solve the currently loaded board.
+  // Returns 0 in case of error or no event is produced, else 1.
   EMSCRIPTEN_KEEPALIVE
   int sudorix_solver_next_step(uint32_t *out) {
     if (out == nullptr) {
@@ -938,8 +396,8 @@ extern "C"
     }
   }
 
-  // Calculate and return one step to solve the board given as input (both values and candidates are given)
-  // Returns 0 in case of error or no event is produced, else 1
+  // Calculate and return one step to solve the board given as input (both values and candidates are given).
+  // Returns 0 in case of error or no event is produced, else 1.
   EMSCRIPTEN_KEEPALIVE
   int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out) {
     if (values == nullptr || cands == nullptr || out == nullptr) {
