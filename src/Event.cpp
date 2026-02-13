@@ -4,13 +4,18 @@
 // Events
 // =========================================================
 
-bool Event::operator<(const Event &other) const {
-  return this->getEventId() < other.getEventId();
+Event::Event() { }
+
+Event::Event(EventType type, ReasonId reason) : type(type), reason(reason) { }
+
+const std::vector<Operation> &Event::getOperations() {
+  return this->ops;
+};
+
+size_t Event::getNumberOfOperations() {
+  return this->ops.size();
 }
 
-uint32_t Event::getEventId() const {
-  // make the event comparable by mapping it to a unique integer
-  return (static_cast<uint32_t>(this->type) & 0xFFu) |
-        ((static_cast<uint32_t>(this->idx) & 0xFFu) << 8) |
-        ((static_cast<uint32_t>(this->digit) & 0xFFu) << 16) ;
+void Event::addOperation(uint8_t idx, uint8_t digit) {
+  ops.push_back({idx, digit});
 }

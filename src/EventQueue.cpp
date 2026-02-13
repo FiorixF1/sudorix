@@ -2,85 +2,41 @@
 #include <stdexcept>
 
 // =========================================================
-// Event queue (implementation avoids duplicates)
+// Event queue
 // =========================================================
 
 EventQueue::EventQueue() = default;
 
-// push solo se l'elemento non è già presente
-// evita eventi duplicati nella stessa iterazione
-bool EventQueue::push(const Event &x) {
-  if (s.find(x.getEventId()) != s.end()) {
+void EventQueue::enqueue(SudokuBoard &board, Event &event) {
+  // avoid adding empty events (it can happen as a result of the anti-duplication filter)
+  if (event.getNumberOfOperations() > 0) {
+    q.push(event);
+  }
+}
+
+bool EventQueue::dequeue(Event &ev) {
+  if (q.empty()) {
     return false;
   }
 
-  q.push(x);
-  s.insert(x.getEventId());
+  ev = q.front();
+  q.pop();
   return true;
 }
 
-// rimozione coerente queue + set
-void EventQueue::pop() {
+bool EventQueue::peek(Event &ev) const {
   if (q.empty()) {
-    throw std::logic_error("EventQueue::pop() on empty queue");
+    return false;
   }
 
-  const Event &front = q.front();
-  s.erase(front.getEventId());
-  q.pop();
+  ev = q.front();
+  return true;
 }
 
-const Event &EventQueue::front() const {
-  if (q.empty()) {
-    throw std::logic_error("EventQueue::front() on empty queue");
-  }
-
-  return q.front();
-}
-
-bool EventQueue::contains(const Event &x) const {
-  return s.find(x.getEventId()) != s.end();
-}
-
-std::size_t EventQueue::size() const noexcept {
+std::size_t EventQueue::size() const {
   return q.size();
 }
 
-bool EventQueue::empty() const noexcept {
+bool EventQueue::empty() const {
   return q.empty();
-}
-
-void EventQueue::enqueueSetValue(SudokuBoard &board, int idx, uint8_t digit, ReasonId reason) {
-  if (digit == 0) {
-    return;
-  }
-  if (board.isSolved(idx)) {
-    return;
-  }
-
-  Event ev;
-  ev.type = EventType::SetValue;
-  ev.idx = (uint32_t)idx;
-  ev.digit = (uint32_t)digit;
-  ev.reason = reason;
-  this->push(ev);
-}
-
-void EventQueue::enqueueRemoveCandidate(SudokuBoard &board, int idx, uint8_t digit, ReasonId reason) {
-  if (digit == 0) {
-    return;
-  }
-  if (board.isSolved(idx)) {
-    return;
-  }
-  if (!board.hasCandidate(idx, digit)) {
-    return;
-  }
-
-  Event ev;
-  ev.type = EventType::RemoveCandidate;
-  ev.idx = (uint32_t)idx;
-  ev.digit = (uint32_t)digit;
-  ev.reason = reason;
-  this->push(ev);
 }

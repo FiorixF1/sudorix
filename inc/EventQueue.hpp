@@ -2,7 +2,6 @@
 #define EVENT_QUEUE_H
 
 #include <queue>
-#include <set>
 #include "Event.hpp"
 #include "SudokuBoard.hpp"
 
@@ -11,25 +10,18 @@ class EventQueue
 public:
   EventQueue();
 
-  bool push(const Event &x);
+  void enqueue(SudokuBoard &board, Event &event);
 
-  void pop();
+  bool dequeue(Event &ev);
 
-  const Event &front() const;
+  bool peek(Event &) const;
 
-  bool contains(const Event &x) const;
+  std::size_t size() const;
 
-  std::size_t size() const noexcept;
-
-  bool empty() const noexcept;
-
-  void enqueueSetValue(SudokuBoard &board, int idx, uint8_t digit, ReasonId reason);
-
-  void enqueueRemoveCandidate(SudokuBoard &board, int idx, uint8_t digit, ReasonId reason);
+  bool empty() const;
 
 private:
   std::queue<Event> q;
-  std::set<uint32_t> s;
 };
 
 #endif // EVENT_QUEUE_H

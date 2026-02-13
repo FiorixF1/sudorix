@@ -4,8 +4,8 @@
 // Exported functions:
 //   int sudorix_solver_full(const char *in81, char *out81);
 //   int sudorix_solver_init_board(const char *in81);
-//   int sudorix_solver_next_step(uint32_t *out);
-//   int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out);
+//   int sudorix_solver_next_step(uint32_t *out, uint32_t out_words);
+//   int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out, uint32_t out_words);
 //
 // JS -> WASM contract:
 //   in81[81]   : char      (0 = empty, 1..9 = digit)
@@ -17,10 +17,10 @@
 //
 // Output buffer (out[5] as uint32_t):
 //   out[0] = type     (0 = none, 1 = setValue, 2 = removeCandidate)
-//   out[1] = idx      (0..80)
-//   out[2] = digit    (1..9)
-//   out[3] = reasonId (implementation-defined; mapped to label in JS)
-//   out[4] = fromPrev (1 = popped from previously-filled queue, 0 = generated this iteration)
+//   out[1] = reasonId (implementation-defined; mapped to label in JS)
+//   out[2] = fromPrev (1 = popped from previously-filled queue, 0 = generated this iteration)
+//   out[3] = count    (number of operations)
+//   out[4..]          (operations as 'count' pairs of cell and value)
 //
 // State is managed by the caller for sudorix_solver_hint.
 // State is managed by WASM for sudorix_solver_full and sudorix_solver_next_step.
@@ -50,6 +50,12 @@
   #include <cstdio>
   #define EMSCRIPTEN_KEEPALIVE
   #define emscripten_log(x, fmt, ...) printf(fmt, ##__VA_ARGS__);
+#endif
+
+#ifdef DEBUG
+  #define debug_log(fmt, ...) emscripten_log(EM_LOG_CONSOLE, fmt, ##__VA_ARGS__)
+#else
+  #define debug_log(fmt, ...)
 #endif
 
 static SudokuBoard g_sudokuBoard;
@@ -84,7 +90,9 @@ static void techFullHouse(SudokuBoard &board) {
       const uint16_t missingMask = (uint16_t)(0x1FFu & ~present);
       if (countBits9(missingMask) == 1) {
         missingDigit = bitToDigitSingle(missingMask);
-        g_eventQueue.enqueueSetValue(board, emptyIdx, missingDigit, ReasonId::FullHouse);
+        Event event(EventType::SetValue, ReasonId::FullHouse);
+        event.addOperation(emptyIdx, missingDigit);
+        g_eventQueue.enqueue(board, event);
       }
     }
   };
@@ -115,7 +123,9 @@ static void techHiddenSingles(SudokuBoard &board) {
         }
       }
       if (foundIdx >= 0) {
-        g_eventQueue.enqueueSetValue(board, foundIdx, digit, ReasonId::HiddenSingle);
+        Event event(EventType::SetValue, ReasonId::HiddenSingle);
+        event.addOperation(foundIdx, digit);
+        g_eventQueue.enqueue(board, event);
       }
     }
   };
@@ -176,13 +186,17 @@ static void techLockedCandidates(SudokuBoard &board) {
 
       if (sameRow) {
         // remove digit from row r0, excluding cells in this box
+        Event event(EventType::RemoveCandidate, reasonId);
         for (int k = 0; k < 9; k++) {
           const int idx = ROW_CELLS[r0][k];
           if (idxBox(idx) == (uint8_t)b) {
             continue;
           }
-          g_eventQueue.enqueueRemoveCandidate(board, idx, digit, reasonId);
+          if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
+            event.addOperation(idx, digit);
+          }
         }
+        g_eventQueue.enqueue(board, event);
       }
 
       const uint8_t c0 = idxCol(positions[0]);
@@ -196,13 +210,17 @@ static void techLockedCandidates(SudokuBoard &board) {
 
       if (sameCol) {
         // remove digit from column c0, excluding cells in this box
+        Event event(EventType::RemoveCandidate, reasonId);
         for (int k = 0; k < 9; k++) {
           const int idx = COL_CELLS[c0][k];
           if (idxBox(idx) == (uint8_t)b) {
             continue;
           }
-          g_eventQueue.enqueueRemoveCandidate(board, idx, digit, reasonId);
+          if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
+            event.addOperation(idx, digit);
+          }
         }
+        g_eventQueue.enqueue(board, event);
       }
     }
   }
@@ -215,7 +233,9 @@ static void techNakedSingles(SudokuBoard &board) {
     }
     const uint8_t d = board.getSingleCandidate(i);
     if (d != 0) {
-      g_eventQueue.enqueueSetValue(board, i, d, ReasonId::NakedSingle);
+      Event event(EventType::SetValue, ReasonId::NakedSingle);
+      event.addOperation(i, d);
+      g_eventQueue.enqueue(board, event);
     }
   }
 }
@@ -230,51 +250,128 @@ static constexpr TechniqueFn TECHNIQUES[] =
   &techNakedSingles
 };
 
-// shared by all interface functions
-static int dequeue_event(SudokuBoard &board, Event &out, uint32_t &fromPrev) {
-  // 1) If queue already has pending events from a previous iteration, return one immediately.
-  if (!g_eventQueue.empty()) {
-    const Event ev = g_eventQueue.front();
-    g_eventQueue.pop();
+static bool is_operation_applicable(SudokuBoard &board, EventType type, uint8_t idx, uint8_t digit) {
+  // you can set only an unsolved cell
+  if (type == EventType::SetValue) {
+    return !board.isSolved(idx) && digit != 0;
+  }
+  // you can remove only existing candidates from an unsolved cell
+  if (type == EventType::RemoveCandidate) {
+    return !board.isSolved(idx) && board.hasCandidate(idx, digit) && digit != 0;
+  }
+  return false;
+}
 
-    out.type = ev.type;
-    out.idx = ev.idx;
-    out.digit = ev.digit;
-    out.reason = ev.reason;
-    fromPrev = 1u; // fromPrev
+// Drain the next event and serialize the operations into out[].
+// Layout (out_words is the capacity in uint32_t):
+//   out[0] = eventType (0 none, 1 setValue, 2 removeCandidate)
+//   out[1] = reasonId
+//   out[2] = fromPrev (1 if coming from a previous iteration queue, 0 otherwise)
+//   out[3] = count (number of operations)
+//   then payload pairs (idx, digit) repeated count times.
+//
+// The function returns only events and operations that are applicable to the current 
+// state of the board. This implies that some events in queue could be discarded.
+// The function will continue the search until the queue is empty.
+static int drain_event(SudokuBoard &board,
+                       uint32_t *out,
+                       uint32_t out_words,
+                       uint32_t fromPrev,
+                       bool apply_to_board) {
+  if (!out || out_words < 4) {
+    return 0;
+  }
+
+  Event first;
+  if (!g_eventQueue.peek(first)) {
+    out[0] = 0;
+    out[1] = 0;
+    out[2] = 0;
+    out[3] = 0;
+    return 0;
+  }
+
+  const EventType type = first.type;
+  const ReasonId reason = first.reason;
+
+  const uint32_t max_ops = (out_words - 4u) / 2u;
+  if (first.getNumberOfOperations() > max_ops) {
+    // no space remaining in output buffer, TODO notify caller
+    out[0] = 0;
+    out[1] = 0;
+    out[2] = 0;
+    out[3] = 0;
+    return 0;
+  }
+
+  g_eventQueue.dequeue(first);
+  out[0] = (uint32_t)type;
+  out[1] = (uint32_t)reason;
+  out[2] = fromPrev;
+  out[3] = 0;
+
+  uint32_t count = 0;
+  for (const Operation &op : first.getOperations()) {
+    // anti-duplication filter
+    if (is_operation_applicable(board, type, op.idx, op.digit)) {
+      out[4 + 2 * count + 0] = (uint32_t)op.idx;
+      out[4 + 2 * count + 1] = (uint32_t)op.digit;
+      count++;
+
+      if (apply_to_board) {
+        if (type == EventType::SetValue) {
+          board.applySetValue(op.idx, op.digit);
+        }
+        if (type == EventType::RemoveCandidate) {
+          board.applyRemoveCandidate(op.idx, op.digit);
+        }
+      }
+    } // else discard invalid operations
+  }
+  out[3] = count;
+
+  // if count equals 0, the entire event is discarded, continue draining
+  return (count > 0) ? 1 : drain_event(board, out, out_words, fromPrev, apply_to_board);
+}
+
+// Run techniques to fill the queue if needed, then return a single event.
+// If apply_to_board is true, the drained operations are also applied to 'board'.
+static int compute_next_event(SudokuBoard &board,
+                              uint32_t *out,
+                              uint32_t out_words,
+                              bool apply_to_board) {
+  // 1) if we already have pending events, return them immediately.
+  if (drain_event(board, out, out_words, 1u, apply_to_board)) {
     return 1;
   }
 
-  // 2) Run techniques in priority order. Stop at the first technique that enqueues events.
+  // 2) run techniques in priority order; stop at the first technique that enqueues anything.
   for (size_t i = 0; i < (sizeof(TECHNIQUES) / sizeof(TECHNIQUES[0])); i++) {
     const size_t before = g_eventQueue.size();
     TECHNIQUES[i](board);
-    const bool produced = g_eventQueue.size() != before;
-    if (produced) {
+    if (g_eventQueue.size() != before) {
       break;
     }
   }
 
-  // 3) Pop one event generated by this iteration (if any).
-  if (!g_eventQueue.empty()) {
-    const Event ev = g_eventQueue.front();
-    g_eventQueue.pop();
-
-    out.type = ev.type;
-    out.idx = ev.idx;
-    out.digit = ev.digit;
-    out.reason = ev.reason;
-    fromPrev = 0u; // generated this iteration
+  // 3) if something has been generated, drain as "fromPrev=0".
+  if (drain_event(board, out, out_words, 0u, apply_to_board)) {
     return 1;
   }
 
-  // nothing has been produced
+  // No events produced.
+  if (out && out_words >= 4) {
+    out[0] = 0;
+    out[1] = 0;
+    out[2] = 0;
+    out[3] = 0;
+  }
   return 0;
 }
 
 //
-// FOR DEBUGGING
-// emscripten_log(EM_LOG_CONSOLE, "Queue has %d elements", g_eventQueue.size());
+// FOR DEBUGGING compile with -DDEBUG and use this function:
+// debug_log("Queue has %d elements", g_eventQueue.size());
 //
 
 // =========================================================
@@ -298,31 +395,17 @@ extern "C"
     }
 
     // Reset queue
-    while (!g_eventQueue.empty()) {
-      g_eventQueue.pop();
-    }
+    g_eventQueue = EventQueue();
 
     // Solve loop using existing stepper:
     // repeatedly compute one event, apply it locally, and continue until stuck.
-    Event ev;
-    uint32_t fromPrev;
+    uint32_t tmp[1024];
     int guard = 0;
     const int guardMax = 200000;
 
     while (guard++ < guardMax) {
-      if (!dequeue_event(board, ev, fromPrev)) {
-        break;
-      }
-
-      if (ev.type == EventType::None) {
-        break;
-      }
-
-      if (ev.type == EventType::SetValue) {
-        board.applySetValue(ev.idx, ev.digit);
-      } else if (ev.type == EventType::RemoveCandidate) {
-        board.applyRemoveCandidate(ev.idx, ev.digit);
-      } else {
+      const int ok = compute_next_event(board, tmp, 1024, true);
+      if (!ok) {
         break;
       }
     }
@@ -351,9 +434,7 @@ extern "C"
     }
 
     // Reset queue
-    while (!g_eventQueue.empty()) {
-      g_eventQueue.pop();
-    }
+    g_eventQueue = EventQueue();
 
     return 1;
   }
@@ -361,78 +442,38 @@ extern "C"
   // Performs and returns one step to solve the currently loaded board.
   // Returns 0 in case of error or no event is produced, else 1.
   EMSCRIPTEN_KEEPALIVE
-  int sudorix_solver_next_step(uint32_t *out) {
-    if (out == nullptr) {
+  int sudorix_solver_next_step(uint32_t *out, uint32_t out_words) {
+    if (out == nullptr || out_words < 4) {
       return 0;
     }
 
     // Compute one event, apply it locally and return it to the caller.
-    Event ev;
-    uint32_t fromPrev;
-    if (!dequeue_event(g_sudokuBoard, ev, fromPrev)) {
-      // nothing has been produced
-      out[0] = 0;
-      out[1] = 0;
-      out[2] = 0;
-      out[3] = 0;
-      out[4] = 0;
-      return 0;
-    } else {
-      // serialize event and send it back
-      out[0] = (uint32_t)ev.type;
-      out[1] = ev.idx;
-      out[2] = ev.digit;
-      out[3] = (uint32_t)ev.reason;
-      out[4] = 0u; // generated this iteration
-
-      // apply event to local copy
-      if (ev.type == EventType::SetValue) {
-        g_sudokuBoard.applySetValue(ev.idx, ev.digit);
-      } else if (ev.type == EventType::RemoveCandidate) {
-        g_sudokuBoard.applyRemoveCandidate(ev.idx, ev.digit);
-      }
-
-      return 1;
-    }
+    const int ok = compute_next_event(g_sudokuBoard, out, out_words, true);
+    return ok ? 1 : 0;
   }
 
   // Calculate and return one step to solve the board given as input (both values and candidates are given).
   // Returns 0 in case of error or no event is produced, else 1.
   EMSCRIPTEN_KEEPALIVE
-  int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out) {
-    if (values == nullptr || cands == nullptr || out == nullptr) {
+  int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out, uint32_t out_words) {
+    if (values == nullptr || cands == nullptr || out == nullptr || out_words < 4) {
       return 0;
     }
 
-    // Load board snapshot (JS is the source of truth)
+    // Build a temporary board owned by the caller (JS is the source of truth here).
     SudokuBoard board;
     if (!board.importFromBuffers(values, cands)) {
-      return 0;
-    }
-
-    // Reset queue
-    while (!g_eventQueue.empty()) {
-      g_eventQueue.pop();
-    }
-
-    Event ev;
-    uint32_t fromPrev;
-    if (!dequeue_event(board, ev, fromPrev)) {
-      // nothing has been produced
       out[0] = 0;
       out[1] = 0;
       out[2] = 0;
       out[3] = 0;
-      out[4] = 0;
       return 0;
-    } else {
-      // serialize event and send it back
-      out[0] = (uint32_t)ev.type;
-      out[1] = ev.idx;
-      out[2] = ev.digit;
-      out[3] = (uint32_t)ev.reason;
-      out[4] = 0u; // generated this iteration
-      return 1;
     }
+
+    // Clear internal queue state for this hint computation.
+    g_eventQueue = EventQueue();
+
+    const int ok = compute_next_event(board, out, out_words, false);
+    return ok ? 1 : 0;
   }
 } // extern "C"

@@ -22,7 +22,6 @@ var business_logic = (() => {
    * Expects Emscripten output:
    *   - solver_wasm.js
    *   - solver_wasm.wasm
-   * built with EXPORT_NAME=createSudorixSolver and exported functions sudorix_solver_step + sudorix_queue_clear.
    * ========================================================= */
   let wasmModule = null;
   let wasmSolveFull = null;      // cwrap'd function
@@ -32,6 +31,7 @@ var business_logic = (() => {
   let wasmBufValues = 0;         // malloc'ed pointers in WASM heap
   let wasmBufCands  = 0;
   let wasmBufOut    = 0;
+  const WASM_OUT_WORDS = 1024;
 
   const WASM_REASON = {
     0: "Solver",
@@ -56,13 +56,13 @@ var business_logic = (() => {
       wasmModule = Module;
       wasmSolveFull = wasmModule.cwrap("sudorix_solver_full", "number", ["number", "number"]);
       wasmSolveInit = wasmModule.cwrap("sudorix_solver_init_board", "number", ["number"]);
-      wasmSolveNextStep = wasmModule.cwrap("sudorix_solver_next_step", "number", ["number"]);
-      wasmSolveHint = wasmModule.cwrap("sudorix_solver_hint", "number", ["number", "number", "number"]);
+      wasmSolveNextStep = wasmModule.cwrap("sudorix_solver_next_step", "number", ["number", "number"]);
+      wasmSolveHint = wasmModule.cwrap("sudorix_solver_hint", "number", ["number", "number", "number", "number"]);
 
       wasmBufValues = wasmModule._malloc(81);          // uint8_t[81]
       wasmBufCands  = wasmModule._malloc(81 * 2);      // uint16_t[81]
       wasmBufInStr  = wasmModule._malloc(82);          // char[81] + '\0'
-      wasmBufOut    = wasmModule._malloc(5 * 4);       // uint32_t[5]
+      wasmBufOut    = wasmModule._malloc(WASM_OUT_WORDS * 4); // uint32_t[WASM_OUT_WORDS]
 
       appendLog("WASM: solvilo preta.");
       return Module;
@@ -131,63 +131,90 @@ var business_logic = (() => {
       return null;
     }
 
-    // Call C++: out[0]=type, out[1]=idx, out[2]=digit, out[3]=reasonId, out[4]=fromPrev
-    const ok = wasmSolveNextStep(wasmBufOut);
+    // C++ batch ABI:
+    // out[0]=type, out[1]=reasonId, out[2]=fromPrev, out[3]=count, then pairs
+    const ok = wasmSolveNextStep(wasmBufOut, WASM_OUT_WORDS);
     if (!ok) {
       return null;
     }
 
-    const out = wasmModule.HEAPU32.subarray(wasmBufOut >> 2, (wasmBufOut >> 2) + 5);
+    const out = wasmModule.HEAPU32.subarray(wasmBufOut >> 2, (wasmBufOut >> 2) + WASM_OUT_WORDS);
     const type = out[0] >>> 0;
-    const idx = out[1] >>> 0;
-    const digit = out[2] >>> 0;
-    const reasonId = out[3] >>> 0;
-    const fromPrev = (out[4] >>> 0) !== 0;
+    const reasonId = out[1] >>> 0;
+    const fromPrev = (out[2] >>> 0) !== 0;
+    const count = out[3] >>> 0;
+
+    if (type === 0 || count === 0) {
+      return null;
+    }
+
+    const ops = [];
+    for (let i = 0; i < count; i++) {
+      const a = out[4 + 2 * i + 0] >>> 0;
+      const b = out[4 + 2 * i + 1] >>> 0;
+      if (type === 1) {
+        ops.push({ idx: a, digit: b });
+      } else if (type === 2) {
+        ops.push({ idx: a, digit: b });
+      }
+    }
 
     if (type === 1) {
-      return { type: "setValue", idx, digit, reason: WASM_REASON[reasonId] || "Solver", fromPrev };
+      return { type: "setValue", ops, reason: WASM_REASON[reasonId] || "Solver", fromPrev };
     }
     if (type === 2) {
-      return { type: "removeCandidate", idx, digit, reason: WASM_REASON[reasonId] || "Solver", fromPrev };
+      return { type: "removeCandidate", ops, reason: WASM_REASON[reasonId] || "Solver", fromPrev };
     }
     return null;
   }
 
-  function wasmComputeHint(boardRef) {
+  function wasmComputeHint(board) {
     if (!wasmModule || !wasmSolveHint) {
       return null;
     }
 
-    // Snapshot board -> TypedArrays
-    const values = new Uint8Array(81);
-    const cands  = new Uint16Array(81);
+    // Prepare inputs (snapshot board)
+    let inValues = new Uint8Array(81);
+    let inCands  = new Uint16Array(81);
     for (let i = 0; i < 81; i++) {
-      values[i] = boardRef.getValue(i) & 0xFF;
-      cands[i]  = boardRef.getCandidateMask(i) & 0xFFFF;
+      inValues[i] = board.getValue(i) & 0xFF;
+      inCands[i]  = board.getCandidateMask(i) & 0xFFFF;
     }
 
-    // Copy into WASM heap
-    wasmModule.HEAPU8.set(values, wasmBufValues);
-    wasmModule.HEAPU16.set(cands, wasmBufCands >> 1);
+    wasmModule.HEAPU8.set(inValues, wasmBufValues);
+    wasmModule.HEAPU16.set(inCands, wasmBufCands >> 1);
 
-    // Call C++: out[0]=type, out[1]=idx, out[2]=digit, out[3]=reasonId, out[4]=fromPrev
-    const ok = wasmSolveHint(wasmBufValues, wasmBufCands, wasmBufOut);
+    const ok = wasmSolveHint(wasmBufValues, wasmBufCands, wasmBufOut, WASM_OUT_WORDS);
     if (!ok) {
       return null;
     }
 
-    const out = wasmModule.HEAPU32.subarray(wasmBufOut >> 2, (wasmBufOut >> 2) + 5);
+    const out = wasmModule.HEAPU32.subarray(wasmBufOut >> 2, (wasmBufOut >> 2) + WASM_OUT_WORDS);
     const type = out[0] >>> 0;
-    const idx = out[1] >>> 0;
-    const digit = out[2] >>> 0;
-    const reasonId = out[3] >>> 0;
-    const fromPrev = (out[4] >>> 0) !== 0;
+    const reasonId = out[1] >>> 0;
+    const fromPrev = (out[2] >>> 0) !== 0;
+    const count = out[3] >>> 0;
+
+    if (type === 0 || count === 0) {
+      return null;
+    }
+
+    const ops = [];
+    for (let i = 0; i < count; i++) {
+      const a = out[4 + 2 * i + 0] >>> 0;
+      const b = out[4 + 2 * i + 1] >>> 0;
+      if (type === 1) {
+        ops.push({ idx: a, digit: b });
+      } else if (type === 2) {
+        ops.push({ idx: a, digit: b });
+      }
+    }
 
     if (type === 1) {
-      return { type: "setValue", idx, digit, reason: WASM_REASON[reasonId] || "Solver", fromPrev };
+      return { type: "setValue", ops, reason: WASM_REASON[reasonId] || "Solver", fromPrev };
     }
     if (type === 2) {
-      return { type: "removeCandidate", idx, digit, reason: WASM_REASON[reasonId] || "Solver", fromPrev };
+      return { type: "removeCandidate", ops, reason: WASM_REASON[reasonId] || "Solver", fromPrev };
     }
     return null;
   }
@@ -796,8 +823,6 @@ var business_logic = (() => {
   /* solver state */
   let roundNumber = 0;
   let solveTimer = null;
-  let flashIdx = -1;
-  let flashTimeout = null;
 
   /* timer state */
   let timerStart = 0;
@@ -1339,20 +1364,6 @@ var business_logic = (() => {
       return;
     }
 
-    // clear previous flash
-    if (flashTimeout) {
-      clearTimeout(flashTimeout);
-    }
-
-    if (flashIdx >= 0) {
-      const prevEl = gridEl.children[flashIdx];
-      if (prevEl) {
-        prevEl.classList.remove("flashSet");
-        prevEl.classList.remove("flashRemove");
-      }
-    }
-
-    flashIdx = idx;
     const el = gridEl.children[idx];
     if (el) {
       if (type === "setValue") {
@@ -1363,14 +1374,12 @@ var business_logic = (() => {
       }
     }
 
-    flashTimeout = setTimeout(() => {
+    setTimeout(() => {
       const el2 = gridEl.children[idx];
       if (el2) {
         el2.classList.remove("flashSet");
         el2.classList.remove("flashRemove");
       }
-      flashIdx = -1;
-      flashTimeout = null;
     }, 240);
   }
 
@@ -1380,71 +1389,67 @@ var business_logic = (() => {
       solveTimer = null;
       appendLog("Solvilo: halti.");
     }
-    if (flashTimeout) {
-      clearTimeout(flashTimeout);
-      flashTimeout = null;
-    }
-    if (flashIdx >= 0) {
-      const el = gridEl.children[flashIdx];
-      if (el) {
-        el.classList.remove("flash");
-      }
-      flashIdx = -1;
-    }
   }
 
   function applyEvent(ev) {
+    if (!ev || !ev.ops || ev.ops.length === 0) {
+      return false;
+    }
+
     if (ev.type === "setValue") {
-      const idx = ev.idx;
-      const digit = ev.digit;
+      let any = false;
 
-      if (!assertDigit(digit)) {
-        return false;
-      }
+      for (const op of ev.ops) {
+        const idx = op.idx;
+        const digit = op.digit;
 
-      const wasSolved = board.isSolved(idx);
-      const res = board.setManualValue(idx, digit); /* solver uses same setter but not user log */
-      if (!res.ok) {
-        return false;
-      }
-      if (wasSolved && board.getValue(idx) === digit) {
-        return false;
-      }
+        if (!assertDigit(digit)) {
+          continue;
+        }
 
-      const { r, c } = idxToRC(idx);
-      appendLog(`Round ${roundNumber} - ${ev.reason || "Solver"}: r${r}c${c} = ${digit}`);
+        const wasSolved = board.isSolved(idx);
+        const res = board.setManualValue(idx, digit); /* solver uses same setter but not user log */
+        if (!res.ok) {
+          continue;
+        }
+        if (wasSolved && board.getValue(idx) === digit) {
+          continue;
+        }
 
-      flashCell(idx, ev.type);
-      renderCell(idx);
+        const { r, c } = idxToRC(idx);
+        appendLog(`Round ${roundNumber} - ${ev.reason || "Solver"}: r${r}c${c} = ${digit}`);
 
-      /* update candidates */
-      board.autoClearPeersAfterPlacement(idx, digit);
-      for (const p of PEERS[idx]) {
-        renderCell(p);
+        /* update candidates */
+        board.autoClearPeersAfterPlacement(idx, digit);
+
+        any = true;
       }
 
       triggerAutoCheckIfComplete();
-      return true;
+      return any;
     }
 
     if (ev.type === "removeCandidate") {
-      const idx = ev.idx;
-      const digit = ev.digit;
+      let any = false;
+      let removedCount = 0;
 
-      if (!assertDigit(digit)) {
-        return false;
+      for (const op of ev.ops) {
+        const idx = op.idx;
+        const digit = op.digit;
+
+        // Iterate bits 0..8
+        const res = board.removeCandidate(idx, digit);
+        if (res.ok && res.changed) {
+          removedCount++;
+          any = true;
+        }
       }
 
-      const res = board.removeCandidate(idx, digit);
-      if (!res.ok || !res.changed) {
-        return false;
+      if (any) {
+        appendLog(`Round ${roundNumber} - ${ev.reason || "Solver"}: removed ${removedCount} candidate(s)`);
       }
 
-      const { r, c } = idxToRC(idx);
-      appendLog(`Round ${roundNumber} - ${ev.reason || "Solver"}: remove cand ${digit} from r${r}c${c}`);
-
-      renderCell(idx);
-      return true;
+      return any;
     }
 
     return false;
@@ -1480,7 +1485,11 @@ var business_logic = (() => {
     const did = applyEvent(ev);
     if (did) {
       renderAll();
-      flashCell(ev.idx, ev.type);
+      if (ev.ops && ev.ops.length) {
+        for (var op of ev.ops) {
+          flashCell(op.idx, ev.type);
+        }
+      } 
     }
     return did;
   }
@@ -1550,7 +1559,11 @@ var business_logic = (() => {
 
     applyEvent(ev);
     renderAll();
-    flashCell(ev.idx, ev.type);
+    if (ev.ops && ev.ops.length) {
+      for (var op of ev.ops) {
+        flashCell(op.idx, ev.type);
+      }
+    }
   }
 
   /* =========================================================

@@ -2,6 +2,7 @@
 #define EVENT_H
 
 #include <cstdint>
+#include <vector>
 
 enum class EventType : uint8_t {
   None = 0,
@@ -19,19 +20,28 @@ enum class ReasonId : uint8_t {
   LockedCandidates = 6
 };
 
+// one operation = set a value or remove a candidate
+struct Operation {
+  uint8_t   idx;
+  uint8_t   digit;
+};
+
 class Event
 {
 public:
-  EventType type;
-  uint8_t   idx;
-  uint8_t   digit;
-  ReasonId  reason;
+  Event();
+  Event(EventType type, ReasonId reason);
 
-  bool operator<(const Event &other) const;
+  EventType type;
+  ReasonId reason;
+
+  const std::vector<Operation> &getOperations();
+  size_t getNumberOfOperations();
+  void addOperation(uint8_t idx, uint8_t digit);
 
 private:
-  friend class EventQueue;
-  uint32_t getEventId() const;
+  // an event is a set of multiple operations
+  std::vector<Operation> ops;
 };
 
 #endif // EVENT_H
