@@ -15,7 +15,7 @@ BIN_DIR         ?= bin
 WEB_DIR         ?= web
 
 # Test data file (one puzzle per line, 81 chars, 0-9 or '.')
-PUZZLES         ?= puzzles.txt
+PUZZLES         ?= Just17.txt
 MODE            ?= full   # full|step (step is stub in current test main)
 
 # Tools
@@ -23,14 +23,26 @@ CXX             ?= g++
 EMCC            ?= emcc
 PYTHON          ?= python3
 
+# Debug toggle:
+#   make DEBUG=1
+ifeq ($(DEBUG),1)
+  DEBUG_FLAG := -DDEBUG
+else
+  DEBUG_FLAG :=
+endif
+
 # Flags
-CXXFLAGS        ?= -O3 -std=c++17 -I$(INC_DIR)
-LDFLAGS         ?=
-EMCCFLAGS       ?= -O3 -std=c++17 -I$(INC_DIR)
+COMMON_FLAGS    := -std=c++17 -I$(INC_DIR) $(DEBUG_FLAG)
+CXXFLAGS        := -O3 $(COMMON_FLAGS)
+EMCCFLAGS       := -O3 $(COMMON_FLAGS)
+
+# Automatic dependency generation
+DEPFLAGS        := -MMD -MP
 
 # ---- Sources (all .cpp in src)
 SRCS            := $(wildcard $(SRC_DIR)/*.cpp)
 OBJS            := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SRCS))
+DEPS            := $(OBJS:.o=.d)
 
 # Test main
 TEST_MAIN_CPP   ?= $(TEST_DIR)/sudorix_solver_test_main.cpp
@@ -46,7 +58,7 @@ TEST_BIN        := $(BIN_DIR)/sudorix_test
 WASM_JS         := $(WEB_DIR)/solver_wasm.js
 WASM_WASM       := $(WEB_DIR)/solver_wasm.wasm
 
-.PHONY: all wasm native test run clean distclean serve help
+.PHONY: all wasm native test run serve clean distclean help
 
 all: wasm native test
 
@@ -78,8 +90,11 @@ native: $(OBJS)
 
 # Compile each src/*.cpp -> build/obj/*.o
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
-	$(CXX) -c $< $(CXXFLAGS) -o $@
+	$(CXX) $(CXXFLAGS) $(DEPFLAGS) -c $< -o $@
 	@echo "Built: $@"
+
+# Include auto-generated dependency files
+-include $(DEPS)
 
 # ---------------
 # Test executable
@@ -87,7 +102,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 test: $(TEST_BIN)
 
 $(TEST_BIN): $(TEST_MAIN_CPP) $(OBJS) | $(BIN_DIR)
-	$(CXX) $(TEST_MAIN_CPP) $(OBJS) $(LDFLAGS) -std=c++17 -O2 -I$(INC_DIR) -o $@
+	$(CXX) $(COMMON_FLAGS) -O2 $^ -o $@
 	@echo "Built: $@"
 
 run: test
@@ -128,7 +143,7 @@ serve: wasm
 # Cleanup
 # -------
 clean:
-	@rm -rf $(BUILD_DIR) $(BIN_DIR)
+	rm -rf $(BUILD_DIR) $(BIN_DIR)
 
 distclean: clean
-	@rm -rf $(WEB_DIR)
+	rm -rf $(WEB_DIR)
