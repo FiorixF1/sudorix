@@ -66,55 +66,55 @@ void SudokuBoard::exportToBuffers(uint8_t *values, uint16_t *cands) const {
 }
 
 // --- values API ---
-uint8_t SudokuBoard::getValue(int idx) const {
+Digit SudokuBoard::getValue(Index idx) const {
   return cells[idx].getValue();
 }
 
-bool SudokuBoard::isSolved(int idx) const {
+bool SudokuBoard::isSolved(Index idx) const {
   return cells[idx].isSolved();
 }
 
-void SudokuBoard::setValue(int idx, uint8_t digit) {
+void SudokuBoard::setValue(Index idx, Digit digit) {
   cells[idx].setValue(digit);
 }
 
-void SudokuBoard::clearValue(int idx) {
+void SudokuBoard::clearValue(Index idx) {
   cells[idx].clearValue();
 }
 
 // --- candidates API ---
-uint16_t SudokuBoard::getCandidateMask(int idx) const {
+Mask SudokuBoard::getCandidateMask(Index idx) const {
   return cells[idx].getCandidateMask();
 }
 
-void SudokuBoard::setCandidateMask(int idx, uint16_t mask) {
+void SudokuBoard::setCandidateMask(Index idx, Mask mask) {
   cells[idx].setCandidateMask(mask);
 }
 
-bool SudokuBoard::hasCandidate(int idx, uint8_t digit) const {
+bool SudokuBoard::hasCandidate(Index idx, Digit digit) const {
   return cells[idx].hasCandidate(digit);
 }
 
-uint8_t SudokuBoard::countCandidates(int idx) const {
+size_t SudokuBoard::countCandidates(Index idx) const {
   return cells[idx].countCandidates();
 }
 
-uint8_t SudokuBoard::getSingleCandidate(int idx) const {
+Digit SudokuBoard::getSingleCandidate(Index idx) const {
   return cells[idx].getSingleCandidate();
 }
 
-void SudokuBoard::disableCandidate(int idx, uint8_t digit) {
+void SudokuBoard::disableCandidate(Index idx, Digit digit) {
   cells[idx].disableCandidate(digit);
 }
 
 // --- events API ---
-void SudokuBoard::applySetValue(int idx, int digit) {
+void SudokuBoard::applySetValue(Index idx, Digit digit) {
   // Set + Auto clear 
   setValue(idx, digit);
   autoClearPeersAfterPlacement(idx, digit);
 }
 
-void SudokuBoard::applyRemoveCandidate(int idx, int digit) {
+void SudokuBoard::applyRemoveCandidate(Index idx, Digit digit) {
   // Remove + Auto place if applicable
   disableCandidate(idx, digit);
   int only = getSingleCandidate(idx);
@@ -123,7 +123,7 @@ void SudokuBoard::applyRemoveCandidate(int idx, int digit) {
   }
 }
 
-void SudokuBoard::autoClearPeersAfterPlacement(int idx, int digit) {
+void SudokuBoard::autoClearPeersAfterPlacement(Index idx, Digit digit) {
   int r = idxRow(idx);
   int c = idxCol(idx);
   int b = idxBox(idx);
@@ -154,7 +154,7 @@ bool SudokuBoard::isCompletelySolved() const {
   return true;
 }
 
-inline bool SudokuBoard::isValidIndex(int idx) {
+inline bool SudokuBoard::isValidIndex(Index idx) {
   return idx >= 0 && idx < 81;
 }
 
@@ -170,7 +170,7 @@ bool SudokuBoard::_recalcAllCandidatesFromValues() {
   uint16_t boxUsed[9] = {0};
 
   // 1) Scansione valori e costruzione used masks + verifica conflitti
-  for (int idx = 0; idx < 81; idx++) {
+  for (Index idx = 0; idx < 81; idx++) {
     int value = getValue(idx);
     if (value == 0) {
       continue;
@@ -204,7 +204,7 @@ bool SudokuBoard::_recalcAllCandidatesFromValues() {
 
   // 2) Celle vuote: candidati = NOT(used in row/col/box)
   constexpr uint16_t ALL = 0x01FF; // 9 bit a 1
-  for (int idx = 0; idx < 81; idx++) {
+  for (Index idx = 0; idx < 81; idx++) {
     if (isSolved(idx)) {
       continue;
     }

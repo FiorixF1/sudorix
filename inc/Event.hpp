@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <vector>
+#include "utils.hpp"
 
 enum class EventType : uint8_t {
   None = 0,
@@ -17,13 +18,14 @@ enum class ReasonId : uint8_t {
   HiddenSingle = 3,
   PointingPair = 4,
   PointingTriple = 5,
-  LockedCandidates = 6
+  LockedCandidates = 6,
+  BoxLineReduction = 7
 };
 
 // one operation = set a value or remove a candidate
 struct Operation {
-  uint8_t   idx;
-  uint8_t   digit;
+  Index idx;
+  Digit digit;
 };
 
 class Event
@@ -37,7 +39,7 @@ public:
 
   const std::vector<Operation> &getOperations();
   size_t getNumberOfOperations();
-  void addOperation(uint8_t idx, uint8_t digit);
+  void addOperation(Index idx, Digit digit);
 
 private:
   // an event is a set of multiple operations

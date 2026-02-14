@@ -36,27 +36,13 @@
 #include <cstddef>
 #include <cstring>
 #include <functional>
+#include <set>
+#include <vector>
 
 #include "solver.hpp"
 #include "SudokuBoard.hpp"
 #include "EventQueue.hpp"
 #include "utils.hpp"
-
-#ifdef __EMSCRIPTEN__
-  // WASM
-  #include <emscripten/emscripten.h>
-#else
-  // native
-  #include <cstdio>
-  #define EMSCRIPTEN_KEEPALIVE
-  #define emscripten_log(x, fmt, ...) printf(fmt, ##__VA_ARGS__);
-#endif
-
-#ifdef DEBUG
-  #define debug_log(fmt, ...) emscripten_log(EM_LOG_CONSOLE, fmt, ##__VA_ARGS__)
-#else
-  #define debug_log(fmt, ...)
-#endif
 
 static SudokuBoard g_sudokuBoard;
 static EventQueue g_eventQueue;
@@ -66,15 +52,15 @@ static EventQueue g_eventQueue;
 // =========================================================
 
 static void techFullHouse(SudokuBoard &board) {
-  auto scanUnit = [&](const int unitCells[9]) -> void
+  auto scanUnit = [&](const Index unitCells[9]) -> void
   {
-    int emptyIdx = -1;
-    uint8_t missingDigit = 0;
-    uint16_t present = 0;
+    Index emptyIdx = -1;
+    Digit missingDigit = 0;
+    Mask present = 0;
 
     for (int k = 0; k < 9; k++) {
-      const int idx = unitCells[k];
-      const uint8_t v = board.getValue(idx);
+      const Index idx = unitCells[k];
+      const Digit v = board.getValue(idx);
       if (v == 0) {
         if (emptyIdx != -1) {
           emptyIdx = -2; // more than one empty
@@ -87,7 +73,7 @@ static void techFullHouse(SudokuBoard &board) {
     }
 
     if (emptyIdx >= 0) {
-      const uint16_t missingMask = (uint16_t)(0x1FFu & ~present);
+      const Mask missingMask = (Mask)(0x1FFu & ~present);
       if (countBits9(missingMask) == 1) {
         missingDigit = bitToDigitSingle(missingMask);
         Event event(EventType::SetValue, ReasonId::FullHouse);
@@ -105,12 +91,12 @@ static void techFullHouse(SudokuBoard &board) {
 }
 
 static void techHiddenSingles(SudokuBoard &board) {
-  auto scanUnit = [&](const int unitCells[9]) -> void
+  auto scanUnit = [&](const Index unitCells[9]) -> void
   {
-    for (uint8_t digit = 1; digit <= 9; digit++) {
-      int foundIdx = -1;
+    for (Digit digit = 1; digit <= 9; digit++) {
+      Index foundIdx = -1;
       for (int k = 0; k < 9; k++) {
-        const int idx = unitCells[k];
+        const Index idx = unitCells[k];
         if (board.isSolved(idx)) {
           continue;
         }
@@ -147,20 +133,19 @@ static void techLockedCandidates(SudokuBoard &board) {
   //    remove the digit from that row outside the box
   //  - same for a single column
   for (int b = 0; b < 9; b++) {
-    for (uint8_t digit = 1; digit <= 9; digit++) {
-      int positions[9];
-      int posCount = 0;
-
+    for (Digit digit = 1; digit <= 9; digit++) {
+      std::vector<Index> positions;
       for (int k = 0; k < 9; k++) {
-        const int idx = BOX_CELLS[b][k];
+        const Index idx = BOX_CELLS[b][k];
         if (board.isSolved(idx)) {
           continue;
         }
         if (board.hasCandidate(idx, digit)) {
-          positions[posCount++] = idx;
+          positions.push_back(idx);
         }
       }
 
+      size_t posCount = positions.size();
       if (posCount < 2) {
         continue; // locked candidates is about confinement with at least 2
       }
@@ -175,10 +160,10 @@ static void techLockedCandidates(SudokuBoard &board) {
         reasonId = ReasonId::LockedCandidates;
       }
 
-      const uint8_t r0 = idxRow(positions[0]);
+      const int r0 = idxRow(positions[0]);
       bool sameRow = true;
-      for (int i = 1; i < posCount; i++) {
-        if (idxRow(positions[i]) != r0) {
+      for (Index pos : positions) {
+        if (idxRow(pos) != r0) {
           sameRow = false;
           break;
         }
@@ -188,8 +173,8 @@ static void techLockedCandidates(SudokuBoard &board) {
         // remove digit from row r0, excluding cells in this box
         Event event(EventType::RemoveCandidate, reasonId);
         for (int k = 0; k < 9; k++) {
-          const int idx = ROW_CELLS[r0][k];
-          if (idxBox(idx) == (uint8_t)b) {
+          const Index idx = ROW_CELLS[r0][k];
+          if (idxBox(idx) == b) {
             continue;
           }
           if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
@@ -199,10 +184,10 @@ static void techLockedCandidates(SudokuBoard &board) {
         g_eventQueue.enqueue(board, event);
       }
 
-      const uint8_t c0 = idxCol(positions[0]);
+      const int c0 = idxCol(positions[0]);
       bool sameCol = true;
-      for (int i = 1; i < posCount; i++) {
-        if (idxCol(positions[i]) != c0) {
+      for (Index pos : positions) {
+        if (idxCol(pos) != c0) {
           sameCol = false;
           break;
         }
@@ -212,8 +197,102 @@ static void techLockedCandidates(SudokuBoard &board) {
         // remove digit from column c0, excluding cells in this box
         Event event(EventType::RemoveCandidate, reasonId);
         for (int k = 0; k < 9; k++) {
-          const int idx = COL_CELLS[c0][k];
-          if (idxBox(idx) == (uint8_t)b) {
+          const Index idx = COL_CELLS[c0][k];
+          if (idxBox(idx) == b) {
+            continue;
+          }
+          if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
+            event.addOperation(idx, digit);
+          }
+        }
+        g_eventQueue.enqueue(board, event);
+      }
+    }
+  }
+}
+
+static void techBoxLineReduction(SudokuBoard &board) {
+  // rows
+  for (int r = 0; r < 9; r++) {
+    for (Digit digit = 1; digit <= 9; digit++) {
+      std::vector<Digit> positions;
+      for (int k = 0; k < 9; k++) {
+        const Index idx = ROW_CELLS[r][k];
+        if (board.isSolved(idx)) {
+          continue;
+        }
+        if (board.hasCandidate(idx, digit)) {
+          positions.push_back(idx);
+        }
+      }
+
+      size_t posCount = positions.size();
+      if (posCount < 2 || posCount > 3) {
+        continue; // box line reduction is about confinement with 2 or 3
+      }
+
+      ReasonId reasonId = ReasonId::BoxLineReduction;
+
+      std::set<int> boxes;
+      bool sameBlock = true;
+      for (Index pos : positions) {
+        boxes.insert(idxBox(pos));
+      }
+
+      if (boxes.size() == 1) {
+        // remove digit from this box, excluding cells in this row/column
+        int boxIdx = *boxes.begin();
+
+        Event event(EventType::RemoveCandidate, reasonId);
+        for (int k = 0; k < 9; k++) {
+          const Index idx = BOX_CELLS[boxIdx][k];
+          if (idxRow(idx) == r) {
+            continue;
+          }
+          if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
+            event.addOperation(idx, digit);
+          }
+        }
+        g_eventQueue.enqueue(board, event);
+      }
+    }
+  }
+
+  // columns
+  for (int c = 0; c < 9; c++) {
+    for (Digit digit = 1; digit <= 9; digit++) {
+      std::vector<Digit> positions;
+      for (int k = 0; k < 9; k++) {
+        const Index idx = COL_CELLS[c][k];
+        if (board.isSolved(idx)) {
+          continue;
+        }
+        if (board.hasCandidate(idx, digit)) {
+          positions.push_back(idx);
+        }
+      }
+
+      size_t posCount = positions.size();
+      if (posCount < 2 || posCount > 3) {
+        continue; // box line reduction is about confinement with 2 or 3
+      }
+
+      ReasonId reasonId = ReasonId::BoxLineReduction;
+
+      std::set<Index> boxes;
+      bool sameBlock = true;
+      for (Index pos : positions) {
+        boxes.insert(idxBox(pos));
+      }
+
+      if (boxes.size() == 1) {
+        // remove digit from this box, excluding cells in this row/column
+        Index boxIdx = *boxes.begin();
+
+        Event event(EventType::RemoveCandidate, reasonId);
+        for (int k = 0; k < 9; k++) {
+          const Index idx = BOX_CELLS[boxIdx][k];
+          if (idxCol(idx) == c) {
             continue;
           }
           if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
@@ -231,7 +310,7 @@ static void techNakedSingles(SudokuBoard &board) {
     if (board.isSolved(i)) {
       continue;
     }
-    const uint8_t d = board.getSingleCandidate(i);
+    const Digit d = board.getSingleCandidate(i);
     if (d != 0) {
       Event event(EventType::SetValue, ReasonId::NakedSingle);
       event.addOperation(i, d);
@@ -244,13 +323,14 @@ typedef void (*TechniqueFn)(SudokuBoard &);
 
 static constexpr TechniqueFn TECHNIQUES[] =
 {
-  &techFullHouse,
-  &techHiddenSingles,
-  &techLockedCandidates,
-  &techNakedSingles
+  techFullHouse,
+  techHiddenSingles,
+  techLockedCandidates,
+  techNakedSingles,
+  techBoxLineReduction
 };
 
-static bool is_operation_applicable(SudokuBoard &board, EventType type, uint8_t idx, uint8_t digit) {
+static bool is_operation_applicable(SudokuBoard &board, EventType type, Index idx, Digit digit) {
   // you can set only an unsolved cell
   if (type == EventType::SetValue) {
     return !board.isSolved(idx) && digit != 0;
@@ -412,7 +492,7 @@ extern "C"
 
     // Export
     for (int i = 0; i < 81; i++) {
-      const uint8_t value = board.getValue(i);
+      const Digit value = board.getValue(i);
       out81[i] = value ? (char)('0' + value) : '.';
     }
     out81[81] = '\0';

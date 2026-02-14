@@ -8,7 +8,7 @@
 EventQueue::EventQueue() = default;
 
 void EventQueue::enqueue(SudokuBoard &board, Event &event) {
-  // avoid adding empty events (it can happen as a result of the anti-duplication filter)
+  // avoid adding empty events (is_operation_applicable will filter them anyways but just in case)
   if (event.getNumberOfOperations() > 0) {
     q.push(event);
   }
@@ -33,7 +33,7 @@ bool EventQueue::peek(Event &ev) const {
   return true;
 }
 
-std::size_t EventQueue::size() const {
+size_t EventQueue::size() const {
   return q.size();
 }
 

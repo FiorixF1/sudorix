@@ -2,6 +2,7 @@
 #define SUDOKU_CELL_H
 
 #include <cstdint>
+#include "Event.hpp"
 
 class SudokuCell
 {
@@ -9,34 +10,34 @@ public:
   SudokuCell();
 
   // --- value ---
-  uint8_t getValue() const;
+  Digit getValue() const;
 
   bool isSolved() const;
 
-  void setValue(uint8_t digit);
+  void setValue(Digit digit);
 
   void clearValue();
 
   // --- candidates ---
-  uint16_t getCandidateMask() const;
+  Mask getCandidateMask() const;
 
-  void setCandidateMask(uint16_t mask);
+  void setCandidateMask(Mask mask);
 
-  bool hasCandidate(uint8_t digit) const;
+  bool hasCandidate(Digit digit) const;
 
-  uint8_t countCandidates() const;
+  size_t countCandidates() const;
 
-  uint8_t getSingleCandidate() const;
+  Digit getSingleCandidate() const;
 
-  void enableCandidate(uint8_t digit);
+  void enableCandidate(Digit digit);
 
-  bool disableCandidate(uint8_t digit);
+  bool disableCandidate(Digit digit);
 
-  bool toggleCandidate(uint8_t digit);
+  bool toggleCandidate(Digit digit);
 
 private:
-  uint8_t  value;     // 0..9
-  uint16_t candMask;  // 9-bit
+  Digit  value;     // 0..9
+  Mask   candMask;  // 9-bit
 };
 
 #endif // SUDOKU_CELL_H

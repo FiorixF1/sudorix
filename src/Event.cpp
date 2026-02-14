@@ -16,6 +16,6 @@ size_t Event::getNumberOfOperations() {
   return this->ops.size();
 }
 
-void Event::addOperation(uint8_t idx, uint8_t digit) {
+void Event::addOperation(Index idx, Digit digit) {
   ops.push_back({idx, digit});
 }

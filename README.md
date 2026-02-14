@@ -78,7 +78,7 @@ make run PUZZLES=/path/to/file.txt MODE=full|step
 
 Nuntempe Sudorix povas solvi:
 
-* **24946** enigmojn el **31512** el `Just17.txt`
+* **25659** enigmojn el **31512** el `Just17.txt`
 
 * **0** enigmojn el **50000** el `top50000.txt`
 
@@ -89,6 +89,7 @@ Aldonu novajn teknikojn en `solver.cpp` per realigo de funkcio kun la sekva sign
 - `typedef void (*TechniqueFn)(SudokuBoard &);`
 
 Ĉiu funkcio povas aŭ:
+
 - atribui valoron al ĉelo, aŭ
 - forigi kandidaton.
 

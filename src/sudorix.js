@@ -35,12 +35,13 @@ var business_logic = (() => {
 
   const WASM_REASON = {
     0: "Solver",
-    1: "Full house",
-    2: "Naked single",
-    3: "Hidden single",
+    1: "Full House",
+    2: "Naked Single",
+    3: "Hidden Single",
     4: "Pointing Pair",
     5: "Pointing Triple",
-    6: "Locked candidates"
+    6: "Locked Candidates",
+    7: "Box/Line Reduction"
   };
 
   function initWasmSolver() {

@@ -16,7 +16,7 @@ public:
 
   bool peek(Event &) const;
 
-  std::size_t size() const;
+  size_t size() const;
 
   bool empty() const;
 

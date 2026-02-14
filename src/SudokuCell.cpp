@@ -8,7 +8,7 @@
 SudokuCell::SudokuCell() : value(0), candMask(0) { }
 
 // --- value ---
-uint8_t SudokuCell::getValue() const {
+Digit SudokuCell::getValue() const {
   return value;
 }
 
@@ -16,7 +16,7 @@ bool SudokuCell::isSolved() const {
   return value != 0;
 }
 
-void SudokuCell::setValue(uint8_t digit) {
+void SudokuCell::setValue(Digit digit) {
   value = digit;
   if (digit != 0) {
     // When solved, keep only the digit bit as candidates.
@@ -29,38 +29,38 @@ void SudokuCell::clearValue() {
 }
 
 // --- candidates ---
-uint16_t SudokuCell::getCandidateMask() const {
-  return (uint16_t)(candMask & 0x1FFu);
+Mask SudokuCell::getCandidateMask() const {
+  return (Mask)(candMask & 0x1FFu);
 }
 
-void SudokuCell::setCandidateMask(uint16_t mask) {
-  candMask = (uint16_t)(mask & 0x1FFu);
+void SudokuCell::setCandidateMask(Mask mask) {
+  candMask = (Mask)(mask & 0x1FFu);
 }
 
-bool SudokuCell::hasCandidate(uint8_t digit) const {
+bool SudokuCell::hasCandidate(Digit digit) const {
   return (getCandidateMask() & digitToBit(digit)) != 0;
 }
 
-uint8_t SudokuCell::countCandidates() const {
+size_t SudokuCell::countCandidates() const {
   return countBits9(getCandidateMask());
 }
 
-uint8_t SudokuCell::getSingleCandidate() const {
-  const uint16_t m = getCandidateMask();
+Digit SudokuCell::getSingleCandidate() const {
+  const Mask m = getCandidateMask();
   if (countBits9(m) == 1) {
     return bitToDigitSingle(m);
   }
   return 0;
 }
 
-void SudokuCell::enableCandidate(uint8_t digit) {
+void SudokuCell::enableCandidate(Digit digit) {
   candMask |= digitToBit(digit);
 }
 
-bool SudokuCell::disableCandidate(uint8_t digit) {
-  const uint16_t bit = digitToBit(digit);
-  const uint16_t before = getCandidateMask();
-  const uint16_t after = (uint16_t)(before & ~bit);
+bool SudokuCell::disableCandidate(Digit digit) {
+  const Mask bit = digitToBit(digit);
+  const Mask before = getCandidateMask();
+  const Mask after = (uint16_t)(before & ~bit);
   if (after != before) {
     candMask = after;
     return true;
@@ -68,8 +68,8 @@ bool SudokuCell::disableCandidate(uint8_t digit) {
   return false;
 }
 
-bool SudokuCell::toggleCandidate(uint8_t digit) {
-  const uint16_t bit = digitToBit(digit);
+bool SudokuCell::toggleCandidate(Digit digit) {
+  const Mask bit = digitToBit(digit);
   const bool wasOn = (candMask & bit) != 0;
   candMask ^= bit;
   return !wasOn;

@@ -3,11 +3,31 @@
 
 #include <cstdint>
 
+#ifdef __EMSCRIPTEN__
+  // WASM
+  #include <emscripten/emscripten.h>
+#else
+  // native
+  #include <cstdio>
+  #define EMSCRIPTEN_KEEPALIVE
+  #define emscripten_log(x, fmt, ...) printf(fmt, ##__VA_ARGS__);
+#endif
+
+#ifdef DEBUG
+  #define debug_log(fmt, ...) emscripten_log(EM_LOG_CONSOLE, fmt, ##__VA_ARGS__)
+#else
+  #define debug_log(fmt, ...)
+#endif
+
+using Digit = uint8_t;
+using Mask = uint16_t;
+using Index = int8_t;
+
 // =========================================================
 // Precomputed indices (rows / cols / boxes)
 // =========================================================
 
-static constexpr int ROW_CELLS[9][9] = {
+static constexpr Index ROW_CELLS[9][9] = {
     { 0, 1, 2, 3, 4, 5, 6, 7, 8 },
     { 9, 10, 11, 12, 13, 14, 15, 16, 17 },
     { 18, 19, 20, 21, 22, 23, 24, 25, 26 },
@@ -19,7 +39,7 @@ static constexpr int ROW_CELLS[9][9] = {
     { 72, 73, 74, 75, 76, 77, 78, 79, 80 }
   };
 
-static constexpr int COL_CELLS[9][9] = {
+static constexpr Index COL_CELLS[9][9] = {
     { 0, 9, 18, 27, 36, 45, 54, 63, 72 },
     { 1, 10, 19, 28, 37, 46, 55, 64, 73 },
     { 2, 11, 20, 29, 38, 47, 56, 65, 74 },
@@ -31,7 +51,7 @@ static constexpr int COL_CELLS[9][9] = {
     { 8, 17, 26, 35, 44, 53, 62, 71, 80 }
   };
 
-static constexpr int BOX_CELLS[9][9] = {
+static constexpr Index BOX_CELLS[9][9] = {
     { 0, 1, 2, 9, 10, 11, 18, 19, 20 },
     { 3, 4, 5, 12, 13, 14, 21, 22, 23 },
     { 6, 7, 8, 15, 16, 17, 24, 25, 26 },
@@ -43,30 +63,30 @@ static constexpr int BOX_CELLS[9][9] = {
     { 60, 61, 62, 69, 70, 71, 78, 79, 80 }
   };
 
-inline uint8_t idxRow(int idx) {
-  return (uint8_t)(idx / 9);
+inline int idxRow(Index idx) {
+  return (int)(idx / 9);
 }
 
-inline uint8_t idxCol(int idx) {
-  return (uint8_t)(idx % 9);
+inline int idxCol(Index idx) {
+  return (int)(idx % 9);
 }
 
-inline uint8_t idxBox(int idx) {
-  const uint8_t r = idxRow(idx);
-  const uint8_t c = idxCol(idx);
-  return (uint8_t)((r / 3) * 3 + (c / 3));
+inline int idxBox(Index idx) {
+  const int r = idxRow(idx);
+  const int c = idxCol(idx);
+  return (int)((r / 3) * 3 + (c / 3));
 }
 
 // =========================================================
 // Helpers (bitmasks)
 // =========================================================
 
-inline uint16_t digitToBit(uint8_t d) {
+inline Mask digitToBit(Digit d) {
   // d: 1..9 -> bit (d-1)
-  return (uint16_t)(1u << (d - 1u));
+  return (Mask)(1u << (d - 1u));
 }
 
-inline uint8_t countBits9(uint16_t mask) {
+inline uint8_t countBits9(Mask mask) {
   mask &= 0x1FFu;
   // builtin popcount if available
 #if defined(__GNUC__) || defined(__clang__)
@@ -81,7 +101,7 @@ inline uint8_t countBits9(uint16_t mask) {
 #endif
 }
 
-inline uint8_t bitToDigitSingle(uint16_t mask) {
+inline uint8_t bitToDigitSingle(Mask mask) {
   // assumes exactly one bit set (1..9)
 #if defined(__GNUC__) || defined(__clang__)
   return (uint8_t)(__builtin_ctz((unsigned)mask) + 1u);

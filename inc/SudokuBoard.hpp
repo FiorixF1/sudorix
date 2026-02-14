@@ -11,38 +11,38 @@ public:
 
   int importFromString(const char *values);
 
-  int importFromBuffers(const uint8_t *values, const uint16_t *cands);
+  int importFromBuffers(const Digit *values, const Mask *cands);
 
-  void exportToBuffers(uint8_t *values, uint16_t *cands) const;
+  void exportToBuffers(Digit *values, Mask *cands) const;
 
   // --- values API ---
-  uint8_t getValue(int idx) const;
+  Digit getValue(Index idx) const;
 
-  bool isSolved(int idx) const;
+  bool isSolved(Index idx) const;
 
-  void setValue(int idx, uint8_t digit);
+  void setValue(Index idx, Digit digit);
 
-  void clearValue(int idx);
+  void clearValue(Index idx);
 
   // --- candidates API ---
-  uint16_t getCandidateMask(int idx) const;
+  Mask getCandidateMask(Index idx) const;
 
-  void setCandidateMask(int idx, uint16_t mask);
+  void setCandidateMask(Index idx, Mask mask);
 
-  bool hasCandidate(int idx, uint8_t digit) const;
+  bool hasCandidate(Index idx, Digit digit) const;
 
-  uint8_t countCandidates(int idx) const;
+  size_t countCandidates(Index idx) const;
 
-  uint8_t getSingleCandidate(int idx) const;
+  Digit getSingleCandidate(Index idx) const;
 
-  void disableCandidate(int idx, uint8_t digit) ;
+  void disableCandidate(Index idx, Digit digit) ;
 
   // --- events API ---
-  void applySetValue(int idx, int digit);
+  void applySetValue(Index idx, Digit digit);
 
-  void applyRemoveCandidate(int idx, int digit);
+  void applyRemoveCandidate(Index idx, Digit digit);
 
-  void autoClearPeersAfterPlacement(int idx, int digit);
+  void autoClearPeersAfterPlacement(Index idx, Digit digit);
 
   bool isCompletelySolved() const;
 
@@ -50,7 +50,7 @@ private:
   // We keep a local copy (owned) so that solver techniques can mutate freely
   SudokuCell cells[81];
 
-  static inline bool isValidIndex(int idx);
+  static inline bool isValidIndex(Index idx);
 
   bool _recalcAllCandidatesFromValues();
 };
