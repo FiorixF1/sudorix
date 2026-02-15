@@ -19,7 +19,9 @@ enum class ReasonId : uint8_t {
   PointingPair = 4,
   PointingTriple = 5,
   LockedCandidates = 6,
-  BoxLineReduction = 7
+  ClaimingPair = 7,
+  ClaimingTriple = 8,
+  BoxLineReduction = 9
 };
 
 // one operation = set a value or remove a candidate

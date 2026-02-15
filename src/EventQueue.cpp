@@ -1,5 +1,4 @@
 #include "EventQueue.hpp"
-#include <stdexcept>
 
 // =========================================================
 // Event queue

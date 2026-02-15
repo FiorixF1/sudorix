@@ -10,6 +10,10 @@ SudokuBoard::SudokuBoard() = default;
 
 // only values, candidates are calculated automatically
 int SudokuBoard::importFromString(const char *values) {
+  // clear cache
+  for (Digit x = 1; x <= 9; ++x) {
+    counter[x] = 0;
+  }
   // parse: digits 1..9 are values; 0 or '.' are empty; ignore others
   int tokens = 0;
   for (int i = 0; values[i] != '\0'; i++) {
@@ -17,6 +21,7 @@ int SudokuBoard::importFromString(const char *values) {
     if (ch >= '1' && ch <= '9') {
       // given
       cells[i].setValue(ch - '0');
+      ++counter[ch - '0'];
       ++tokens;
     } else if (ch == '0' || ch == '.') {
       // empty
@@ -45,9 +50,14 @@ int SudokuBoard::importFromString(const char *values) {
 
 // values and candidates
 int SudokuBoard::importFromBuffers(const uint8_t *values, const uint16_t *cands) {
+  // clear cache
+  for (Digit x = 1; x <= 9; ++x) {
+    counter[x] = 0;
+  }
   // TODO: error handling
   for (int i = 0; i < 81; i++) {
     cells[i].setValue(values[i]);
+    ++counter[values[i]];
     // If JS provides candidates for solved cells too, keep them consistent anyway.
     if (values[i] == 0) {
       cells[i].setCandidateMask(cands[i]);
@@ -75,10 +85,12 @@ bool SudokuBoard::isSolved(Index idx) const {
 }
 
 void SudokuBoard::setValue(Index idx, Digit digit) {
+  ++counter[digit];
   cells[idx].setValue(digit);
 }
 
 void SudokuBoard::clearValue(Index idx) {
+  --counter[cells[idx].getValue()];
   cells[idx].clearValue();
 }
 
@@ -107,6 +119,45 @@ void SudokuBoard::disableCandidate(Index idx, Digit digit) {
   cells[idx].disableCandidate(digit);
 }
 
+// --- peers API ---
+Set<Index> SudokuBoard::getPeers(PeerType peerType, Index idx) const {
+  Set<Index> peers;
+
+  if (peerType & PeerType::ROWS) {
+    int r = idxRow(idx);
+    peers.union_assign(ROW_UNITS[r]);
+  }
+  
+  if (peerType & PeerType::COLUMNS) {
+    int c = idxCol(idx);
+    peers.union_assign(COL_UNITS[c]);
+  }
+
+  if (peerType & PeerType::BOXES) {
+    int b = idxBox(idx);
+    peers.union_assign(BOX_UNITS[b]);
+  }
+  
+  // Consider only unsolved cells
+  Set<Index> result = peers.filter([&](Index i){ return i != idx && !isSolved(i); });
+
+  return result;
+}
+
+Set<Index> SudokuBoard::getPeers(PeerType peerType, const Set<Index> &idxSet) const {
+  Set<Index> result;
+  for (auto it = idxSet.begin(); it != idxSet.end(); ++it) {
+    Set<Index> tmp = this->getPeers(peerType, *it);
+    if (it == idxSet.begin()) {
+      // first iteration, the set is empty
+      result.union_assign(tmp);
+    } else {
+      result.intersect_assign(tmp);
+    }
+  }
+  return result;
+}
+
 // --- events API ---
 void SudokuBoard::applySetValue(Index idx, Digit digit) {
   // Set + Auto clear 
@@ -117,31 +168,16 @@ void SudokuBoard::applySetValue(Index idx, Digit digit) {
 void SudokuBoard::applyRemoveCandidate(Index idx, Digit digit) {
   // Remove + Auto place if applicable
   disableCandidate(idx, digit);
-  int only = getSingleCandidate(idx);
-  if (only) {
-    return applySetValue(idx, only);
-  }
+  // auto place not supported in UI
+  //int only = getSingleCandidate(idx);
+  //if (only) {
+  //  return applySetValue(idx, only);
+  //}
 }
 
 void SudokuBoard::autoClearPeersAfterPlacement(Index idx, Digit digit) {
-  int r = idxRow(idx);
-  int c = idxCol(idx);
-  int b = idxBox(idx);
-
-  // Rimuove digit dai candidati dei peers non risolti.
-  for (int k = 0; k < 9; k++) {
-    int ir = ROW_CELLS[r][k];
-    if (ir != idx && !isSolved(ir)) {
-      disableCandidate(ir, digit);
-    }
-    int ic = COL_CELLS[c][k];
-    if (ic != idx && !isSolved(ic)) {
-      disableCandidate(ic, digit);
-    }
-    int ib = BOX_CELLS[b][k];
-    if (ib != idx && !isSolved(ib)) {
-      disableCandidate(ib, digit);
-    }
+  for (Index i : this->getPeers(PeerType::ALL, idx)) {
+    disableCandidate(i, digit);
   }
 }
 
@@ -152,6 +188,16 @@ bool SudokuBoard::isCompletelySolved() const {
     }
   }
   return true;
+}
+
+Set<Digit> SudokuBoard::getAvailableDigits() const {
+  Set<Digit> result;
+  for (auto it = counter.begin(); it != counter.end(); ++it) {
+    if (it->second != 9) {
+      result.insert(it->first);
+    }
+  }
+  return result;
 }
 
 inline bool SudokuBoard::isValidIndex(Index idx) {

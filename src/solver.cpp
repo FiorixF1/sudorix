@@ -1,37 +1,3 @@
-// Sudorix WASM Solver Core (C++)
-// C++/WASM implements the solver engine; UI/gameplay stays in JS.
-//
-// Exported functions:
-//   int sudorix_solver_full(const char *in81, char *out81);
-//   int sudorix_solver_init_board(const char *in81);
-//   int sudorix_solver_next_step(uint32_t *out, uint32_t out_words);
-//   int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out, uint32_t out_words);
-//
-// JS -> WASM contract:
-//   in81[81]   : char      (0 = empty, 1..9 = digit)
-//   values[81] : uint8_t   (0 = empty, 1..9 = digit)
-//   cands[81]  : uint16_t  (bit0..bit8 correspond to digits 1..9)
-//
-// Output string (out81[81] as char):
-//   out81[81]  : char      (. = not solved, 1..9 = digit)
-//
-// Output buffer (out[5] as uint32_t):
-//   out[0] = type     (0 = none, 1 = setValue, 2 = removeCandidate)
-//   out[1] = reasonId (implementation-defined; mapped to label in JS)
-//   out[2] = fromPrev (1 = popped from previously-filled queue, 0 = generated this iteration)
-//   out[3] = count    (number of operations)
-//   out[4..]          (operations as 'count' pairs of cell and value)
-//
-// State is managed by the caller for sudorix_solver_hint.
-// State is managed by WASM for sudorix_solver_full and sudorix_solver_next_step.
-// sudorix_solver_next_step requires an initial call to sudorix_solver_init_board.
-//
-// Notes:
-//   - The event queue is stored in WASM as persistent state (g_eventQueue contains unique events).
-//   - JS must provide a consistent board (values and candidates) before calling sudorix_solver_hint.
-//   - JS must initialize the board with sudorix_solver_init_board before using sudorix_solver_next_step.
-//   - JS does not need to manage the state when using sudorix_solver_full and sudorix_solver_next_step other than UI purpose.
-
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
@@ -52,14 +18,13 @@ static EventQueue g_eventQueue;
 // =========================================================
 
 static void techFullHouse(SudokuBoard &board) {
-  auto scanUnit = [&](const Index unitCells[9]) -> void
+  auto scanUnit = [&](const Unit &unit) -> void
   {
     Index emptyIdx = -1;
     Digit missingDigit = 0;
     Mask present = 0;
 
-    for (int k = 0; k < 9; k++) {
-      const Index idx = unitCells[k];
+    for (Index idx : unit) {
       const Digit v = board.getValue(idx);
       if (v == 0) {
         if (emptyIdx != -1) {
@@ -84,19 +49,18 @@ static void techFullHouse(SudokuBoard &board) {
   };
 
   for (int u = 0; u < 9; u++) {
-    scanUnit(BOX_CELLS[u]);
-    scanUnit(ROW_CELLS[u]);
-    scanUnit(COL_CELLS[u]);
+    scanUnit(BOX_UNITS[u]);
+    scanUnit(ROW_UNITS[u]);
+    scanUnit(COL_UNITS[u]);
   }
 }
 
 static void techHiddenSingles(SudokuBoard &board) {
-  auto scanUnit = [&](const Index unitCells[9]) -> void
+  auto scanUnit = [&](const Unit &unit) -> void
   {
-    for (Digit digit = 1; digit <= 9; digit++) {
+    for (Digit digit : board.getAvailableDigits()) {
       Index foundIdx = -1;
-      for (int k = 0; k < 9; k++) {
-        const Index idx = unitCells[k];
+      for (Index idx : unit) {
         if (board.isSolved(idx)) {
           continue;
         }
@@ -117,13 +81,13 @@ static void techHiddenSingles(SudokuBoard &board) {
   };
 
   for (int u = 0; u < 9; u++) {
-    scanUnit(BOX_CELLS[u]);
+    scanUnit(BOX_UNITS[u]);
   }
   for (int u = 0; u < 9; u++) {
-    scanUnit(ROW_CELLS[u]);
+    scanUnit(ROW_UNITS[u]);
   }
   for (int u = 0; u < 9; u++) {
-    scanUnit(COL_CELLS[u]);
+    scanUnit(COL_UNITS[u]);
   }
 }
 
@@ -132,11 +96,10 @@ static void techLockedCandidates(SudokuBoard &board) {
   //  - if all candidates are confined to a single row within the box,
   //    remove the digit from that row outside the box
   //  - same for a single column
-  for (int b = 0; b < 9; b++) {
-    for (Digit digit = 1; digit <= 9; digit++) {
+  for (const Unit &box : BOX_UNITS) {
+    for (Digit digit : board.getAvailableDigits()) {
       std::vector<Index> positions;
-      for (int k = 0; k < 9; k++) {
-        const Index idx = BOX_CELLS[b][k];
+      for (Index idx : box) {
         if (board.isSolved(idx)) {
           continue;
         }
@@ -155,9 +118,6 @@ static void techLockedCandidates(SudokuBoard &board) {
         reasonId = ReasonId::PointingPair;
       } else if (posCount == 3) {
         reasonId = ReasonId::PointingTriple;
-      } else {
-        // generic name
-        reasonId = ReasonId::LockedCandidates;
       }
 
       const int r0 = idxRow(positions[0]);
@@ -172,11 +132,8 @@ static void techLockedCandidates(SudokuBoard &board) {
       if (sameRow) {
         // remove digit from row r0, excluding cells in this box
         Event event(EventType::RemoveCandidate, reasonId);
-        for (int k = 0; k < 9; k++) {
-          const Index idx = ROW_CELLS[r0][k];
-          if (idxBox(idx) == b) {
-            continue;
-          }
+        Set<Index> set = ROW_UNITS[r0].difference_with(box);
+        for (Index idx : set) {
           if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
             event.addOperation(idx, digit);
           }
@@ -196,11 +153,8 @@ static void techLockedCandidates(SudokuBoard &board) {
       if (sameCol) {
         // remove digit from column c0, excluding cells in this box
         Event event(EventType::RemoveCandidate, reasonId);
-        for (int k = 0; k < 9; k++) {
-          const Index idx = COL_CELLS[c0][k];
-          if (idxBox(idx) == b) {
-            continue;
-          }
+        Set<Index> set = COL_UNITS[c0].difference_with(box);
+        for (Index idx : set) {
           if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
             event.addOperation(idx, digit);
           }
@@ -212,12 +166,11 @@ static void techLockedCandidates(SudokuBoard &board) {
 }
 
 static void techBoxLineReduction(SudokuBoard &board) {
-  // rows
-  for (int r = 0; r < 9; r++) {
-    for (Digit digit = 1; digit <= 9; digit++) {
+  auto scanUnit = [&](const Unit &unit) -> void
+  {
+    for (Digit digit : board.getAvailableDigits()) {
       std::vector<Digit> positions;
-      for (int k = 0; k < 9; k++) {
-        const Index idx = ROW_CELLS[r][k];
+      for (Index idx : unit) {
         if (board.isSolved(idx)) {
           continue;
         }
@@ -231,9 +184,14 @@ static void techBoxLineReduction(SudokuBoard &board) {
         continue; // box line reduction is about confinement with 2 or 3
       }
 
-      ReasonId reasonId = ReasonId::BoxLineReduction;
+      ReasonId reasonId;
+      if (posCount == 2) {
+        reasonId = ReasonId::ClaimingPair;
+      } else if (posCount == 3) {
+        reasonId = ReasonId::ClaimingTriple;
+      }
 
-      std::set<int> boxes;
+      Set<int> boxes;
       bool sameBlock = true;
       for (Index pos : positions) {
         boxes.insert(idxBox(pos));
@@ -244,11 +202,8 @@ static void techBoxLineReduction(SudokuBoard &board) {
         int boxIdx = *boxes.begin();
 
         Event event(EventType::RemoveCandidate, reasonId);
-        for (int k = 0; k < 9; k++) {
-          const Index idx = BOX_CELLS[boxIdx][k];
-          if (idxRow(idx) == r) {
-            continue;
-          }
+        Set<Index> set = BOX_UNITS[boxIdx].difference_with(unit);
+        for (Index idx : set) {
           if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
             event.addOperation(idx, digit);
           }
@@ -256,57 +211,18 @@ static void techBoxLineReduction(SudokuBoard &board) {
         g_eventQueue.enqueue(board, event);
       }
     }
+  };
+
+  for (int u = 0; u < 9; u++) {
+    scanUnit(ROW_UNITS[u]);
   }
-
-  // columns
-  for (int c = 0; c < 9; c++) {
-    for (Digit digit = 1; digit <= 9; digit++) {
-      std::vector<Digit> positions;
-      for (int k = 0; k < 9; k++) {
-        const Index idx = COL_CELLS[c][k];
-        if (board.isSolved(idx)) {
-          continue;
-        }
-        if (board.hasCandidate(idx, digit)) {
-          positions.push_back(idx);
-        }
-      }
-
-      size_t posCount = positions.size();
-      if (posCount < 2 || posCount > 3) {
-        continue; // box line reduction is about confinement with 2 or 3
-      }
-
-      ReasonId reasonId = ReasonId::BoxLineReduction;
-
-      std::set<Index> boxes;
-      bool sameBlock = true;
-      for (Index pos : positions) {
-        boxes.insert(idxBox(pos));
-      }
-
-      if (boxes.size() == 1) {
-        // remove digit from this box, excluding cells in this row/column
-        Index boxIdx = *boxes.begin();
-
-        Event event(EventType::RemoveCandidate, reasonId);
-        for (int k = 0; k < 9; k++) {
-          const Index idx = BOX_CELLS[boxIdx][k];
-          if (idxCol(idx) == c) {
-            continue;
-          }
-          if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
-            event.addOperation(idx, digit);
-          }
-        }
-        g_eventQueue.enqueue(board, event);
-      }
-    }
+  for (int u = 0; u < 9; u++) {
+    scanUnit(COL_UNITS[u]);
   }
 }
 
 static void techNakedSingles(SudokuBoard &board) {
-  for (int i = 0; i < 81; i++) {
+  for (Index i = 0; i < 81; i++) {
     if (board.isSolved(i)) {
       continue;
     }
@@ -326,8 +242,8 @@ static constexpr TechniqueFn TECHNIQUES[] =
   techFullHouse,
   techHiddenSingles,
   techLockedCandidates,
-  techNakedSingles,
-  techBoxLineReduction
+  techBoxLineReduction,
+  techNakedSingles
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Index idx, Digit digit) {
@@ -342,14 +258,7 @@ static bool is_operation_applicable(SudokuBoard &board, EventType type, Index id
   return false;
 }
 
-// Drain the next event and serialize the operations into out[].
-// Layout (out_words is the capacity in uint32_t):
-//   out[0] = eventType (0 none, 1 setValue, 2 removeCandidate)
-//   out[1] = reasonId
-//   out[2] = fromPrev (1 if coming from a previous iteration queue, 0 otherwise)
-//   out[3] = count (number of operations)
-//   then payload pairs (idx, digit) repeated count times.
-//
+// Drain the next event and serialize the operations into out[] as described by API.
 // The function returns only events and operations that are applicable to the current 
 // state of the board. This implies that some events in queue could be discarded.
 // The function will continue the search until the queue is empty.

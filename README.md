@@ -47,8 +47,8 @@ Retumiloj kutime blokas la ŝargon de `.wasm` el `file://`.
 
 ```bash
 make serve
-# then open:
-# http://localhost:8000/Sudorix.html
+# poste malfermu:
+# http://localhost:8000/sudorix.html
 ```
 
 ### Memstara kompilo
@@ -88,18 +88,18 @@ Aldonu novajn teknikojn en `solver.cpp` per realigo de funkcio kun la sekva sign
 
 - `typedef void (*TechniqueFn)(SudokuBoard &);`
 
-Ĉiu funkcio povas aŭ:
+Ĉiu funkcio povas:
 
-- atribui valoron al ĉelo, aŭ
-- forigi kandidaton.
+- atribui valoron al ĉeloj
+- forigi kandidatojn al ĉeloj
 
-Eventoj estas priskribitaj per `uint32_t out[5]`:
+Eventoj estas priskribitaj per `uint32_t out[1024]`:
 
 - `out[0]` = tipo (`EventType::SetValue` aŭ `EventType::RemoveCandidate`)
-- `out[1]` = indekso (0..80)
-- `out[2]` = cifero (1..9)
-- `out[3]` = reasonId (ekzemple `ReasonId::NakedSingle`)
-- `out[4]` = 1 se la evento estis produktita en antaŭa iteracio
+- `out[1]` = reasonId (ekzemple `ReasonId::NakedSingle`)
+- `out[2]` = 1 se la evento estis produktita en antaŭa iteracio
+- `out[3]` = nombro da operacioj
+- listo de operacioj esprimitaj kiel duopo indekso (0..80) / cifero (1..9)
 
 ### API
 
@@ -107,10 +107,10 @@ Eventoj estas priskribitaj per `uint32_t out[5]`:
   - ricevas Sudokuon kiel ĉenon kaj redonas la solvon kiel ĉenon; malplenaj ĉeloj estas markitaj per `0` aŭ `.`
 - `int sudorix_solver_init_board(const char *in81)`
   - ricevas Sudokuon kiel ĉenon kaj konservas ĝin en la interna memoro de la solvilo
-- `int sudorix_solver_next_step(uint32_t *out)`
-  - redonas unu paŝon por solvi la Sudokuon ŝargitan per `sudorix_solver_init_board` kaj ĝisdatigas la internan staton; la eligo estas skribita en `out[5]`:
-  - `out[0]=type`, `out[1]=idx`, `out[2]=digit`, `out[3]=reasonId`, `out[4]=fromPrev`
-- `int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out)`
-  - ricevas Sudokuon kiel tabelojn enhavantajn kaj la jam solvitajn ĉelojn kaj la kandidatojn por ĉiu ĉelo, kaj redonas unu paŝon por daŭrigi la solvon; la eligo estas skribita en `out[5]`:
-  - `out[0]=type`, `out[1]=idx`, `out[2]=digit`, `out[3]=reasonId`, `out[4]=fromPrev`
-  - **neniu interna stato estas ĝisdatigita**
+- `int sudorix_solver_next_step(uint32_t *out, uint32_t out_words)`
+  - redonas unu paŝon por solvi la Sudokuon ŝargitan per `sudorix_solver_init_board` kaj ĝisdatigas la internan staton; la eligo estas skribita en `out` kaj `out_words` estas la longeco utiligita el la bufro:
+  - `out[0]=type`, `out[1]=reasonId`, `out[2]=fromPrev`, `out[3]=count`, `out[4..]=idx/digit`
+- `int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out, uint32_t out_words)`
+  - ricevas Sudokuon kiel tabelojn enhavantajn kaj la jam solvitajn ĉelojn kaj la kandidatojn por ĉiu ĉelo, kaj redonas unu paŝon por daŭrigi la solvon; la eligo estas skribita en `out` kaj `out_words` estas la longeco utiligita el la bufro:
+  - `out[0]=type`, `out[1]=reasonId`, `out[2]=fromPrev`, `out[3]=count`, `out[4..]=idx/digit`
+  - **neniu interna stato estas ĝisdatigata**

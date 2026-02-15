@@ -2,6 +2,7 @@
 #define UTILS_H
 
 #include <cstdint>
+#include "Set.hpp"
 
 #ifdef __EMSCRIPTEN__
   // WASM
@@ -22,45 +23,46 @@
 using Digit = uint8_t;
 using Mask = uint16_t;
 using Index = int8_t;
+using Unit = Set<Index>;
 
 // =========================================================
 // Precomputed indices (rows / cols / boxes)
 // =========================================================
 
-static constexpr Index ROW_CELLS[9][9] = {
-    { 0, 1, 2, 3, 4, 5, 6, 7, 8 },
-    { 9, 10, 11, 12, 13, 14, 15, 16, 17 },
-    { 18, 19, 20, 21, 22, 23, 24, 25, 26 },
-    { 27, 28, 29, 30, 31, 32, 33, 34, 35 },
-    { 36, 37, 38, 39, 40, 41, 42, 43, 44 },
-    { 45, 46, 47, 48, 49, 50, 51, 52, 53 },
-    { 54, 55, 56, 57, 58, 59, 60, 61, 62 },
-    { 63, 64, 65, 66, 67, 68, 69, 70, 71 },
-    { 72, 73, 74, 75, 76, 77, 78, 79, 80 }
+static const Unit ROW_UNITS[9] = {
+    Set({(Index)0,(Index)1,(Index)2,(Index)3,(Index)4,(Index)5,(Index)6,(Index)7,(Index)8 }),
+    Set({(Index)9,(Index)10,(Index)11,(Index)12,(Index)13,(Index)14,(Index)15,(Index)16,(Index)17 }),
+    Set({(Index)18,(Index)19,(Index)20,(Index)21,(Index)22,(Index)23,(Index)24,(Index)25,(Index)26 }),
+    Set({(Index)27,(Index)28,(Index)29,(Index)30,(Index)31,(Index)32,(Index)33,(Index)34,(Index)35 }),
+    Set({(Index)36,(Index)37,(Index)38,(Index)39,(Index)40,(Index)41,(Index)42,(Index)43,(Index)44 }),
+    Set({(Index)45,(Index)46,(Index)47,(Index)48,(Index)49,(Index)50,(Index)51,(Index)52,(Index)53 }),
+    Set({(Index)54,(Index)55,(Index)56,(Index)57,(Index)58,(Index)59,(Index)60,(Index)61,(Index)62 }),
+    Set({(Index)63,(Index)64,(Index)65,(Index)66,(Index)67,(Index)68,(Index)69,(Index)70,(Index)71 }),
+    Set({(Index)72,(Index)73,(Index)74,(Index)75,(Index)76,(Index)77,(Index)78,(Index)79,(Index)80 })
   };
 
-static constexpr Index COL_CELLS[9][9] = {
-    { 0, 9, 18, 27, 36, 45, 54, 63, 72 },
-    { 1, 10, 19, 28, 37, 46, 55, 64, 73 },
-    { 2, 11, 20, 29, 38, 47, 56, 65, 74 },
-    { 3, 12, 21, 30, 39, 48, 57, 66, 75 },
-    { 4, 13, 22, 31, 40, 49, 58, 67, 76 },
-    { 5, 14, 23, 32, 41, 50, 59, 68, 77 },
-    { 6, 15, 24, 33, 42, 51, 60, 69, 78 },
-    { 7, 16, 25, 34, 43, 52, 61, 70, 79 },
-    { 8, 17, 26, 35, 44, 53, 62, 71, 80 }
+static const Unit COL_UNITS[9] = {
+    Set({(Index)0,(Index)9,(Index)18,(Index)27,(Index)36,(Index)45,(Index)54,(Index)63,(Index)72 }),
+    Set({(Index)1,(Index)10,(Index)19,(Index)28,(Index)37,(Index)46,(Index)55,(Index)64,(Index)73 }),
+    Set({(Index)2,(Index)11,(Index)20,(Index)29,(Index)38,(Index)47,(Index)56,(Index)65,(Index)74 }),
+    Set({(Index)3,(Index)12,(Index)21,(Index)30,(Index)39,(Index)48,(Index)57,(Index)66,(Index)75 }),
+    Set({(Index)4,(Index)13,(Index)22,(Index)31,(Index)40,(Index)49,(Index)58,(Index)67,(Index)76 }),
+    Set({(Index)5,(Index)14,(Index)23,(Index)32,(Index)41,(Index)50,(Index)59,(Index)68,(Index)77 }),
+    Set({(Index)6,(Index)15,(Index)24,(Index)33,(Index)42,(Index)51,(Index)60,(Index)69,(Index)78 }),
+    Set({(Index)7,(Index)16,(Index)25,(Index)34,(Index)43,(Index)52,(Index)61,(Index)70,(Index)79 }),
+    Set({(Index)8,(Index)17,(Index)26,(Index)35,(Index)44,(Index)53,(Index)62,(Index)71,(Index)80 })
   };
 
-static constexpr Index BOX_CELLS[9][9] = {
-    { 0, 1, 2, 9, 10, 11, 18, 19, 20 },
-    { 3, 4, 5, 12, 13, 14, 21, 22, 23 },
-    { 6, 7, 8, 15, 16, 17, 24, 25, 26 },
-    { 27, 28, 29, 36, 37, 38, 45, 46, 47 },
-    { 30, 31, 32, 39, 40, 41, 48, 49, 50 },
-    { 33, 34, 35, 42, 43, 44, 51, 52, 53 },
-    { 54, 55, 56, 63, 64, 65, 72, 73, 74 },
-    { 57, 58, 59, 66, 67, 68, 75, 76, 77 },
-    { 60, 61, 62, 69, 70, 71, 78, 79, 80 }
+static const Unit BOX_UNITS[9] = {
+    Set({(Index)0,(Index)1,(Index)2,(Index)9,(Index)10,(Index)11,(Index)18,(Index)19,(Index)20 }),
+    Set({(Index)3,(Index)4,(Index)5,(Index)12,(Index)13,(Index)14,(Index)21,(Index)22,(Index)23 }),
+    Set({(Index)6,(Index)7,(Index)8,(Index)15,(Index)16,(Index)17,(Index)24,(Index)25,(Index)26 }),
+    Set({(Index)27,(Index)28,(Index)29,(Index)36,(Index)37,(Index)38,(Index)45,(Index)46,(Index)47 }),
+    Set({(Index)30,(Index)31,(Index)32,(Index)39,(Index)40,(Index)41,(Index)48,(Index)49,(Index)50 }),
+    Set({(Index)33,(Index)34,(Index)35,(Index)42,(Index)43,(Index)44,(Index)51,(Index)52,(Index)53 }),
+    Set({(Index)54,(Index)55,(Index)56,(Index)63,(Index)64,(Index)65,(Index)72,(Index)73,(Index)74 }),
+    Set({(Index)57,(Index)58,(Index)59,(Index)66,(Index)67,(Index)68,(Index)75,(Index)76,(Index)77 }),
+    Set({(Index)60,(Index)61,(Index)62,(Index)69,(Index)70,(Index)71,(Index)78,(Index)79,(Index)80 })
   };
 
 inline int idxRow(Index idx) {

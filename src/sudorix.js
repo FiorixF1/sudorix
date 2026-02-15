@@ -41,7 +41,9 @@ var business_logic = (() => {
     4: "Pointing Pair",
     5: "Pointing Triple",
     6: "Locked Candidates",
-    7: "Box/Line Reduction"
+    7: "Claiming Pair",
+    8: "Claiming Triple",
+    9: "Box/Line Reduction"
   };
 
   function initWasmSolver() {
