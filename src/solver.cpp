@@ -18,29 +18,29 @@ static EventQueue g_eventQueue;
 // =========================================================
 
 static void techFullHouse(SudokuBoard &board) {
-  auto scanUnit = [&](const Unit &unit) -> void
+  auto scanUnit = [&](const IndexSet &unit) -> void
   {
     Index emptyIdx = -1;
     Digit missingDigit = 0;
-    Mask present = 0;
+    DigitSet present;
 
     for (Index idx : unit) {
-      const Digit v = board.getValue(idx);
-      if (v == 0) {
+      const Digit value = board.getValue(idx);
+      if (value == 0) {
         if (emptyIdx != -1) {
           emptyIdx = -2; // more than one empty
           break;
         }
         emptyIdx = idx;
       } else {
-        present |= digitToBit(v);
+        present.insert(value);
       }
     }
 
     if (emptyIdx >= 0) {
-      const Mask missingMask = (Mask)(0x1FFu & ~present);
-      if (countBits9(missingMask) == 1) {
-        missingDigit = bitToDigitSingle(missingMask);
+      const DigitSet missingDigits = ALL_DIGITS - present;
+      if (missingDigits.size() == 1) {
+        missingDigit = *missingDigits.begin();
         Event event(EventType::SetValue, ReasonId::FullHouse);
         event.addOperation(emptyIdx, missingDigit);
         g_eventQueue.enqueue(board, event);
@@ -56,9 +56,9 @@ static void techFullHouse(SudokuBoard &board) {
 }
 
 static void techHiddenSingles(SudokuBoard &board) {
-  auto scanUnit = [&](const Unit &unit) -> void
+  auto scanUnit = [&](const IndexSet &unit) -> void
   {
-    for (Digit digit : board.getAvailableDigits()) {
+    for (Digit digit : board.getUnsolvedDigits()) {
       Index foundIdx = -1;
       for (Index idx : unit) {
         if (board.isSolved(idx)) {
@@ -96,19 +96,19 @@ static void techLockedCandidates(SudokuBoard &board) {
   //  - if all candidates are confined to a single row within the box,
   //    remove the digit from that row outside the box
   //  - same for a single column
-  for (const Unit &box : BOX_UNITS) {
-    for (Digit digit : board.getAvailableDigits()) {
-      std::vector<Index> positions;
+  for (const IndexSet &box : BOX_UNITS) {
+    for (Digit digit : board.getUnsolvedDigits()) {
+      IndexSet positions;
       for (Index idx : box) {
         if (board.isSolved(idx)) {
           continue;
         }
         if (board.hasCandidate(idx, digit)) {
-          positions.push_back(idx);
+          positions.insert(idx);
         }
       }
 
-      size_t posCount = positions.size();
+      int posCount = positions.size();
       if (posCount < 2) {
         continue; // locked candidates is about confinement with at least 2
       }
@@ -120,7 +120,7 @@ static void techLockedCandidates(SudokuBoard &board) {
         reasonId = ReasonId::PointingTriple;
       }
 
-      const int r0 = idxRow(positions[0]);
+      const int r0 = idxRow(*positions.begin());
       bool sameRow = true;
       for (Index pos : positions) {
         if (idxRow(pos) != r0) {
@@ -132,7 +132,7 @@ static void techLockedCandidates(SudokuBoard &board) {
       if (sameRow) {
         // remove digit from row r0, excluding cells in this box
         Event event(EventType::RemoveCandidate, reasonId);
-        Set<Index> set = ROW_UNITS[r0].difference_with(box);
+        IndexSet set = ROW_UNITS[r0].difference_with(box);
         for (Index idx : set) {
           if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
             event.addOperation(idx, digit);
@@ -141,7 +141,7 @@ static void techLockedCandidates(SudokuBoard &board) {
         g_eventQueue.enqueue(board, event);
       }
 
-      const int c0 = idxCol(positions[0]);
+      const int c0 = idxCol(*positions.begin());
       bool sameCol = true;
       for (Index pos : positions) {
         if (idxCol(pos) != c0) {
@@ -153,7 +153,7 @@ static void techLockedCandidates(SudokuBoard &board) {
       if (sameCol) {
         // remove digit from column c0, excluding cells in this box
         Event event(EventType::RemoveCandidate, reasonId);
-        Set<Index> set = COL_UNITS[c0].difference_with(box);
+        IndexSet set = COL_UNITS[c0].difference_with(box);
         for (Index idx : set) {
           if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
             event.addOperation(idx, digit);
@@ -166,20 +166,20 @@ static void techLockedCandidates(SudokuBoard &board) {
 }
 
 static void techBoxLineReduction(SudokuBoard &board) {
-  auto scanUnit = [&](const Unit &unit) -> void
+  auto scanUnit = [&](const IndexSet &unit) -> void
   {
-    for (Digit digit : board.getAvailableDigits()) {
-      std::vector<Digit> positions;
+    for (Digit digit : board.getUnsolvedDigits()) {
+      IndexSet positions;
       for (Index idx : unit) {
         if (board.isSolved(idx)) {
           continue;
         }
         if (board.hasCandidate(idx, digit)) {
-          positions.push_back(idx);
+          positions.insert(idx);
         }
       }
 
-      size_t posCount = positions.size();
+      int posCount = positions.size();
       if (posCount < 2 || posCount > 3) {
         continue; // box line reduction is about confinement with 2 or 3
       }
@@ -191,7 +191,7 @@ static void techBoxLineReduction(SudokuBoard &board) {
         reasonId = ReasonId::ClaimingTriple;
       }
 
-      Set<int> boxes;
+      IndexSet boxes;
       bool sameBlock = true;
       for (Index pos : positions) {
         boxes.insert(idxBox(pos));
@@ -200,9 +200,8 @@ static void techBoxLineReduction(SudokuBoard &board) {
       if (boxes.size() == 1) {
         // remove digit from this box, excluding cells in this row/column
         int boxIdx = *boxes.begin();
-
         Event event(EventType::RemoveCandidate, reasonId);
-        Set<Index> set = BOX_UNITS[boxIdx].difference_with(unit);
+        IndexSet set = BOX_UNITS[boxIdx].difference_with(unit);
         for (Index idx : set) {
           if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
             event.addOperation(idx, digit);
@@ -221,6 +220,50 @@ static void techBoxLineReduction(SudokuBoard &board) {
   }
 }
 
+static void techHiddenPairs(SudokuBoard &board) {
+  auto scanUnit = [&](const IndexSet &unit) -> void
+  {
+    // map each digit to its positions in this unit
+    IndexSet positions[10];
+    for (Digit digit : board.getUnsolvedDigits()) {
+      IndexSet thisPosition;
+      for (Index idx : unit) {
+        if (board.isSolved(idx)) {
+          continue;
+        }
+        if (board.hasCandidate(idx, digit)) {
+          thisPosition.insert(idx);
+        }
+      }
+      positions[digit] = thisPosition;
+    }
+    // iterate over all pairs of digits that appear exactly twice in the unit
+    for (Digit a = 1; a <= 8; ++a) {
+      if (positions[a].size() == 2) {
+        for (Digit b = a+1; b <= 9; ++b) {
+          if (positions[a] == positions[b]) {
+            // hidden pair spotted
+            Event event(EventType::RemoveCandidate, ReasonId::HiddenPair);
+            for (Index idx : positions[a]) {
+              // remove digits different from a and b from the cells of the pair
+              for (Digit digit : board.getUnsolvedDigits() - DigitSet({a, b})) {
+                event.addOperation(idx, digit);
+              }
+            }
+            g_eventQueue.enqueue(board, event);
+          }
+        }
+      }
+    }
+  };
+
+  for (int u = 0; u < 9; u++) {
+    scanUnit(ROW_UNITS[u]);
+    scanUnit(COL_UNITS[u]);
+    scanUnit(BOX_UNITS[u]);
+  }
+}
+
 static void techNakedSingles(SudokuBoard &board) {
   for (Index i = 0; i < 81; i++) {
     if (board.isSolved(i)) {
@@ -235,6 +278,48 @@ static void techNakedSingles(SudokuBoard &board) {
   }
 }
 
+static void techNakedPairs(SudokuBoard &board) {
+  auto scanUnit = [&](const IndexSet &unit) -> void
+  {
+    // map each position to its digits in this unit
+    DigitSet digits[9];
+
+    std::vector<int> helper = unit.to_vector();
+    for (int i = 0; i < 9; ++i) {
+      Index idx = helper[i];
+      if (board.isSolved(idx)) {
+        continue;
+      }
+      digits[i] = board.getCandidates(idx);
+    }
+
+    // iterate over all positions that have exactly two digits in the unit
+    for (int a = 0; a < 8; ++a) {
+      if (digits[a].size() == 2) {
+        for (int b = a+1; b < 9; ++b) {
+          if (digits[a] == digits[b]) {
+            // naked pair spotted
+            Event event(EventType::RemoveCandidate, ReasonId::NakedPair);
+            for (Index idx : board.getPeers(IndexSet({helper[a], helper[b]}))) {
+              // remove digits present in a and b from other cells they can see
+              for (Digit digit : digits[a]) {
+                event.addOperation(idx, digit);
+              }
+            }
+            g_eventQueue.enqueue(board, event);
+          }
+        }
+      }
+    }
+  };
+
+  for (int u = 0; u < 9; u++) {
+    scanUnit(ROW_UNITS[u]);
+    scanUnit(COL_UNITS[u]);
+    scanUnit(BOX_UNITS[u]);
+  }
+}
+
 typedef void (*TechniqueFn)(SudokuBoard &);
 
 static constexpr TechniqueFn TECHNIQUES[] =
@@ -243,7 +328,9 @@ static constexpr TechniqueFn TECHNIQUES[] =
   techHiddenSingles,
   techLockedCandidates,
   techBoxLineReduction,
-  techNakedSingles
+  techHiddenPairs,
+  techNakedSingles,
+  techNakedPairs
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Index idx, Digit digit) {

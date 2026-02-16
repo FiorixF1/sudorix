@@ -33,18 +33,29 @@ var business_logic = (() => {
   let wasmBufOut    = 0;
   const WASM_OUT_WORDS = 1024;
 
-  const WASM_REASON = {
-    0: "Solver",
-    1: "Full House",
-    2: "Naked Single",
-    3: "Hidden Single",
-    4: "Pointing Pair",
-    5: "Pointing Triple",
-    6: "Locked Candidates",
-    7: "Claiming Pair",
-    8: "Claiming Triple",
-    9: "Box/Line Reduction"
-  };
+  // must follow the same order in Event.hpp
+  const WASM_REASON = [
+    "Solver",
+    "Full House",
+    "Naked Single",
+    "Naked Pair",
+    "Naked Triple",
+    "Naked Quad",
+    "Hidden Single",
+    "Hidden Pair",
+    "Hidden Triple",
+    "Hidden Quad",
+    "Pointing Pair",
+    "Pointing Triple",
+    "Claiming Pair",
+    "Claiming Triple",
+    "X-Wing",
+    "Swordfish",
+    "Jellyfish",
+    "XY-Wing",
+    "XYZ-Wing",
+    "BUG"
+  ];
 
   function initWasmSolver() {
     // createSudorixSolver is defined by solver_wasm.js (Emscripten output)
@@ -1449,7 +1460,8 @@ var business_logic = (() => {
       }
 
       if (any) {
-        appendLog(`Round ${roundNumber} - ${ev.reason || "Solver"}: removed ${removedCount} candidate(s)`);
+        const j = removedCount == 1 ? '' : 'j';
+        appendLog(`Rundo ${roundNumber} - ${ev.reason || "Solver"}: ${removedCount} kandidato${j} forigita${j}`);
       }
 
       return any;

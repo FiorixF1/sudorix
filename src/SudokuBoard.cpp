@@ -60,18 +60,18 @@ int SudokuBoard::importFromBuffers(const uint8_t *values, const uint16_t *cands)
     ++counter[values[i]];
     // If JS provides candidates for solved cells too, keep them consistent anyway.
     if (values[i] == 0) {
-      cells[i].setCandidateMask(cands[i]);
+      cells[i].setCandidates(DigitSet(  cands[i]   ));  // treat candidates as mask
     } else {
-      cells[i].setCandidateMask(digitToBit(values[i]));
+      cells[i].setCandidates(DigitSet( {values[i]} ));  // single value, use { ... }
     }
   }
   return 1;
  }
 
-void SudokuBoard::exportToBuffers(uint8_t *values, uint16_t *cands) const {
-  for (int i = 0; i < 81; i++) {
+void SudokuBoard::exportToBuffers(Digit *values, DigitSet *cands) const {
+  for (Index i = 0; i < 81; i++) {
     values[i] = cells[i].getValue();
-    cands[i]  = cells[i].getCandidateMask();
+    cands[i]  = cells[i].getCandidates();
   }
 }
 
@@ -95,19 +95,19 @@ void SudokuBoard::clearValue(Index idx) {
 }
 
 // --- candidates API ---
-Mask SudokuBoard::getCandidateMask(Index idx) const {
-  return cells[idx].getCandidateMask();
+DigitSet SudokuBoard::getCandidates(Index idx) const {
+  return cells[idx].getCandidates();
 }
 
-void SudokuBoard::setCandidateMask(Index idx, Mask mask) {
-  cells[idx].setCandidateMask(mask);
+void SudokuBoard::setCandidates(Index idx, DigitSet candidates) {
+  cells[idx].setCandidates(candidates);
 }
 
 bool SudokuBoard::hasCandidate(Index idx, Digit digit) const {
   return cells[idx].hasCandidate(digit);
 }
 
-size_t SudokuBoard::countCandidates(Index idx) const {
+int SudokuBoard::countCandidates(Index idx) const {
   return cells[idx].countCandidates();
 }
 
@@ -120,8 +120,8 @@ void SudokuBoard::disableCandidate(Index idx, Digit digit) {
 }
 
 // --- peers API ---
-Set<Index> SudokuBoard::getPeers(PeerType peerType, Index idx) const {
-  Set<Index> peers;
+IndexSet SudokuBoard::getPeers(Index idx, PeerType peerType) const {
+  IndexSet peers;
 
   if (peerType & PeerType::ROWS) {
     int r = idxRow(idx);
@@ -138,16 +138,16 @@ Set<Index> SudokuBoard::getPeers(PeerType peerType, Index idx) const {
     peers.union_assign(BOX_UNITS[b]);
   }
   
-  // Consider only unsolved cells
-  Set<Index> result = peers.filter([&](Index i){ return i != idx && !isSolved(i); });
+  // Consider only unsolved cells and exclude the input cell
+  IndexSet result = peers.filter([&](Index i){ return i != idx && !isSolved(i); });
 
   return result;
 }
 
-Set<Index> SudokuBoard::getPeers(PeerType peerType, const Set<Index> &idxSet) const {
-  Set<Index> result;
+IndexSet SudokuBoard::getPeers(const IndexSet &idxSet, PeerType peerType) const {
+  IndexSet result;
   for (auto it = idxSet.begin(); it != idxSet.end(); ++it) {
-    Set<Index> tmp = this->getPeers(peerType, *it);
+    IndexSet tmp = this->getPeers(*it, peerType);
     if (it == idxSet.begin()) {
       // first iteration, the set is empty
       result.union_assign(tmp);
@@ -160,7 +160,7 @@ Set<Index> SudokuBoard::getPeers(PeerType peerType, const Set<Index> &idxSet) co
 
 // --- events API ---
 void SudokuBoard::applySetValue(Index idx, Digit digit) {
-  // Set + Auto clear 
+  // IndexSet + Auto clear 
   setValue(idx, digit);
   autoClearPeersAfterPlacement(idx, digit);
 }
@@ -176,7 +176,7 @@ void SudokuBoard::applyRemoveCandidate(Index idx, Digit digit) {
 }
 
 void SudokuBoard::autoClearPeersAfterPlacement(Index idx, Digit digit) {
-  for (Index i : this->getPeers(PeerType::ALL, idx)) {
+  for (Index i : this->getPeers(idx)) {
     disableCandidate(i, digit);
   }
 }
@@ -190,8 +190,8 @@ bool SudokuBoard::isCompletelySolved() const {
   return true;
 }
 
-Set<Digit> SudokuBoard::getAvailableDigits() const {
-  Set<Digit> result;
+DigitSet SudokuBoard::getUnsolvedDigits() const {
+  DigitSet result;
   for (auto it = counter.begin(); it != counter.end(); ++it) {
     if (it->second != 9) {
       result.insert(it->first);
@@ -200,24 +200,20 @@ Set<Digit> SudokuBoard::getAvailableDigits() const {
   return result;
 }
 
-inline bool SudokuBoard::isValidIndex(Index idx) {
-  return idx >= 0 && idx < 81;
-}
-
 bool SudokuBoard::_recalcAllCandidatesFromValues() {
   // Reset completo
-  for (int i = 0; i < 81; i++) {
-    setCandidateMask(i, 0);
+  for (Index i = 0; i < 81; i++) {
+    setCandidates(i, DigitSet());
   }
 
   // Precompute delle mask "used" per ogni unità
-  uint16_t rowUsed[9] = {0};
-  uint16_t colUsed[9] = {0};
-  uint16_t boxUsed[9] = {0};
+  DigitSet rowUsed[9];
+  DigitSet colUsed[9];
+  DigitSet boxUsed[9];
 
   // 1) Scansione valori e costruzione used masks + verifica conflitti
   for (Index idx = 0; idx < 81; idx++) {
-    int value = getValue(idx);
+    Digit value = getValue(idx);
     if (value == 0) {
       continue;
     }
@@ -225,31 +221,29 @@ bool SudokuBoard::_recalcAllCandidatesFromValues() {
       return false;
     }
 
-    uint16_t mask = digitToBit(value);
     int r = idxRow(idx);
     int c = idxCol(idx);
     int b = idxBox(idx);
 
-    if ((rowUsed[r] & mask) != 0) {
+    if ((rowUsed[r].contains(value))) {
       return false;
     }
-    if ((colUsed[c] & mask) != 0) {
+    if ((colUsed[c].contains(value))) {
       return false;
     }
-    if ((boxUsed[b] & mask) != 0) {
+    if ((boxUsed[b].contains(value))) {
       return false;
     }
 
-    rowUsed[r] = static_cast<uint16_t>(rowUsed[r] | mask);
-    colUsed[c] = static_cast<uint16_t>(colUsed[c] | mask);
-    boxUsed[b] = static_cast<uint16_t>(boxUsed[b] | mask);
+    rowUsed[r].insert(value);
+    colUsed[c].insert(value);
+    boxUsed[b].insert(value);
 
     // Cella risolta: candidato unico
-    setCandidateMask(idx, mask);
+    setCandidates(idx, DigitSet({value}));
   }
 
   // 2) Celle vuote: candidati = NOT(used in row/col/box)
-  constexpr uint16_t ALL = 0x01FF; // 9 bit a 1
   for (Index idx = 0; idx < 81; idx++) {
     if (isSolved(idx)) {
       continue;
@@ -259,15 +253,15 @@ bool SudokuBoard::_recalcAllCandidatesFromValues() {
     int c = idxCol(idx);
     int b = idxBox(idx);
 
-    uint16_t used = static_cast<uint16_t>(rowUsed[r] | colUsed[c] | boxUsed[b]);
-    uint16_t allowed = static_cast<uint16_t>(ALL & ~used);
+    DigitSet used = rowUsed[r] | colUsed[c] | boxUsed[b];
+    DigitSet allowed = ALL_DIGITS - used;
 
     // Se una cella vuota non ha candidati, griglia inconsistente
-    if (allowed == 0) {
+    if (allowed.empty()) {
       return false;
     }
 
-    setCandidateMask(idx, allowed);
+    setCandidates(idx, allowed);
   }
 
   return true;

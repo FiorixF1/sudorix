@@ -13,15 +13,25 @@ enum class EventType : uint8_t {
 
 enum class ReasonId : uint8_t {
   Solver = 0,
-  FullHouse = 1,
-  NakedSingle = 2,
-  HiddenSingle = 3,
-  PointingPair = 4,
-  PointingTriple = 5,
-  LockedCandidates = 6,
-  ClaimingPair = 7,
-  ClaimingTriple = 8,
-  BoxLineReduction = 9
+  FullHouse,
+  NakedSingle,
+  NakedPair,
+  NakedTriple,
+  NakedQuad,
+  HiddenSingle,
+  HiddenPair,
+  HiddenTriple,
+  HiddenQuad,
+  PointingPair,
+  PointingTriple,
+  ClaimingPair,
+  ClaimingTriple,
+  XWing,
+  Swordfish,
+  Jellyfish,
+  XYWing,
+  XYZWing,
+  BUG
 };
 
 // one operation = set a value or remove a candidate

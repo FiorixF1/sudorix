@@ -5,7 +5,7 @@
 // SudokuCell
 // =========================================================
 
-SudokuCell::SudokuCell() : value(0), candMask(0) { }
+SudokuCell::SudokuCell() = default;
 
 // --- value ---
 Digit SudokuCell::getValue() const {
@@ -20,7 +20,7 @@ void SudokuCell::setValue(Digit digit) {
   value = digit;
   if (digit != 0) {
     // When solved, keep only the digit bit as candidates.
-    candMask = digitToBit(digit);
+    candMask = DigitSet({digit});
   }
 }
 
@@ -29,48 +29,41 @@ void SudokuCell::clearValue() {
 }
 
 // --- candidates ---
-Mask SudokuCell::getCandidateMask() const {
-  return (Mask)(candMask & 0x1FFu);
+DigitSet SudokuCell::getCandidates() const {
+  return candMask;
 }
 
-void SudokuCell::setCandidateMask(Mask mask) {
-  candMask = (Mask)(mask & 0x1FFu);
+void SudokuCell::setCandidates(DigitSet mask) {
+  candMask = mask;
 }
 
 bool SudokuCell::hasCandidate(Digit digit) const {
-  return (getCandidateMask() & digitToBit(digit)) != 0;
+  return candMask.contains(digit);
 }
 
-size_t SudokuCell::countCandidates() const {
-  return countBits9(getCandidateMask());
+int SudokuCell::countCandidates() const {
+  return candMask.size();
 }
 
 Digit SudokuCell::getSingleCandidate() const {
-  const Mask m = getCandidateMask();
-  if (countBits9(m) == 1) {
-    return bitToDigitSingle(m);
+  if (candMask.size() == 1) {
+    return *candMask.begin();
   }
   return 0;
 }
 
 void SudokuCell::enableCandidate(Digit digit) {
-  candMask |= digitToBit(digit);
+  candMask.insert(digit);
 }
 
 bool SudokuCell::disableCandidate(Digit digit) {
-  const Mask bit = digitToBit(digit);
-  const Mask before = getCandidateMask();
-  const Mask after = (uint16_t)(before & ~bit);
-  if (after != before) {
-    candMask = after;
-    return true;
-  }
-  return false;
+  bool result = candMask.contains(digit);
+  candMask.erase(digit);
+  return result;
 }
 
 bool SudokuCell::toggleCandidate(Digit digit) {
-  const Mask bit = digitToBit(digit);
-  const bool wasOn = (candMask & bit) != 0;
-  candMask ^= bit;
-  return !wasOn;
+  bool result = candMask.contains(digit);
+  candMask.toggle(digit);
+  return result;
 }

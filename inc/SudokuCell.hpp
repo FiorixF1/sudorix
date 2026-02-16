@@ -19,13 +19,13 @@ public:
   void clearValue();
 
   // --- candidates ---
-  Mask getCandidateMask() const;
+  DigitSet getCandidates() const;
 
-  void setCandidateMask(Mask mask);
+  void setCandidates(DigitSet mask);
 
   bool hasCandidate(Digit digit) const;
 
-  size_t countCandidates() const;
+  int countCandidates() const;
 
   Digit getSingleCandidate() const;
 
@@ -36,8 +36,8 @@ public:
   bool toggleCandidate(Digit digit);
 
 private:
-  Digit  value;     // 0..9
-  Mask   candMask;  // 9-bit
+  Digit    value;     // 0..9
+  DigitSet candMask;  // 9-bit
 };
 
 #endif // SUDOKU_CELL_H
