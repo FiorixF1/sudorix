@@ -78,9 +78,9 @@ make run PUZZLES=/path/to/file.txt MODE=full|step
 
 Nuntempe Sudorix povas solvi:
 
-* **27858** enigmojn el **31512** el `Just17.txt`
+* **28179** enigmojn el **31512** el `Just17.txt`
 
-* **42** enigmojn el **50000** el `top50000.txt`
+* **70** enigmojn el **50000** el `top50000.txt`
 
 ## Etendado de teknikoj
 

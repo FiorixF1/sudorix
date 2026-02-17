@@ -204,10 +204,10 @@ public:
   }
 
   // ---- operators ----
-  friend constexpr BitmaskSet operator|(BitmaskSet a, const BitmaskSet &b) noexcept { return a.union_assign(b); }
-  friend constexpr BitmaskSet operator&(BitmaskSet a, const BitmaskSet &b) noexcept { return a.intersect_assign(b); }
-  friend constexpr BitmaskSet operator-(BitmaskSet a, const BitmaskSet &b) noexcept { return a.difference_assign(b); }
-  friend constexpr BitmaskSet operator^(BitmaskSet a, const BitmaskSet &b) noexcept { return a.symmetric_difference_assign(b); }
+  friend constexpr BitmaskSet operator|(BitmaskSet a, const BitmaskSet &b) noexcept { return a.union_with(b); }
+  friend constexpr BitmaskSet operator&(BitmaskSet a, const BitmaskSet &b) noexcept { return a.intersect_with(b); }
+  friend constexpr BitmaskSet operator-(BitmaskSet a, const BitmaskSet &b) noexcept { return a.difference_with(b); }
+  friend constexpr BitmaskSet operator^(BitmaskSet a, const BitmaskSet &b) noexcept { return a.symmetric_difference_with(b); }
 
   constexpr BitmaskSet &operator|=(const BitmaskSet &other) noexcept { return union_assign(other); }
   constexpr BitmaskSet &operator&=(const BitmaskSet &other) noexcept { return intersect_assign(other); }

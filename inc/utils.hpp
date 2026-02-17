@@ -15,9 +15,9 @@
 #endif
 
 #ifdef DEBUG
-  #define debug_log(fmt,  ...) emscripten_log(EM_LOG_CONSOLE,  fmt,  ##__VA_ARGS__)
+  #define console_log(fmt,  ...) emscripten_log(EM_LOG_CONSOLE,  fmt,  ##__VA_ARGS__)
 #else
-  #define debug_log(fmt,  ...)
+  #define console_log(fmt,  ...)
 #endif
 
 using Digit = uint8_t;               // digits 1..9

@@ -57,11 +57,11 @@ int SudokuBoard::importFromBuffers(const uint8_t *values, const uint16_t *cands)
   // TODO: error handling
   for (int i = 0; i < 81; i++) {
     cells[i].setValue(values[i]);
-    ++counter[values[i]];
     // If JS provides candidates for solved cells too, keep them consistent anyway.
     if (values[i] == 0) {
       cells[i].setCandidates(DigitSet(  cands[i]   ));  // treat candidates as mask
     } else {
+      ++counter[values[i]];
       cells[i].setCandidates(DigitSet( {values[i]} ));  // single value, use { ... }
     }
   }

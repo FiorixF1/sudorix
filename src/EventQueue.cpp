@@ -7,7 +7,7 @@
 EventQueue::EventQueue() = default;
 
 void EventQueue::enqueue(SudokuBoard &board, Event &event) {
-  // avoid adding empty events (is_operation_applicable will filter them anyways but just in case)
+  // avoid adding empty events otherwise the solver loop would stop
   if (event.getNumberOfOperations() > 0) {
     q.push(event);
   }

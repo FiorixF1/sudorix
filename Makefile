@@ -15,7 +15,7 @@ BIN_DIR         ?= bin
 WEB_DIR         ?= web
 
 # Test data file (one puzzle per line, 81 chars, 0-9 or '.')
-PUZZLES         ?= Just17.txt
+PUZZLES         ?= test/Just17.txt
 MODE            ?= full   # full|step (step is stub in current test main)
 
 # Tools
