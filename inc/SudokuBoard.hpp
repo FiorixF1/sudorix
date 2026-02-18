@@ -26,39 +26,72 @@ public:
   void exportToBuffers(Digit *values, DigitSet *cands) const;
 
   // --- values API ---
-  Digit getValue(Index idx) const;
+  Digit getValue(Cell idx) const;
 
-  bool isSolved(Index idx) const;
+  bool isSolved(Cell idx) const;
 
-  void setValue(Index idx, Digit digit);
+  void setValue(Cell idx, Digit digit);
 
-  void clearValue(Index idx);
+  void clearValue(Cell idx);
 
   // --- candidates API ---
-  DigitSet getCandidates(Index idx) const;
+  DigitSet getCandidates(Cell idx) const;
 
-  void setCandidates(Index idx, DigitSet candidates);
+  void setCandidates(Cell idx, DigitSet candidates);
 
-  bool hasCandidate(Index idx, Digit digit) const;
+  bool hasCandidate(Cell idx, Digit digit) const;
 
-  int countCandidates(Index idx) const;
+  int countCandidates(Cell idx) const;
 
-  Digit getSingleCandidate(Index idx) const;
+  Digit getSingleCandidate(Cell idx) const;
 
-  void disableCandidate(Index idx, Digit digit);
+  void disableCandidate(Cell idx, Digit digit);
 
   // --- peers API ---
-  IndexSet getPeers(Index idx, PeerType peerType = PeerType::ALL) const;
+  IndexSet getPeers(Cell idx, PeerType peerType = PeerType::ALL) const;
 
   IndexSet getPeers(const IndexSet &idxSet, PeerType peerType = PeerType::ALL) const;
 
-  // --- events API ---
-  void applySetValue(Index idx, Digit digit);
+  // --- positions API ---
 
-  void applyRemoveCandidate(Index idx, Digit digit);
+  // given a unit and a digit, tell me which cells contain the digit
+  IndexSet getPositionsOfDigit(Unit unit, Digit d) const;
+
+  // given a unit and a cell (as index 0..8), tell me which digits are contained in the cell
+  DigitSet getDigitsInPosition(Unit unit, int i) const;
+
+  // --- events API ---
+  void applySetValue(Cell idx, Digit digit);
+
+  void applyRemoveCandidate(Cell idx, Digit digit);
+
+  // --- units API ---
+  const std::vector<Unit> &getRows() const;
+
+  const std::vector<Unit> &getColumns() const;
+
+  const std::vector<Unit> &getBoxes() const;
+
+  const Unit &getRowByCell(Cell idx) const;
+
+  const Unit &getColumnByCell(Cell idx) const;
+
+  const Unit &getBoxByCell(Cell idx) const;
+
+  const Unit &getRowByIndex08(int idx) const;
+
+  const Unit &getColumnByIndex08(int idx) const;
+
+  const Unit &getBoxByIndex08(int idx) const;
+
+  int getRowIndex08(Cell idx) const;
+
+  int getColumnIndex08(Cell idx) const;
+
+  int getBoxIndex08(Cell idx) const;
 
   // --- other ---
-  void autoClearPeersAfterPlacement(Index idx, Digit digit);
+  void autoClearPeersAfterPlacement(Cell idx, Digit digit);
 
   bool isCompletelySolved() const;
 

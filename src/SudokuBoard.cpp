@@ -2,6 +2,46 @@
 #include "utils.hpp"
 
 // =========================================================
+// Precomputed indices (rows / cols / boxes)
+// =========================================================
+
+static const std::vector<Unit> ROW_UNITS = {
+    IndexSet({ 0,  1,  2,  3,  4,  5,  6,  7,  8 }), 
+    IndexSet({ 9, 10, 11, 12, 13, 14, 15, 16, 17 }),
+    IndexSet({18, 19, 20, 21, 22, 23, 24, 25, 26 }),
+    IndexSet({27, 28, 29, 30, 31, 32, 33, 34, 35 }),
+    IndexSet({36, 37, 38, 39, 40, 41, 42, 43, 44 }),
+    IndexSet({45, 46, 47, 48, 49, 50, 51, 52, 53 }),
+    IndexSet({54, 55, 56, 57, 58, 59, 60, 61, 62 }),
+    IndexSet({63, 64, 65, 66, 67, 68, 69, 70, 71 }),
+    IndexSet({72, 73, 74, 75, 76, 77, 78, 79, 80 })
+  };
+
+static const std::vector<Unit> COL_UNITS = {
+    IndexSet({ 0,  9, 18, 27, 36, 45, 54, 63, 72 }),
+    IndexSet({ 1, 10, 19, 28, 37, 46, 55, 64, 73 }),
+    IndexSet({ 2, 11, 20, 29, 38, 47, 56, 65, 74 }),
+    IndexSet({ 3, 12, 21, 30, 39, 48, 57, 66, 75 }),
+    IndexSet({ 4, 13, 22, 31, 40, 49, 58, 67, 76 }),
+    IndexSet({ 5, 14, 23, 32, 41, 50, 59, 68, 77 }),
+    IndexSet({ 6, 15, 24, 33, 42, 51, 60, 69, 78 }),
+    IndexSet({ 7, 16, 25, 34, 43, 52, 61, 70, 79 }),
+    IndexSet({ 8, 17, 26, 35, 44, 53, 62, 71, 80 })
+  };
+
+static const std::vector<Unit> BOX_UNITS = {
+    IndexSet({ 0,  1,  2,  9, 10, 11, 18, 19, 20 }),
+    IndexSet({ 3,  4,  5, 12, 13, 14, 21, 22, 23 }),
+    IndexSet({ 6,  7,  8, 15, 16, 17, 24, 25, 26 }),
+    IndexSet({27, 28, 29, 36, 37, 38, 45, 46, 47 }),
+    IndexSet({30, 31, 32, 39, 40, 41, 48, 49, 50 }),
+    IndexSet({33, 34, 35, 42, 43, 44, 51, 52, 53 }),
+    IndexSet({54, 55, 56, 63, 64, 65, 72, 73, 74 }),
+    IndexSet({57, 58, 59, 66, 67, 68, 75, 76, 77 }),
+    IndexSet({60, 61, 62, 69, 70, 71, 78, 79, 80 })
+  };
+
+// =========================================================
 // SudokuBoard
 // =========================================================
 
@@ -69,77 +109,74 @@ int SudokuBoard::importFromBuffers(const uint8_t *values, const uint16_t *cands)
  }
 
 void SudokuBoard::exportToBuffers(Digit *values, DigitSet *cands) const {
-  for (Index i = 0; i < 81; i++) {
+  for (int i = 0; i < 81; i++) {
     values[i] = cells[i].getValue();
     cands[i]  = cells[i].getCandidates();
   }
 }
 
 // --- values API ---
-Digit SudokuBoard::getValue(Index idx) const {
+Digit SudokuBoard::getValue(Cell idx) const {
   return cells[idx].getValue();
 }
 
-bool SudokuBoard::isSolved(Index idx) const {
+bool SudokuBoard::isSolved(Cell idx) const {
   return cells[idx].isSolved();
 }
 
-void SudokuBoard::setValue(Index idx, Digit digit) {
+void SudokuBoard::setValue(Cell idx, Digit digit) {
   ++counter[digit];
   cells[idx].setValue(digit);
 }
 
-void SudokuBoard::clearValue(Index idx) {
+void SudokuBoard::clearValue(Cell idx) {
   --counter[cells[idx].getValue()];
   cells[idx].clearValue();
 }
 
 // --- candidates API ---
-DigitSet SudokuBoard::getCandidates(Index idx) const {
+DigitSet SudokuBoard::getCandidates(Cell idx) const {
   return cells[idx].getCandidates();
 }
 
-void SudokuBoard::setCandidates(Index idx, DigitSet candidates) {
+void SudokuBoard::setCandidates(Cell idx, DigitSet candidates) {
   cells[idx].setCandidates(candidates);
 }
 
-bool SudokuBoard::hasCandidate(Index idx, Digit digit) const {
+bool SudokuBoard::hasCandidate(Cell idx, Digit digit) const {
   return cells[idx].hasCandidate(digit);
 }
 
-int SudokuBoard::countCandidates(Index idx) const {
+int SudokuBoard::countCandidates(Cell idx) const {
   return cells[idx].countCandidates();
 }
 
-Digit SudokuBoard::getSingleCandidate(Index idx) const {
+Digit SudokuBoard::getSingleCandidate(Cell idx) const {
   return cells[idx].getSingleCandidate();
 }
 
-void SudokuBoard::disableCandidate(Index idx, Digit digit) {
+void SudokuBoard::disableCandidate(Cell idx, Digit digit) {
   cells[idx].disableCandidate(digit);
 }
 
 // --- peers API ---
-IndexSet SudokuBoard::getPeers(Index idx, PeerType peerType) const {
+IndexSet SudokuBoard::getPeers(Cell idx, PeerType peerType) const {
   IndexSet peers;
 
   if (peerType & PeerType::ROWS) {
-    int r = idxRow(idx);
-    peers.union_assign(ROW_UNITS[r]);
+    peers.union_assign(getRowByCell(idx));
   }
   
   if (peerType & PeerType::COLUMNS) {
-    int c = idxCol(idx);
-    peers.union_assign(COL_UNITS[c]);
+    peers.union_assign(getColumnByCell(idx));
   }
 
   if (peerType & PeerType::BOXES) {
-    int b = idxBox(idx);
-    peers.union_assign(BOX_UNITS[b]);
+    peers.union_assign(getBoxByCell(idx));
   }
   
   // Consider only unsolved cells and exclude the input cell
-  IndexSet result = peers.filter([&](Index i){ return i != idx && !isSolved(i); });
+  IndexSet result = peers.filter([&](Cell i){ return i != idx && !isSolved(i); });
 
   return result;
 }
@@ -158,14 +195,87 @@ IndexSet SudokuBoard::getPeers(const IndexSet &idxSet, PeerType peerType) const 
   return result;
 }
 
+// --- positions API ---
+const std::vector<Unit> &SudokuBoard::getRows() const {
+  return ROW_UNITS;
+} 
+
+const std::vector<Unit> &SudokuBoard::getColumns() const {
+  return COL_UNITS;
+}
+
+const std::vector<Unit> &SudokuBoard::getBoxes() const {
+  return BOX_UNITS;
+}
+
+const Unit &SudokuBoard::getRowByCell(Cell idx) const {
+  return ROW_UNITS[getRowIndex08(idx)];
+} 
+
+const Unit &SudokuBoard::getColumnByCell(Cell idx) const {
+  return COL_UNITS[getColumnIndex08(idx)];
+}
+
+const Unit &SudokuBoard::getBoxByCell(Cell idx) const {
+  return BOX_UNITS[getBoxIndex08(idx)];
+}
+
+const Unit &SudokuBoard::getRowByIndex08(int idx) const {
+  return ROW_UNITS[idx];
+} 
+
+const Unit &SudokuBoard::getColumnByIndex08(int idx) const {
+  return COL_UNITS[idx];
+}
+
+const Unit &SudokuBoard::getBoxByIndex08(int idx) const {
+  return BOX_UNITS[idx];
+}
+
+int SudokuBoard::getRowIndex08(Cell idx) const {
+  return (int)(idx / 9);
+}
+
+int SudokuBoard::getColumnIndex08(Cell idx) const {
+  return (int)(idx % 9);
+}
+
+int SudokuBoard::getBoxIndex08(Cell idx) const {
+  const int r = getRowIndex08(idx);
+  const int c = getColumnIndex08(idx);
+  return (int)((r / 3) * 3 + (c / 3));
+}
+
+IndexSet SudokuBoard::getPositionsOfDigit(Unit unit, Digit d) const {
+  IndexSet positions;
+  for (Cell idx : unit) {
+    if (this->isSolved(idx)) {
+      continue;
+    }
+    if (this->hasCandidate(idx, d)) {
+      positions.insert(idx);
+    }
+  }
+  return positions;
+}
+  
+DigitSet SudokuBoard::getDigitsInPosition(Unit unit, int i) const {
+  std::vector<int> unitList = unit.to_vector();
+  Cell idx = unitList[i];
+  if (this->isSolved(idx)) {
+    return DigitSet(0);
+  }
+  return this->getCandidates(idx);
+}
+
 // --- events API ---
-void SudokuBoard::applySetValue(Index idx, Digit digit) {
-  // IndexSet + Auto clear 
+void SudokuBoard::applySetValue(Cell idx, Digit digit) {
+  // Set + Auto clear 
   setValue(idx, digit);
   autoClearPeersAfterPlacement(idx, digit);
 }
 
-void SudokuBoard::applyRemoveCandidate(Index idx, Digit digit) {
+void SudokuBoard::applyRemoveCandidate(Cell idx, Digit digit) {
   // Remove + Auto place if applicable
   disableCandidate(idx, digit);
   // auto place not supported in UI
@@ -175,8 +285,8 @@ void SudokuBoard::applyRemoveCandidate(Index idx, Digit digit) {
   //}
 }
 
-void SudokuBoard::autoClearPeersAfterPlacement(Index idx, Digit digit) {
-  for (Index i : this->getPeers(idx)) {
+void SudokuBoard::autoClearPeersAfterPlacement(Cell idx, Digit digit) {
+  for (Cell i : this->getPeers(idx)) {
     disableCandidate(i, digit);
   }
 }
@@ -202,7 +312,7 @@ DigitSet SudokuBoard::getUnsolvedDigits() const {
 
 bool SudokuBoard::_recalcAllCandidatesFromValues() {
   // Reset completo
-  for (Index i = 0; i < 81; i++) {
+  for (Cell i = 0; i < 81; i++) {
     setCandidates(i, DigitSet());
   }
 
@@ -212,18 +322,15 @@ bool SudokuBoard::_recalcAllCandidatesFromValues() {
   DigitSet boxUsed[9];
 
   // 1) Scansione valori e costruzione used masks + verifica conflitti
-  for (Index idx = 0; idx < 81; idx++) {
+  for (Cell idx = 0; idx < 81; idx++) {
     Digit value = getValue(idx);
     if (value == 0) {
       continue;
     }
-    if (value < 1 || value > 9) {
-      return false;
-    }
 
-    int r = idxRow(idx);
-    int c = idxCol(idx);
-    int b = idxBox(idx);
+    int r = getRowIndex08(idx);
+    int c = getColumnIndex08(idx);
+    int b = getBoxIndex08(idx);
 
     if ((rowUsed[r].contains(value))) {
       return false;
@@ -244,14 +351,14 @@ bool SudokuBoard::_recalcAllCandidatesFromValues() {
   }
 
   // 2) Celle vuote: candidati = NOT(used in row/col/box)
-  for (Index idx = 0; idx < 81; idx++) {
+  for (Cell idx = 0; idx < 81; idx++) {
     if (isSolved(idx)) {
       continue;
     }
 
-    int r = idxRow(idx);
-    int c = idxCol(idx);
-    int b = idxBox(idx);
+    int r = getRowIndex08(idx);
+    int c = getColumnIndex08(idx);
+    int b = getBoxIndex08(idx);
 
     DigitSet used = rowUsed[r] | colUsed[c] | boxUsed[b];
     DigitSet allowed = ALL_DIGITS - used;

@@ -16,6 +16,6 @@ size_t Event::getNumberOfOperations() {
   return this->ops.size();
 }
 
-void Event::addOperation(Index idx, Digit digit) {
+void Event::addOperation(Cell idx, Digit digit) {
   ops.push_back({idx, digit});
 }

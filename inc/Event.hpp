@@ -36,7 +36,7 @@ enum class ReasonId : uint8_t {
 
 // one operation = set a value or remove a candidate
 struct Operation {
-  Index idx;
+  Cell idx;
   Digit digit;
 };
 
@@ -51,7 +51,7 @@ public:
 
   const std::vector<Operation> &getOperations();
   size_t getNumberOfOperations();
-  void addOperation(Index idx, Digit digit);
+  void addOperation(Cell idx, Digit digit);
 
 private:
   // an event is a set of multiple operations
