@@ -348,7 +348,7 @@ static void techBoxLineReduction(SudokuBoard &board) {
   {
     for (Digit digit : board.getUnsolvedDigits()) {
       // get cells where the digit is present in the unit
-      Unit positions = board.getPositionsOfDigit(unit, digit);
+      IndexSet positions = board.getPositionsOfDigit(unit, digit);
 
       int posCount = positions.size();
       if (posCount < 2 || posCount > 3) {
@@ -391,6 +391,105 @@ static void techBoxLineReduction(SudokuBoard &board) {
   }
 }
 
+static void techXWing(SudokuBoard &board) {
+  auto scanDigit = [&](Digit digit) -> void
+  {
+    // rows
+    const std::vector<Unit> &rows = board.getRows();
+    for (int a = 0; a < 8; ++a) {
+      // get cells where the digit is present in the row
+      const Unit &row = rows[a];
+      IndexSet positions = board.getPositionsOfDigit(row, digit);
+
+      int posCount = positions.size();
+      if (posCount != 2) {
+        continue; // X-Wing requires exactly two locations
+      }
+
+      // get the columns corresponding to the positions of the digit
+      std::vector<int> positionsList = positions.to_vector();
+      int ca0 = board.getColumnIndex08(positionsList[0]);
+      int ca1 = board.getColumnIndex08(positionsList[1]);
+
+      for (int b = a+1; b < 9; ++b) {
+        const Unit &row = rows[b];
+        IndexSet positions = board.getPositionsOfDigit(row, digit);
+
+        int posCount = positions.size();
+        if (posCount != 2) {
+          continue; // X-Wing requires exactly two locations
+        }
+      
+        std::vector<int> positionsList = positions.to_vector();
+        int cb0 = board.getColumnIndex08(positionsList[0]);
+        int cb1 = board.getColumnIndex08(positionsList[1]);
+        if (ca0 == cb0 && ca1 == cb1) {
+          // X-Wing spotted
+          Event event(EventType::RemoveCandidate, ReasonId::XWing);
+          IndexSet set = (board.getColumnByIndex08(ca0) | board.getColumnByIndex08(ca1)) - 
+                         (rows[a] | rows[b]);
+          for (Cell idx : set) {
+            // remove instances of the digit from the two columns, excluding the two rows
+            if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
+              event.addOperation(idx, digit);
+            }
+          }
+          g_eventQueue.enqueue(board, event);
+        }
+      }
+    }
+
+    // columns
+    const std::vector<Unit> &columns = board.getColumns();
+    for (int a = 0; a < 8; ++a) {
+      // get cells where the digit is present in the column
+      const Unit &column = columns[a];
+      IndexSet positions = board.getPositionsOfDigit(column, digit);
+
+      int posCount = positions.size();
+      if (posCount != 2) {
+        continue; // X-Wing requires exactly two locations
+      }
+
+      // get the rows corresponding to the positions of the digit
+      std::vector<int> positionsList = positions.to_vector();
+      int ra0 = board.getRowIndex08(positionsList[0]);
+      int ra1 = board.getRowIndex08(positionsList[1]);
+
+      for (int b = a+1; b < 9; ++b) {
+        const Unit &column = columns[b];
+        IndexSet positions = board.getPositionsOfDigit(column, digit);
+
+        int posCount = positions.size();
+        if (posCount != 2) {
+          continue; // X-Wing requires exactly two locations
+        }
+      
+        std::vector<int> positionsList = positions.to_vector();
+        int rb0 = board.getRowIndex08(positionsList[0]);
+        int rb1 = board.getRowIndex08(positionsList[1]);
+        if (ra0 == rb0 && ra1 == rb1) {
+          // X-Wing spotted
+          Event event(EventType::RemoveCandidate, ReasonId::XWing);
+          IndexSet set = (board.getRowByIndex08(ra0) | board.getRowByIndex08(ra1)) - 
+                         (columns[a] | columns[b]);
+          for (Cell idx : set) {
+            // remove instances of the digit from the two rows, excluding the two columns
+            if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
+              event.addOperation(idx, digit);
+            }
+          }
+          g_eventQueue.enqueue(board, event);
+        }
+      }
+    }
+  };
+
+  for (Digit digit : board.getUnsolvedDigits()) {
+    scanDigit(digit);
+  }
+}
+
 typedef void (*TechniqueFn)(SudokuBoard &);
 
 // nCr(9, 2) = 36
@@ -408,6 +507,7 @@ static constexpr TechniqueFn TECHNIQUES[] =
   techHiddenTriples,
   techNakedPairs,
   techNakedTriples,
+  techXWing,
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Cell idx, Digit digit) {
