@@ -54,6 +54,7 @@ public:
   void addOperation(Cell idx, Digit digit);
 
 private:
+  friend class EventQueue;
   // an event is a set of multiple operations
   std::vector<Operation> ops;
 };

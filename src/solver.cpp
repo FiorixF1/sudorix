@@ -312,9 +312,7 @@ static void techLockedCandidates(SudokuBoard &board) {
         Event event(EventType::RemoveCandidate, reasonId);
         IndexSet set = board.getRowByIndex08(r0).difference_with(box);
         for (Cell idx : set) {
-          if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
-            event.addOperation(idx, digit);
-          }
+          event.addOperation(idx, digit);
         }
         g_eventQueue.enqueue(board, event);
       }
@@ -333,9 +331,7 @@ static void techLockedCandidates(SudokuBoard &board) {
         Event event(EventType::RemoveCandidate, reasonId);
         IndexSet set = board.getColumnByIndex08(c0).difference_with(box);
         for (Cell idx : set) {
-          if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
-            event.addOperation(idx, digit);
-          }
+          event.addOperation(idx, digit);
         }
         g_eventQueue.enqueue(board, event);
       }
@@ -374,9 +370,7 @@ static void techBoxLineReduction(SudokuBoard &board) {
         Event event(EventType::RemoveCandidate, reasonId);
         IndexSet set = board.getBoxByIndex08(boxIdx).difference_with(unit);
         for (Cell idx : set) {
-          if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
-            event.addOperation(idx, digit);
-          }
+          event.addOperation(idx, digit);
         }
         g_eventQueue.enqueue(board, event);
       }
@@ -430,9 +424,7 @@ static void techXWing(SudokuBoard &board) {
                          (rows[a] | rows[b]);
           for (Cell idx : set) {
             // remove instances of the digit from the two columns, excluding the two rows
-            if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
-              event.addOperation(idx, digit);
-            }
+            event.addOperation(idx, digit);
           }
           g_eventQueue.enqueue(board, event);
         }
@@ -475,9 +467,7 @@ static void techXWing(SudokuBoard &board) {
                          (columns[a] | columns[b]);
           for (Cell idx : set) {
             // remove instances of the digit from the two rows, excluding the two columns
-            if (!board.isSolved(idx) && board.hasCandidate(idx, digit)) {
-              event.addOperation(idx, digit);
-            }
+            event.addOperation(idx, digit);
           }
           g_eventQueue.enqueue(board, event);
         }

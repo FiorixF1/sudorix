@@ -7,8 +7,15 @@
 EventQueue::EventQueue() = default;
 
 void EventQueue::enqueue(SudokuBoard &board, Event &event) {
-  // avoid adding empty events otherwise the solver loop would stop
+  // filter empty events and operations that would stop the solver loop
   if (event.getNumberOfOperations() > 0) {
+    event.ops.erase(
+      std::remove_if(event.ops.begin(), event.ops.end(),
+          [&](Operation op) {
+            return (board.isSolved(op.idx) || !board.hasCandidate(op.idx, op.digit));
+          }),
+      event.ops.end()
+    );
     q.push(event);
   }
 }
