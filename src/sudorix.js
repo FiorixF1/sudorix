@@ -145,41 +145,48 @@ var business_logic = (() => {
       return null;
     }
 
-    // C++ batch ABI:
-    // out[0]=type, out[1]=reasonId, out[2]=fromPrev, out[3]=count, then pairs
+    // C++ batch ABI (words):
+    // out[0]=type, out[1]=reasonId, out[2]=fromPrev, out[3]=opCount, out[4]=srcCount
+    // then srcCount pairs (idx, mask), then opCount pairs (idx, mask)
     const ok = wasmSolveNextStep(wasmBufOut, WASM_OUT_WORDS);
     if (!ok) {
       return null;
     }
 
     const out = wasmModule.HEAPU32.subarray(wasmBufOut >> 2, (wasmBufOut >> 2) + WASM_OUT_WORDS);
-    const type = out[0] >>> 0;
+    const typeN = out[0] >>> 0;
     const reasonId = out[1] >>> 0;
     const fromPrev = (out[2] >>> 0) !== 0;
-    const count = out[3] >>> 0;
+    const opCount = out[3] >>> 0;
+    const srcCount = out[4] >>> 0;
 
-    if (type === 0 || count === 0) {
+    if (typeN === 0 || opCount === 0) {
       return null;
     }
 
-    const ops = [];
-    for (let i = 0; i < count; i++) {
-      const a = out[4 + 2 * i + 0] >>> 0;
-      const b = out[4 + 2 * i + 1] >>> 0;
-      if (type === 1) {
-        ops.push({ idx: a, digit: b });
-      } else if (type === 2) {
-        ops.push({ idx: a, digit: b });
-      }
+    const ev = {
+      type: (typeN === 1) ? "setValue" : (typeN === 2) ? "removeCandidate" : "none",
+      reason: WASM_REASON[reasonId] || "Solver",
+      fromPrev: fromPrev,
+      ops: [],
+      sources: []
+    };
+
+    // sources
+    for (let i = 0; i < srcCount; i++) {
+      const idx = out[5 + 2 * i + 0] >>> 0;
+      const mask = out[5 + 2 * i + 1] >>> 0;
+      ev.sources.push({ idx: idx, mask: mask & 0x1FF });
     }
 
-    if (type === 1) {
-      return { type: "setValue", ops, reason: WASM_REASON[reasonId] || "Solver", fromPrev };
+    const opsBase = 5 + 2 * srcCount;
+    for (let i = 0; i < opCount; i++) {
+      const idx = out[opsBase + 2 * i + 0] >>> 0;
+      const mask = out[opsBase + 2 * i + 1] >>> 0;
+      ev.ops.push({ idx: idx, mask: mask & 0x1FF });
     }
-    if (type === 2) {
-      return { type: "removeCandidate", ops, reason: WASM_REASON[reasonId] || "Solver", fromPrev };
-    }
-    return null;
+
+    return ev;
   }
 
   function wasmComputeHint(board) {
@@ -204,33 +211,38 @@ var business_logic = (() => {
     }
 
     const out = wasmModule.HEAPU32.subarray(wasmBufOut >> 2, (wasmBufOut >> 2) + WASM_OUT_WORDS);
-    const type = out[0] >>> 0;
+    const typeN = out[0] >>> 0;
     const reasonId = out[1] >>> 0;
     const fromPrev = (out[2] >>> 0) !== 0;
-    const count = out[3] >>> 0;
+    const opCount = out[3] >>> 0;
+    const srcCount = out[4] >>> 0;
 
-    if (type === 0 || count === 0) {
+    if (typeN === 0 || opCount === 0) {
       return null;
     }
 
-    const ops = [];
-    for (let i = 0; i < count; i++) {
-      const a = out[4 + 2 * i + 0] >>> 0;
-      const b = out[4 + 2 * i + 1] >>> 0;
-      if (type === 1) {
-        ops.push({ idx: a, digit: b });
-      } else if (type === 2) {
-        ops.push({ idx: a, digit: b });
-      }
+    const ev = {
+      type: (typeN === 1) ? "setValue" : (typeN === 2) ? "removeCandidate" : "none",
+      reason: WASM_REASON[reasonId] || "Solver",
+      fromPrev: fromPrev,
+      ops: [],
+      sources: []
+    };
+
+    for (let i = 0; i < srcCount; i++) {
+      const idx = out[5 + 2 * i + 0] >>> 0;
+      const mask = out[5 + 2 * i + 1] >>> 0;
+      ev.sources.push({ idx: idx, mask: mask & 0x1FF });
     }
 
-    if (type === 1) {
-      return { type: "setValue", ops, reason: WASM_REASON[reasonId] || "Solver", fromPrev };
+    const opsBase = 5 + 2 * srcCount;
+    for (let i = 0; i < opCount; i++) {
+      const idx = out[opsBase + 2 * i + 0] >>> 0;
+      const mask = out[opsBase + 2 * i + 1] >>> 0;
+      ev.ops.push({ idx: idx, mask: mask & 0x1FF });
     }
-    if (type === 2) {
-      return { type: "removeCandidate", ops, reason: WASM_REASON[reasonId] || "Solver", fromPrev };
-    }
-    return null;
+
+    return ev;
   }
 
   /* =========================================================
@@ -281,6 +293,118 @@ var business_logic = (() => {
     }
     // return number of active bits
     return c;
+  }
+
+  function maskToDigits(mask) {
+    const out = [];
+    const m = (mask >>> 0) & 0x1FF;
+    for (let d = 1; d <= 9; d++) {
+      if (m & digitToBit(d)) {
+        out.push(d);
+      }
+    }
+    return out;
+  }
+
+  function maskToSingleDigit(mask) {
+    const m = (mask >>> 0) & 0x1FF;
+    if (m === 0 || (m & (m - 1)) !== 0) {
+      return 0;
+    }
+    for (let d = 1; d <= 9; d++) {
+      if (m === digitToBit(d)) {
+        return d;
+      }
+    }
+    return 0;
+  }
+
+  function getCandidateElement(idx, digit) {
+    const cellEl = gridEl.children[idx];
+    if (!cellEl) {
+      return null;
+    }
+    const candsEl = cellEl.querySelector(".cands");
+    if (!candsEl) {
+      return null;
+    }
+    const list = candsEl.querySelectorAll(".cand");
+    return list && list[digit - 1] ? list[digit - 1] : null;
+  }
+
+  function clearAllEventHighlights() {
+    for (let i = 0; i < 81; i++) {
+      const cellEl = gridEl.children[i];
+      if (!cellEl) {
+        continue;
+      }
+      cellEl.classList.remove("flashSet");
+      cellEl.classList.remove("flashRemove");
+      const candsEl = cellEl.querySelector(".cands");
+      if (!candsEl) {
+        continue;
+      }
+      for (const candEl of candsEl.querySelectorAll(".cand")) {
+        candEl.classList.remove("flashSource");
+        candEl.classList.remove("flashSetCand");
+        candEl.classList.remove("flashRemoveCand");
+        candEl.classList.remove("holdFlash");
+      }
+    }
+  }
+
+  function highlightSourcesAndOps(ev, hold) {
+    if (!ev) {
+      return;
+    }
+    const holdClass = hold ? "holdFlash" : "";
+    // Sources: green
+    if (ev.sources) {
+      for (const s of ev.sources) {
+        const idx = s.idx;
+        const digits = maskToDigits(s.mask);
+        for (const d of digits) {
+          const el = getCandidateElement(idx, d);
+          if (el) {
+            el.classList.add("flashSource");
+            if (holdClass) {
+              el.classList.add(holdClass);
+            }
+          }
+        }
+      }
+    }
+
+    // Operations: set => green, remove => red
+    if (ev.ops) {
+      for (const op of ev.ops) {
+        const idx = op.idx;
+        if (ev.type === "setValue") {
+          const d = maskToSingleDigit(op.mask);
+          if (d) {
+            const el = getCandidateElement(idx, d);
+            if (el) {
+              el.classList.add("flashSetCand");
+              if (holdClass) {
+                el.classList.add(holdClass);
+              }
+            }
+          }
+        } else if (ev.type === "removeCandidate") {
+          const digits = maskToDigits(op.mask);
+          for (const d of digits) {
+            const el = getCandidateElement(idx, d);
+            if (el) {
+              el.classList.add("flashRemoveCand");
+              if (holdClass) {
+                el.classList.add(holdClass);
+              }
+            }
+          }
+        }
+        flashCell(idx, ev.type);
+      }
+    }
   }
 
   function singleBitIndex(mask) {
@@ -631,6 +755,69 @@ var business_logic = (() => {
       return text;
     }
 
+    exportState() {
+      const state = {
+        filledCount: this.#filledCount,
+        cells: []
+      };
+      for (let i = 0; i < 81; i++) {
+        const cell = this.#cellAt(i);
+        const candColors = [];
+        for (let d = 1; d <= 9; d++) {
+          candColors.push(cell.getCandidateColorIndex(d));
+        }
+        state.cells.push({
+          value: cell.getValue(),
+          given: cell.isGiven(),
+          candMask: cell.getCandidateMask(),
+          cellColorIndex: cell.getCellColorIndex(),
+          candColorIndex: candColors
+        });
+      }
+      return state;
+    }
+
+    importState(state) {
+      if (!state || !state.cells || state.cells.length !== 81) {
+        return { ok: false, error: "Nevalida undo-stato." };
+      }
+
+      this.#filledCount = 0;
+      for (let i = 0; i < 81; i++) {
+        const s = state.cells[i];
+        const cell = this.#cellAt(i);
+
+        cell.setGiven(!!s.given);
+        cell.setValue(s.value || 0);
+        cell.setCandidateMask((s.candMask >>> 0) & 0x1FF);
+
+        cell.clearAllColors();
+        if (typeof s.cellColorIndex === "number") {
+          cell.toggleCellColorIndex(s.cellColorIndex);
+          // toggle sets, but if it's -1 it clears anyway; ensure exact:
+          if (s.cellColorIndex === -1) {
+            cell.clearCellColor();
+          }
+        }
+        if (Array.isArray(s.candColorIndex) && s.candColorIndex.length === 9) {
+          for (let d = 1; d <= 9; d++) {
+            const ci = s.candColorIndex[d - 1];
+            if (typeof ci === "number" && ci >= 0) {
+              cell.toggleCandidateColorIndex(d, ci);
+            } else {
+              cell.clearCandidateColor(d);
+            }
+          }
+        }
+
+        if (cell.isSolved()) {
+          this.#filledCount++;
+        }
+      }
+
+      return { ok: true };
+    }
+
     setManualValue(idx, digit) {
       const cell = this.#cellAt(idx);
       if (cell.isGiven()) {
@@ -837,6 +1024,8 @@ var business_logic = (() => {
   /* solver state */
   let roundNumber = 0;
   let solveTimer = null;
+  let pendingStepEvent = null;
+  let undoSnapshot = null;
 
   /* timer state */
   let timerStart = 0;
@@ -1139,6 +1328,8 @@ var business_logic = (() => {
       const span = document.createElement("div");
       span.className = "cand " + (on ? "on" : "off");
       span.textContent = String(d);
+      span.dataset.idx = String(idx);
+      span.dataset.digit = String(d);
 
       /* Base color logic: candidate-specific, else inherit readability from cell bg if any */
       const candColorIndex = board.getCandidateColorIndex(idx, d);
@@ -1300,6 +1491,8 @@ var business_logic = (() => {
    * Candidate / value operations via board API
    * ========================================================= */
   function setManualValueAtSelection(digit) {
+    saveUndoSnapshot();
+
     if (selectedIdx < 0) {
       return;
     }
@@ -1330,6 +1523,8 @@ var business_logic = (() => {
   }
 
   function toggleManualCandidateAtSelection(digit) {
+    saveUndoSnapshot();
+
     if (selectedIdx < 0) {
       return;
     }
@@ -1387,19 +1582,40 @@ var business_logic = (() => {
         el.classList.add("flashRemove");
       }
     }
+  }
 
-    setTimeout(() => {
-      const el2 = gridEl.children[idx];
-      if (el2) {
-        el2.classList.remove("flashSet");
-        el2.classList.remove("flashRemove");
-      }
-    }, 240);
+  function setUndoAvailable(on) {
+    const b = $("btnUndo");
+    if (b) {
+      b.disabled = !on;
+    }
+  }
+
+  function saveUndoSnapshot() {
+    undoSnapshot = board.exportState();
+    setUndoAvailable(true);
+  }
+
+  function doUndo() {
+    if (!undoSnapshot) {
+      return;
+    }
+    stopSolving();
+    clearAllEventHighlights();
+    const res = board.importState(undoSnapshot);
+    undoSnapshot = null;
+    setUndoAvailable(false);
+    if (!res.ok) {
+      openCheckModal(`Undo eraro: ${res.error}`);
+      return;
+    }
+    renderAll();
+    appendLog("UNDO: revenis unu paŝon reen.");
   }
 
   function stopSolving() {
     if (solveTimer) {
-      clearInterval(solveTimer);
+      //clearInterval(solveTimer);
       solveTimer = null;
       appendLog("Solvilo: halti.");
     }
@@ -1415,7 +1631,7 @@ var business_logic = (() => {
 
       for (const op of ev.ops) {
         const idx = op.idx;
-        const digit = op.digit;
+        const digit = maskToSingleDigit(op.mask);
 
         if (!assertDigit(digit)) {
           continue;
@@ -1449,13 +1665,15 @@ var business_logic = (() => {
 
       for (const op of ev.ops) {
         const idx = op.idx;
-        const digit = op.digit;
+        const digits = maskToDigits(op.mask);
 
         // Iterate bits 0..8
-        const res = board.removeCandidate(idx, digit);
-        if (res.ok && res.changed) {
-          removedCount++;
-          any = true;
+        for (const digit of digits) {
+          const res = board.removeCandidate(idx, digit);
+          if (res.ok && res.changed) {
+            removedCount++;
+            any = true;
+          }
         }
       }
 
@@ -1483,30 +1701,40 @@ var business_logic = (() => {
     return false;
   }
 
-  function solverTick() {
+  function solverTick(callbackDone) {
     if (!ensureWasmReadyOrNotify()) {
-      return false;
+      callbackDone(false);
+      return;
     }
 
     const ev = wasmComputeNextStep();
     if (!ev) {
-      return false;
+      callbackDone(false);
+      return;
     }
 
     if (!ev.fromPrev) {
       roundNumber++;
     }
 
-    const did = applyEvent(ev);
-    if (did) {
+    // Phase 1: highlight sources + operations BEFORE applying.
+    renderAll();
+    clearAllEventHighlights();
+    highlightSourcesAndOps(ev, false);
+
+    setTimeout(() => {
+      // Phase 2: apply, then highlight again on the updated grid.
+      saveUndoSnapshot();
+      const did = applyEvent(ev);
       renderAll();
-      if (ev.ops && ev.ops.length) {
-        for (var op of ev.ops) {
-          flashCell(op.idx, ev.type);
-        }
-      } 
-    }
-    return did;
+      clearAllEventHighlights();
+      //highlightSourcesAndOps(ev, false);
+
+      setTimeout(() => {
+        clearAllEventHighlights();
+        callbackDone(did);
+      }, 200);
+    }, 200);
   }
 
   function startSolving() {
@@ -1524,13 +1752,26 @@ var business_logic = (() => {
 
     roundNumber = 0;
 
-    solveTimer = setInterval(() => {
-      const keepGoing = solverTick();
-      if (!keepGoing) {
-        appendLog("Solvilo: halti (neniu plia evento).");
-        stopSolving();
+    const loop = () => {
+      if (!solveTimer) {
+        return;
       }
-    }, 250);
+      solverTick((keepGoing) => {
+        if (!keepGoing) {
+          appendLog("Solvilo: halti (neniu plia evento).");
+          stopSolving();
+          return;
+        }
+        // schedule next
+        if (solveTimer) {
+          setTimeout(loop, 10);
+        }
+      });
+    };
+
+    // solveTimer used as "running flag"
+    solveTimer = 1;
+    loop();
   }
 
   function solveWasmFull() {
@@ -1560,24 +1801,48 @@ var business_logic = (() => {
       return;
     }
 
-    // don't recalculate candidates, otherwise you could end up in an infinite loop
+    // Two-phase behavior:
+    //  - if no pending event: compute and PREVIEW (highlight only, do not apply)
+    //  - if pending exists: APPLY it, then clear
+    if (!pendingStepEvent) {
+      // don't recalculate candidates, otherwise you could end up in an infinite loop
+      const ev = wasmComputeHint(board);
+      if (!ev) {
+        appendLog("Paŝo: neniu evento.");
+        return;
+      }
 
-    const ev = wasmComputeHint(board);
-    if (!ev) {
-      appendLog("Paŝo: neniu evento.");
+      if (!ev.fromPrev) {
+        roundNumber++;
+      }
+
+      pendingStepEvent = ev;
+
+      renderAll();
+      clearAllEventHighlights();
+      highlightSourcesAndOps(ev, true);
+      // qui dovrei già mostrare l'evento nel log appendLog(formatEventLog(ev));
+      appendLog("Paŝo: antaŭrigardo (klaku denove por apliki).");
       return;
     }
 
-    if (!ev.fromPrev) {
-      roundNumber++;
-    }
+    // apply pending
+    const ev = pendingStepEvent;
+    pendingStepEvent = null;
 
-    applyEvent(ev);
+    clearAllEventHighlights();
+    saveUndoSnapshot();
+    const did = applyEvent(ev);
     renderAll();
-    if (ev.ops && ev.ops.length) {
-      for (var op of ev.ops) {
-        flashCell(op.idx, ev.type);
-      }
+    clearAllEventHighlights();
+    highlightSourcesAndOps(ev, false);
+
+    setTimeout(() => {
+      clearAllEventHighlights();
+    }, 200);
+
+    if (!did) {
+      appendLog("Paŝo: evento ne aplikebla.");
     }
   }
 
@@ -1760,6 +2025,8 @@ var business_logic = (() => {
   $("btnDemoStep").addEventListener("click", () => {
     solveOneStep();
   });
+
+  $("btnUndo").addEventListener("click", () => doUndo());
 
   // Wire up right mode buttons
   $("modeValue").addEventListener("click", () => setMode("value"));

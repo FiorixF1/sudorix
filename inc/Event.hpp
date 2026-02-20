@@ -34,10 +34,16 @@ enum class ReasonId : uint8_t {
   BUG
 };
 
-// one operation = set a value or remove a candidate
+// one operation = set value(s) or remove candidate(s)
 struct Operation {
   Cell idx;
-  Digit digit;
+  DigitSet mask;
+};
+
+// one source = a (cell, mask) pair explaining why the rule triggers
+struct Source {
+  Cell idx;
+  DigitSet mask;
 };
 
 class Event
@@ -49,14 +55,21 @@ public:
   EventType type;
   ReasonId reason;
 
-  const std::vector<Operation> &getOperations();
-  size_t getNumberOfOperations();
+  std::vector<Operation> &getOperations();
+  size_t getNumberOfOperations() const;
   void addOperation(Cell idx, Digit digit);
+  void addOperation(Cell idx, DigitSet mask);
+
+  std::vector<Source> &getSources();
+  size_t getNumberOfSources() const;
+  void addSource(Cell idx, Digit digit);
+  void addSource(Cell idx, DigitSet mask);
 
 private:
   friend class EventQueue;
   // an event is a set of multiple operations
   std::vector<Operation> ops;
+  std::vector<Source> sources;
 };
 
 #endif // EVENT_H

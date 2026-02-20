@@ -11,8 +11,9 @@ void EventQueue::enqueue(SudokuBoard &board, Event &event) {
   if (event.getNumberOfOperations() > 0) {
     event.ops.erase(
       std::remove_if(event.ops.begin(), event.ops.end(),
-          [&](Operation op) {
-            return (board.isSolved(op.idx) || !board.hasCandidate(op.idx, op.digit));
+          [&](Operation &op) {
+            op.mask = op.mask & board.getCandidates(op.idx); // remove not available candidates
+            return board.isSolved(op.idx) || op.mask.empty();
           }),
       event.ops.end()
     );

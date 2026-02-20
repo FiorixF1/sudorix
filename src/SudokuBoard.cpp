@@ -2,44 +2,167 @@
 #include "utils.hpp"
 
 // =========================================================
-// Precomputed indices (rows / cols / boxes)
+// Precomputed indices
 // =========================================================
 
+// tables to get units as bitmasks
 static const std::vector<Unit> ROW_UNITS = {
-    IndexSet({ 0,  1,  2,  3,  4,  5,  6,  7,  8 }), 
-    IndexSet({ 9, 10, 11, 12, 13, 14, 15, 16, 17 }),
-    IndexSet({18, 19, 20, 21, 22, 23, 24, 25, 26 }),
-    IndexSet({27, 28, 29, 30, 31, 32, 33, 34, 35 }),
-    IndexSet({36, 37, 38, 39, 40, 41, 42, 43, 44 }),
-    IndexSet({45, 46, 47, 48, 49, 50, 51, 52, 53 }),
-    IndexSet({54, 55, 56, 57, 58, 59, 60, 61, 62 }),
-    IndexSet({63, 64, 65, 66, 67, 68, 69, 70, 71 }),
-    IndexSet({72, 73, 74, 75, 76, 77, 78, 79, 80 })
-  };
+  CellSet({ 0,  1,  2,  3,  4,  5,  6,  7,  8 }),
+  CellSet({ 9, 10, 11, 12, 13, 14, 15, 16, 17 }),
+  CellSet({18, 19, 20, 21, 22, 23, 24, 25, 26 }),
+  CellSet({27, 28, 29, 30, 31, 32, 33, 34, 35 }),
+  CellSet({36, 37, 38, 39, 40, 41, 42, 43, 44 }),
+  CellSet({45, 46, 47, 48, 49, 50, 51, 52, 53 }),
+  CellSet({54, 55, 56, 57, 58, 59, 60, 61, 62 }),
+  CellSet({63, 64, 65, 66, 67, 68, 69, 70, 71 }),
+  CellSet({72, 73, 74, 75, 76, 77, 78, 79, 80 })
+};
 
 static const std::vector<Unit> COL_UNITS = {
-    IndexSet({ 0,  9, 18, 27, 36, 45, 54, 63, 72 }),
-    IndexSet({ 1, 10, 19, 28, 37, 46, 55, 64, 73 }),
-    IndexSet({ 2, 11, 20, 29, 38, 47, 56, 65, 74 }),
-    IndexSet({ 3, 12, 21, 30, 39, 48, 57, 66, 75 }),
-    IndexSet({ 4, 13, 22, 31, 40, 49, 58, 67, 76 }),
-    IndexSet({ 5, 14, 23, 32, 41, 50, 59, 68, 77 }),
-    IndexSet({ 6, 15, 24, 33, 42, 51, 60, 69, 78 }),
-    IndexSet({ 7, 16, 25, 34, 43, 52, 61, 70, 79 }),
-    IndexSet({ 8, 17, 26, 35, 44, 53, 62, 71, 80 })
-  };
+  CellSet({ 0,  9, 18, 27, 36, 45, 54, 63, 72 }),
+  CellSet({ 1, 10, 19, 28, 37, 46, 55, 64, 73 }),
+  CellSet({ 2, 11, 20, 29, 38, 47, 56, 65, 74 }),
+  CellSet({ 3, 12, 21, 30, 39, 48, 57, 66, 75 }),
+  CellSet({ 4, 13, 22, 31, 40, 49, 58, 67, 76 }),
+  CellSet({ 5, 14, 23, 32, 41, 50, 59, 68, 77 }),
+  CellSet({ 6, 15, 24, 33, 42, 51, 60, 69, 78 }),
+  CellSet({ 7, 16, 25, 34, 43, 52, 61, 70, 79 }),
+  CellSet({ 8, 17, 26, 35, 44, 53, 62, 71, 80 })
+};
 
 static const std::vector<Unit> BOX_UNITS = {
-    IndexSet({ 0,  1,  2,  9, 10, 11, 18, 19, 20 }),
-    IndexSet({ 3,  4,  5, 12, 13, 14, 21, 22, 23 }),
-    IndexSet({ 6,  7,  8, 15, 16, 17, 24, 25, 26 }),
-    IndexSet({27, 28, 29, 36, 37, 38, 45, 46, 47 }),
-    IndexSet({30, 31, 32, 39, 40, 41, 48, 49, 50 }),
-    IndexSet({33, 34, 35, 42, 43, 44, 51, 52, 53 }),
-    IndexSet({54, 55, 56, 63, 64, 65, 72, 73, 74 }),
-    IndexSet({57, 58, 59, 66, 67, 68, 75, 76, 77 }),
-    IndexSet({60, 61, 62, 69, 70, 71, 78, 79, 80 })
-  };
+  CellSet({ 0,  1,  2,  9, 10, 11, 18, 19, 20 }),
+  CellSet({ 3,  4,  5, 12, 13, 14, 21, 22, 23 }),
+  CellSet({ 6,  7,  8, 15, 16, 17, 24, 25, 26 }),
+  CellSet({27, 28, 29, 36, 37, 38, 45, 46, 47 }),
+  CellSet({30, 31, 32, 39, 40, 41, 48, 49, 50 }),
+  CellSet({33, 34, 35, 42, 43, 44, 51, 52, 53 }),
+  CellSet({54, 55, 56, 63, 64, 65, 72, 73, 74 }),
+  CellSet({57, 58, 59, 66, 67, 68, 75, 76, 77 }),
+  CellSet({60, 61, 62, 69, 70, 71, 78, 79, 80 })
+};
+
+// tables to get units as indexable arrays
+static constexpr std::array<std::array<Cell,9>,9> ROW_ARRAY = {{
+  { 0,  1,  2,  3,  4,  5,  6,  7,  8 },
+  { 9, 10, 11, 12, 13, 14, 15, 16, 17 },
+  {18, 19, 20, 21, 22, 23, 24, 25, 26 },
+  {27, 28, 29, 30, 31, 32, 33, 34, 35 },
+  {36, 37, 38, 39, 40, 41, 42, 43, 44 },
+  {45, 46, 47, 48, 49, 50, 51, 52, 53 },
+  {54, 55, 56, 57, 58, 59, 60, 61, 62 },
+  {63, 64, 65, 66, 67, 68, 69, 70, 71 },
+  {72, 73, 74, 75, 76, 77, 78, 79, 80 }
+}};
+
+static constexpr std::array<std::array<Cell,9>,9> COL_ARRAY = {{
+  { 0,  9, 18, 27, 36, 45, 54, 63, 72 },
+  { 1, 10, 19, 28, 37, 46, 55, 64, 73 },
+  { 2, 11, 20, 29, 38, 47, 56, 65, 74 },
+  { 3, 12, 21, 30, 39, 48, 57, 66, 75 },
+  { 4, 13, 22, 31, 40, 49, 58, 67, 76 },
+  { 5, 14, 23, 32, 41, 50, 59, 68, 77 },
+  { 6, 15, 24, 33, 42, 51, 60, 69, 78 },
+  { 7, 16, 25, 34, 43, 52, 61, 70, 79 },
+  { 8, 17, 26, 35, 44, 53, 62, 71, 80 }
+}};
+
+static constexpr std::array<std::array<Cell,9>,9> BOX_ARRAY = {{
+  { 0,  1,  2,  9, 10, 11, 18, 19, 20 },
+  { 3,  4,  5, 12, 13, 14, 21, 22, 23 },
+  { 6,  7,  8, 15, 16, 17, 24, 25, 26 },
+  {27, 28, 29, 36, 37, 38, 45, 46, 47 },
+  {30, 31, 32, 39, 40, 41, 48, 49, 50 },
+  {33, 34, 35, 42, 43, 44, 51, 52, 53 },
+  {54, 55, 56, 63, 64, 65, 72, 73, 74 },
+  {57, 58, 59, 66, 67, 68, 75, 76, 77 },
+  {60, 61, 62, 69, 70, 71, 78, 79, 80 }
+}};
+
+// peers table
+static const std::vector<CellSet> PEERS = {
+  CellSet({ 1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 18, 19, 20, 27, 36, 45, 54, 63, 72}),
+  CellSet({ 0,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 18, 19, 20, 28, 37, 46, 55, 64, 73}),
+  CellSet({ 0,  1,  3,  4,  5,  6,  7,  8,  9, 10, 11, 18, 19, 20, 29, 38, 47, 56, 65, 74}),
+  CellSet({ 0,  1,  2,  4,  5,  6,  7,  8, 12, 13, 14, 21, 22, 23, 30, 39, 48, 57, 66, 75}),
+  CellSet({ 0,  1,  2,  3,  5,  6,  7,  8, 12, 13, 14, 21, 22, 23, 31, 40, 49, 58, 67, 76}),
+  CellSet({ 0,  1,  2,  3,  4,  6,  7,  8, 12, 13, 14, 21, 22, 23, 32, 41, 50, 59, 68, 77}),
+  CellSet({ 0,  1,  2,  3,  4,  5,  7,  8, 15, 16, 17, 24, 25, 26, 33, 42, 51, 60, 69, 78}),
+  CellSet({ 0,  1,  2,  3,  4,  5,  6,  8, 15, 16, 17, 24, 25, 26, 34, 43, 52, 61, 70, 79}),
+  CellSet({ 0,  1,  2,  3,  4,  5,  6,  7, 15, 16, 17, 24, 25, 26, 35, 44, 53, 62, 71, 80}),
+  CellSet({ 0,  1,  2, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 27, 36, 45, 54, 63, 72}),
+  CellSet({ 0,  1,  2,  9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 28, 37, 46, 55, 64, 73}),
+  CellSet({ 0,  1,  2,  9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 29, 38, 47, 56, 65, 74}),
+  CellSet({ 3,  4,  5,  9, 10, 11, 13, 14, 15, 16, 17, 21, 22, 23, 30, 39, 48, 57, 66, 75}),
+  CellSet({ 3,  4,  5,  9, 10, 11, 12, 14, 15, 16, 17, 21, 22, 23, 31, 40, 49, 58, 67, 76}),
+  CellSet({ 3,  4,  5,  9, 10, 11, 12, 13, 15, 16, 17, 21, 22, 23, 32, 41, 50, 59, 68, 77}),
+  CellSet({ 6,  7,  8,  9, 10, 11, 12, 13, 14, 16, 17, 24, 25, 26, 33, 42, 51, 60, 69, 78}),
+  CellSet({ 6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 17, 24, 25, 26, 34, 43, 52, 61, 70, 79}),
+  CellSet({ 6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16, 24, 25, 26, 35, 44, 53, 62, 71, 80}),
+  CellSet({ 0,  1,  2,  9, 10, 11, 19, 20, 21, 22, 23, 24, 25, 26, 27, 36, 45, 54, 63, 72}),
+  CellSet({ 0,  1,  2,  9, 10, 11, 18, 20, 21, 22, 23, 24, 25, 26, 28, 37, 46, 55, 64, 73}),
+  CellSet({ 0,  1,  2,  9, 10, 11, 18, 19, 21, 22, 23, 24, 25, 26, 29, 38, 47, 56, 65, 74}),
+  CellSet({ 3,  4,  5, 12, 13, 14, 18, 19, 20, 22, 23, 24, 25, 26, 30, 39, 48, 57, 66, 75}),
+  CellSet({ 3,  4,  5, 12, 13, 14, 18, 19, 20, 21, 23, 24, 25, 26, 31, 40, 49, 58, 67, 76}),
+  CellSet({ 3,  4,  5, 12, 13, 14, 18, 19, 20, 21, 22, 24, 25, 26, 32, 41, 50, 59, 68, 77}),
+  CellSet({ 6,  7,  8, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26, 33, 42, 51, 60, 69, 78}),
+  CellSet({ 6,  7,  8, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 34, 43, 52, 61, 70, 79}),
+  CellSet({ 6,  7,  8, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 35, 44, 53, 62, 71, 80}),
+  CellSet({ 0,  9, 18, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 45, 46, 47, 54, 63, 72}),
+  CellSet({ 1, 10, 19, 27, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 45, 46, 47, 55, 64, 73}),
+  CellSet({ 2, 11, 20, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 45, 46, 47, 56, 65, 74}),
+  CellSet({ 3, 12, 21, 27, 28, 29, 31, 32, 33, 34, 35, 39, 40, 41, 48, 49, 50, 57, 66, 75}),
+  CellSet({ 4, 13, 22, 27, 28, 29, 30, 32, 33, 34, 35, 39, 40, 41, 48, 49, 50, 58, 67, 76}),
+  CellSet({ 5, 14, 23, 27, 28, 29, 30, 31, 33, 34, 35, 39, 40, 41, 48, 49, 50, 59, 68, 77}),
+  CellSet({ 6, 15, 24, 27, 28, 29, 30, 31, 32, 34, 35, 42, 43, 44, 51, 52, 53, 60, 69, 78}),
+  CellSet({ 7, 16, 25, 27, 28, 29, 30, 31, 32, 33, 35, 42, 43, 44, 51, 52, 53, 61, 70, 79}),
+  CellSet({ 8, 17, 26, 27, 28, 29, 30, 31, 32, 33, 34, 42, 43, 44, 51, 52, 53, 62, 71, 80}),
+  CellSet({ 0,  9, 18, 27, 28, 29, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 54, 63, 72}),
+  CellSet({ 1, 10, 19, 27, 28, 29, 36, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 55, 64, 73}),
+  CellSet({ 2, 11, 20, 27, 28, 29, 36, 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 56, 65, 74}),
+  CellSet({ 3, 12, 21, 30, 31, 32, 36, 37, 38, 40, 41, 42, 43, 44, 48, 49, 50, 57, 66, 75}),
+  CellSet({ 4, 13, 22, 30, 31, 32, 36, 37, 38, 39, 41, 42, 43, 44, 48, 49, 50, 58, 67, 76}),
+  CellSet({ 5, 14, 23, 30, 31, 32, 36, 37, 38, 39, 40, 42, 43, 44, 48, 49, 50, 59, 68, 77}),
+  CellSet({ 6, 15, 24, 33, 34, 35, 36, 37, 38, 39, 40, 41, 43, 44, 51, 52, 53, 60, 69, 78}),
+  CellSet({ 7, 16, 25, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 51, 52, 53, 61, 70, 79}),
+  CellSet({ 8, 17, 26, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 51, 52, 53, 62, 71, 80}),
+  CellSet({ 0,  9, 18, 27, 28, 29, 36, 37, 38, 46, 47, 48, 49, 50, 51, 52, 53, 54, 63, 72}),
+  CellSet({ 1, 10, 19, 27, 28, 29, 36, 37, 38, 45, 47, 48, 49, 50, 51, 52, 53, 55, 64, 73}),
+  CellSet({ 2, 11, 20, 27, 28, 29, 36, 37, 38, 45, 46, 48, 49, 50, 51, 52, 53, 56, 65, 74}),
+  CellSet({ 3, 12, 21, 30, 31, 32, 39, 40, 41, 45, 46, 47, 49, 50, 51, 52, 53, 57, 66, 75}),
+  CellSet({ 4, 13, 22, 30, 31, 32, 39, 40, 41, 45, 46, 47, 48, 50, 51, 52, 53, 58, 67, 76}),
+  CellSet({ 5, 14, 23, 30, 31, 32, 39, 40, 41, 45, 46, 47, 48, 49, 51, 52, 53, 59, 68, 77}),
+  CellSet({ 6, 15, 24, 33, 34, 35, 42, 43, 44, 45, 46, 47, 48, 49, 50, 52, 53, 60, 69, 78}),
+  CellSet({ 7, 16, 25, 33, 34, 35, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 53, 61, 70, 79}),
+  CellSet({ 8, 17, 26, 33, 34, 35, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 62, 71, 80}),
+  CellSet({ 0,  9, 18, 27, 36, 45, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 72, 73, 74}),
+  CellSet({ 1, 10, 19, 28, 37, 46, 54, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 72, 73, 74}),
+  CellSet({ 2, 11, 20, 29, 38, 47, 54, 55, 57, 58, 59, 60, 61, 62, 63, 64, 65, 72, 73, 74}),
+  CellSet({ 3, 12, 21, 30, 39, 48, 54, 55, 56, 58, 59, 60, 61, 62, 66, 67, 68, 75, 76, 77}),
+  CellSet({ 4, 13, 22, 31, 40, 49, 54, 55, 56, 57, 59, 60, 61, 62, 66, 67, 68, 75, 76, 77}),
+  CellSet({ 5, 14, 23, 32, 41, 50, 54, 55, 56, 57, 58, 60, 61, 62, 66, 67, 68, 75, 76, 77}),
+  CellSet({ 6, 15, 24, 33, 42, 51, 54, 55, 56, 57, 58, 59, 61, 62, 69, 70, 71, 78, 79, 80}),
+  CellSet({ 7, 16, 25, 34, 43, 52, 54, 55, 56, 57, 58, 59, 60, 62, 69, 70, 71, 78, 79, 80}),
+  CellSet({ 8, 17, 26, 35, 44, 53, 54, 55, 56, 57, 58, 59, 60, 61, 69, 70, 71, 78, 79, 80}),
+  CellSet({ 0,  9, 18, 27, 36, 45, 54, 55, 56, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74}),
+  CellSet({ 1, 10, 19, 28, 37, 46, 54, 55, 56, 63, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74}),
+  CellSet({ 2, 11, 20, 29, 38, 47, 54, 55, 56, 63, 64, 66, 67, 68, 69, 70, 71, 72, 73, 74}),
+  CellSet({ 3, 12, 21, 30, 39, 48, 57, 58, 59, 63, 64, 65, 67, 68, 69, 70, 71, 75, 76, 77}),
+  CellSet({ 4, 13, 22, 31, 40, 49, 57, 58, 59, 63, 64, 65, 66, 68, 69, 70, 71, 75, 76, 77}),
+  CellSet({ 5, 14, 23, 32, 41, 50, 57, 58, 59, 63, 64, 65, 66, 67, 69, 70, 71, 75, 76, 77}),
+  CellSet({ 6, 15, 24, 33, 42, 51, 60, 61, 62, 63, 64, 65, 66, 67, 68, 70, 71, 78, 79, 80}),
+  CellSet({ 7, 16, 25, 34, 43, 52, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 71, 78, 79, 80}),
+  CellSet({ 8, 17, 26, 35, 44, 53, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 78, 79, 80}),
+  CellSet({ 0,  9, 18, 27, 36, 45, 54, 55, 56, 63, 64, 65, 73, 74, 75, 76, 77, 78, 79, 80}),
+  CellSet({ 1, 10, 19, 28, 37, 46, 54, 55, 56, 63, 64, 65, 72, 74, 75, 76, 77, 78, 79, 80}),
+  CellSet({ 2, 11, 20, 29, 38, 47, 54, 55, 56, 63, 64, 65, 72, 73, 75, 76, 77, 78, 79, 80}),
+  CellSet({ 3, 12, 21, 30, 39, 48, 57, 58, 59, 66, 67, 68, 72, 73, 74, 76, 77, 78, 79, 80}),
+  CellSet({ 4, 13, 22, 31, 40, 49, 57, 58, 59, 66, 67, 68, 72, 73, 74, 75, 77, 78, 79, 80}),
+  CellSet({ 5, 14, 23, 32, 41, 50, 57, 58, 59, 66, 67, 68, 72, 73, 74, 75, 76, 78, 79, 80}),
+  CellSet({ 6, 15, 24, 33, 42, 51, 60, 61, 62, 69, 70, 71, 72, 73, 74, 75, 76, 77, 79, 80}),
+  CellSet({ 7, 16, 25, 34, 43, 52, 60, 61, 62, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 80}),
+  CellSet({ 8, 17, 26, 35, 44, 53, 60, 61, 62, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79}),
+};
 
 // =========================================================
 // SudokuBoard
@@ -160,31 +283,14 @@ void SudokuBoard::disableCandidate(Cell idx, Digit digit) {
 }
 
 // --- peers API ---
-IndexSet SudokuBoard::getPeers(Cell idx, PeerType peerType) const {
-  IndexSet peers;
-
-  if (peerType & PeerType::ROWS) {
-    peers.union_assign(getRowByCell(idx));
-  }
-  
-  if (peerType & PeerType::COLUMNS) {
-    peers.union_assign(getColumnByCell(idx));
-  }
-
-  if (peerType & PeerType::BOXES) {
-    peers.union_assign(getBoxByCell(idx));
-  }
-  
-  // Consider only unsolved cells and exclude the input cell
-  IndexSet result = peers.filter([&](Cell i){ return i != idx && !isSolved(i); });
-
-  return result;
+CellSet SudokuBoard::getPeers(Cell idx) const {
+  return PEERS[idx];
 }
 
-IndexSet SudokuBoard::getPeers(const IndexSet &idxSet, PeerType peerType) const {
-  IndexSet result;
+CellSet SudokuBoard::getPeers(const CellSet &idxSet) const {
+  CellSet result;
   for (auto it = idxSet.begin(); it != idxSet.end(); ++it) {
-    IndexSet tmp = this->getPeers(*it, peerType);
+    CellSet tmp = this->getPeers(*it);
     if (it == idxSet.begin()) {
       // first iteration, the set is empty
       result.union_assign(tmp);
@@ -193,6 +299,10 @@ IndexSet SudokuBoard::getPeers(const IndexSet &idxSet, PeerType peerType) const 
     }
   }
   return result;
+}
+
+bool SudokuBoard::sees(Cell a, Cell b) const {
+  return PEERS[a].contains(b);
 }
 
 // --- positions API ---
@@ -209,45 +319,45 @@ const std::vector<Unit> &SudokuBoard::getBoxes() const {
 }
 
 const Unit &SudokuBoard::getRowByCell(Cell idx) const {
-  return ROW_UNITS[getRowIndex08(idx)];
+  return ROW_UNITS[getRowLocation(idx)];
 } 
 
 const Unit &SudokuBoard::getColumnByCell(Cell idx) const {
-  return COL_UNITS[getColumnIndex08(idx)];
+  return COL_UNITS[getColumnLocation(idx)];
 }
 
 const Unit &SudokuBoard::getBoxByCell(Cell idx) const {
-  return BOX_UNITS[getBoxIndex08(idx)];
+  return BOX_UNITS[getBoxLocation(idx)];
 }
 
-const Unit &SudokuBoard::getRowByIndex08(int idx) const {
+const Unit &SudokuBoard::getRowByLocation(Location idx) const {
   return ROW_UNITS[idx];
 } 
 
-const Unit &SudokuBoard::getColumnByIndex08(int idx) const {
+const Unit &SudokuBoard::getColumnByLocation(Location idx) const {
   return COL_UNITS[idx];
 }
 
-const Unit &SudokuBoard::getBoxByIndex08(int idx) const {
+const Unit &SudokuBoard::getBoxByLocation(Location idx) const {
   return BOX_UNITS[idx];
 }
 
-int SudokuBoard::getRowIndex08(Cell idx) const {
+Location SudokuBoard::getRowLocation(Cell idx) const {
   return (int)(idx / 9);
 }
 
-int SudokuBoard::getColumnIndex08(Cell idx) const {
+Location SudokuBoard::getColumnLocation(Cell idx) const {
   return (int)(idx % 9);
 }
 
-int SudokuBoard::getBoxIndex08(Cell idx) const {
-  const int r = getRowIndex08(idx);
-  const int c = getColumnIndex08(idx);
+Location SudokuBoard::getBoxLocation(Cell idx) const {
+  const int r = getRowLocation(idx);
+  const int c = getColumnLocation(idx);
   return (int)((r / 3) * 3 + (c / 3));
 }
 
-IndexSet SudokuBoard::getPositionsOfDigit(Unit unit, Digit d) const {
-  IndexSet positions;
+CellSet SudokuBoard::getPositionsOfDigit(Unit unit, Digit d) const {
+  CellSet positions;
   for (Cell idx : unit) {
     if (this->isSolved(idx)) {
       continue;
@@ -259,7 +369,7 @@ IndexSet SudokuBoard::getPositionsOfDigit(Unit unit, Digit d) const {
   return positions;
 }
   
-DigitSet SudokuBoard::getDigitsInPosition(Unit unit, int i) const {
+DigitSet SudokuBoard::getDigitsInLocation(Unit unit, Location i) const {
   std::vector<int> unitList = unit.to_vector();
   Cell idx = unitList[i];
   if (this->isSolved(idx)) {
@@ -328,9 +438,9 @@ bool SudokuBoard::_recalcAllCandidatesFromValues() {
       continue;
     }
 
-    int r = getRowIndex08(idx);
-    int c = getColumnIndex08(idx);
-    int b = getBoxIndex08(idx);
+    int r = getRowLocation(idx);
+    int c = getColumnLocation(idx);
+    int b = getBoxLocation(idx);
 
     if ((rowUsed[r].contains(value))) {
       return false;
@@ -356,9 +466,9 @@ bool SudokuBoard::_recalcAllCandidatesFromValues() {
       continue;
     }
 
-    int r = getRowIndex08(idx);
-    int c = getColumnIndex08(idx);
-    int b = getBoxIndex08(idx);
+    int r = getRowLocation(idx);
+    int c = getColumnLocation(idx);
+    int b = getBoxLocation(idx);
 
     DigitSet used = rowUsed[r] | colUsed[c] | boxUsed[b];
     DigitSet allowed = ALL_DIGITS - used;

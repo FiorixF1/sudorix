@@ -20,13 +20,15 @@
   #define console_log(fmt,  ...)
 #endif
 
-using Digit = uint8_t;               // a digit in range 1..9
-using DigitSet = BitmaskSet<9, 1>;   // a group of digits, typically candidates in a cell
+using Digit = uint8_t;                // a digit in range 1..9
+using DigitSet = BitmaskSet<9, 1>;    // a group of digits, typically candidates in a cell
 
-using Index = int8_t;                // an index for cells 0..80, can be -1 for unknown
-using IndexSet = BitmaskSet<81, 0>;  // a group of indexes, typically a set of cells
-using Unit = IndexSet;               // a group of nine cells in the same row, column or box
-using Cell = Index;                  // a cell expressed as an index in range 0..80
+using Cell = int8_t;                  // an index 0..80 for cells in the grid, can be -1 for unknown
+using CellSet = BitmaskSet<81, 0>;    // a group of cells 0..80 in the grid
+using Unit = CellSet;                 // friendly name for a group of nine cells in the same row, column or box
+
+using Location = int8_t;              // an index 0..8 for a unit (or inside a unit) in the grid, can be -1 for unknown
+using LocationSet = BitmaskSet<8,0>;  // a group of units 0..8 in the grid
 
 constexpr DigitSet ALL_DIGITS(0x1FFU);
 

@@ -48,17 +48,19 @@ public:
   void disableCandidate(Cell idx, Digit digit);
 
   // --- peers API ---
-  IndexSet getPeers(Cell idx, PeerType peerType = PeerType::ALL) const;
+  CellSet getPeers(Cell idx) const;
 
-  IndexSet getPeers(const IndexSet &idxSet, PeerType peerType = PeerType::ALL) const;
+  CellSet getPeers(const CellSet &idxSet) const;
+
+  bool sees(Cell a, Cell b) const;
 
   // --- positions API ---
 
   // given a unit and a digit, tell me which cells contain the digit
-  IndexSet getPositionsOfDigit(Unit unit, Digit d) const;
+  CellSet getPositionsOfDigit(Unit unit, Digit d) const;
 
   // given a unit and a cell (as index 0..8), tell me which digits are contained in the cell
-  DigitSet getDigitsInPosition(Unit unit, int i) const;
+  DigitSet getDigitsInLocation(Unit unit, Location i) const;
 
   // --- events API ---
   void applySetValue(Cell idx, Digit digit);
@@ -78,17 +80,17 @@ public:
 
   const Unit &getBoxByCell(Cell idx) const;
 
-  const Unit &getRowByIndex08(int idx) const;
+  const Unit &getRowByLocation(Location idx) const;
 
-  const Unit &getColumnByIndex08(int idx) const;
+  const Unit &getColumnByLocation(Location idx) const;
 
-  const Unit &getBoxByIndex08(int idx) const;
+  const Unit &getBoxByLocation(Location idx) const;
 
-  int getRowIndex08(Cell idx) const;
+  Location getRowLocation(Cell idx) const;
 
-  int getColumnIndex08(Cell idx) const;
+  Location getColumnLocation(Cell idx) const;
 
-  int getBoxIndex08(Cell idx) const;
+  Location getBoxLocation(Cell idx) const;
 
   // --- other ---
   void autoClearPeersAfterPlacement(Cell idx, Digit digit);

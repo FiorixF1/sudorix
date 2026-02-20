@@ -264,6 +264,10 @@ public:
     return out;
   }
 
+  uint32_t to_uint32() const {
+    return static_cast<uint32_t>(w_[0]);
+  }
+
   template <class Pred>
   BitmaskSet filter(Pred pred) const {
     BitmaskSet out;

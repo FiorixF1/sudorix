@@ -519,3 +519,26 @@
       .gridPanel { width: 100%; }
       .sudoku { margin: 0 auto; }
     }
+
+
+    /* =========================================================
+       * Solver event highlighting (candidates)
+       * ========================================================= */
+    .cand.flashSource {
+      outline: 2px solid rgba(124, 255, 0, 0.95);
+      box-shadow: 0 0 0 2px rgba(124, 255, 0, 0.35);
+    }
+
+    .cand.flashSetCand {
+      outline: 2px solid rgba(124, 255, 0, 0.95);
+      box-shadow: 0 0 0 2px rgba(124, 255, 0, 0.35);
+    }
+
+    .cand.flashRemoveCand {
+      outline: 2px solid rgba(255, 77, 77, 0.95);
+      box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.35);
+    }
+
+    .cand.holdFlash {
+      /* keep highlight visible in step-preview mode */
+    }
