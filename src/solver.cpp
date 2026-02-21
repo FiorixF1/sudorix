@@ -517,6 +517,78 @@ static void techXWing(SudokuBoard &board) {
   }
 }
 
+static void techXYWing(SudokuBoard &board) {
+  CellSet bivalues = board.getBivalues();
+  for (Cell a : bivalues) {
+    // extreme a has XZ
+    DigitSet xz = board.getCandidates(a);
+    for (Cell b : board.getPeers(a) & bivalues) {
+      // wing b must contain XY
+      DigitSet xy = board.getCandidates(b);
+      if ((xz & xy).size() == 1) {
+        Digit x = *(xz & xy).begin();
+        Digit y = *(xy - xz).begin();
+        Digit z = *(xz - xy).begin();
+        for (Cell c : (board.getPeers(b) & bivalues) - CellSet({a})) {
+          // extreme c has YZ
+          DigitSet yz = board.getCandidates(c);
+          if (yz.contains(y) && yz.contains(z)) {
+            // XY-Wing spotted
+            Event event(EventType::RemoveCandidate, ReasonId::XYWing);
+            // the source is the three cells forming the XY-Wing
+            CellSet sourceSet = CellSet({a, b, c});
+            for (Cell idx : sourceSet) {
+              event.addSource(idx, DigitSet({x, y, z}));
+            }
+            // remove instances of Z from peers of extreme cells
+            CellSet set = board.getPeers(CellSet({a, c}));
+            for (Cell idx : set) {
+              event.addOperation(idx, z);
+            }
+            g_eventQueue.enqueue(board, event);
+          }
+        }
+      }
+    }
+  }
+}
+
+static void techXYZWing(SudokuBoard &board) {
+  CellSet bivalues = board.getBivalues();
+  for (Cell a : bivalues) {
+    // extreme a has XZ
+    DigitSet xz = board.getCandidates(a);
+    for (Cell b : board.getPeers(a)) {
+      // wing b must contain XYZ
+      DigitSet xyz = board.getCandidates(b);
+      Digit y = *(xyz - xz).begin();
+      if ((xz & xyz).size() == 2 && xyz.size() == 3) {
+        for (Cell c : (board.getPeers(b) & bivalues) - CellSet({a})) {
+          // extreme c has YZ
+          DigitSet yz = board.getCandidates(c);
+          if (yz.contains(y) && (xyz - yz).size() == 1) {
+            // XYZ-Wing spotted
+            Digit x = *(xyz - yz).begin();
+            Digit z = *(xz & yz).begin();
+            Event event(EventType::RemoveCandidate, ReasonId::XYZWing);
+            // the source is the three cells forming the XYZ-Wing
+            CellSet sourceSet = CellSet({a, b, c});
+            for (Cell idx : sourceSet) {
+              event.addSource(idx, DigitSet({x, y, z}));
+            }
+            // remove instances of Z from peers of all cells
+            CellSet set = board.getPeers(CellSet({a, b, c}));
+            for (Cell idx : set) {
+              event.addOperation(idx, z);
+            }
+            g_eventQueue.enqueue(board, event);
+          }
+        }
+      }
+    }
+  }
+}
+
 typedef void (*TechniqueFn)(SudokuBoard &);
 
 // nCr(9, 2) = 36
@@ -535,6 +607,8 @@ static constexpr TechniqueFn TECHNIQUES[] =
   techNakedPairs,
   techNakedTriples,
   techXWing,
+  techXYWing,
+  techXYZWing,
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Operation &op) {

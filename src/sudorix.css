@@ -303,9 +303,30 @@
       font-weight: 700;
       opacity: 1;
     }
-    .cand.off { opacity: 0.16; }
+    .cand.off {
+      opacity: 0.0;
+     }
 
-    /* Candidates clickable only in Colorazione (visual cue) */
+    .cand.flashSource {
+      outline: 2px solid rgba(124, 255, 0, 0.95);
+      box-shadow: 0 0 0 2px rgba(124, 255, 0, 0.35);
+    }
+
+    .cand.flashSetCand {
+      outline: 2px solid rgba(124, 255, 0, 0.95);
+      box-shadow: 0 0 0 2px rgba(124, 255, 0, 0.35);
+    }
+
+    .cand.flashRemoveCand {
+      outline: 2px solid rgba(255, 77, 77, 0.95);
+      box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.35);
+    }
+
+    .cand.holdFlash {
+      /* keep highlight visible in step-preview mode */
+    }
+
+    /* Candidates clickable only in Kolorigado (visual cue) */
     .sudoku.candClickable .cand {
       cursor: pointer;
     }
@@ -480,13 +501,13 @@
     }
 
     /* When timer is stopped, pause icon and button are greyed out and not "clickable-looking" */
-    .pauseBtn.disabled {
+    .disabled {
       opacity: 0.38;
       cursor: not-allowed;
       border-color: rgba(230, 238, 252, 0.10);
       box-shadow: none !important;
     }
-    .pauseBtn.disabled:hover {
+    .disabled:hover {
       border-color: rgba(230, 238, 252, 0.10);
       box-shadow: none;
     }
@@ -518,27 +539,4 @@
       header .hint { text-align: left; }
       .gridPanel { width: 100%; }
       .sudoku { margin: 0 auto; }
-    }
-
-
-    /* =========================================================
-       * Solver event highlighting (candidates)
-       * ========================================================= */
-    .cand.flashSource {
-      outline: 2px solid rgba(124, 255, 0, 0.95);
-      box-shadow: 0 0 0 2px rgba(124, 255, 0, 0.35);
-    }
-
-    .cand.flashSetCand {
-      outline: 2px solid rgba(124, 255, 0, 0.95);
-      box-shadow: 0 0 0 2px rgba(124, 255, 0, 0.35);
-    }
-
-    .cand.flashRemoveCand {
-      outline: 2px solid rgba(255, 77, 77, 0.95);
-      box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.35);
-    }
-
-    .cand.holdFlash {
-      /* keep highlight visible in step-preview mode */
     }

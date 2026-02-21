@@ -779,7 +779,7 @@ var business_logic = (() => {
 
     importState(state) {
       if (!state || !state.cells || state.cells.length !== 81) {
-        return { ok: false, error: "Nevalida undo-stato." };
+        return { ok: false, error: "Nevalida malfarstato." };
       }
 
       this.#filledCount = 0;
@@ -999,6 +999,8 @@ var business_logic = (() => {
 
   const timerTextEl = $("timerText");
   const btnPauseEl = $("btnPause");
+
+  const btnUndoEl = $("btnUndo");
 
   const modalOverlayCheck = $("modalOverlayCheck");
   const modalMsgCheck = $("modalMsgCheck");
@@ -1286,9 +1288,6 @@ var business_logic = (() => {
     el.classList.toggle("selected", idx === selectedIdx);
     el.classList.toggle("given", board.isGiven(idx));
 
-    // Keep flash class if present (do not wipe it by replacing element)
-    const hadFlash = el.classList.contains("flashSet") || el.classList.contains("flashRemove");
-
     applyCellBaseBackground(el, idx);
     // Clear existing content
     el.innerHTML = "";
@@ -1312,9 +1311,6 @@ var business_logic = (() => {
 
       el.appendChild(dv);
 
-      if (hadFlash) {
-        el.classList.add("flash");
-      }
       return;
     }
 
@@ -1391,10 +1387,6 @@ var business_logic = (() => {
     }
 
     el.appendChild(cands);
-
-    if (hadFlash) {
-      el.classList.add("flash");
-    }
   }
 
   function renderAll() {
@@ -1585,9 +1577,12 @@ var business_logic = (() => {
   }
 
   function setUndoAvailable(on) {
-    const b = $("btnUndo");
-    if (b) {
-      b.disabled = !on;
+    if (on) {
+      btnUndoEl.classList.remove("disabled");
+    } else {
+      btnUndoEl.classList.add("disabled");
+      pendingStepEvent = null;
+      undoSnapshot = null;
     }
   }
 
@@ -1603,14 +1598,13 @@ var business_logic = (() => {
     stopSolving();
     clearAllEventHighlights();
     const res = board.importState(undoSnapshot);
-    undoSnapshot = null;
     setUndoAvailable(false);
     if (!res.ok) {
-      openCheckModal(`Undo eraro: ${res.error}`);
+      openCheckModal(`Malfara eraro: ${res.error}`);
       return;
     }
     renderAll();
-    appendLog("UNDO: revenis unu paŝon reen.");
+    appendLog("Malfaro: revenis unu paŝon reen.");
   }
 
   function stopSolving() {
@@ -1728,7 +1722,7 @@ var business_logic = (() => {
       const did = applyEvent(ev);
       renderAll();
       clearAllEventHighlights();
-      //highlightSourcesAndOps(ev, false);
+      highlightSourcesAndOps(ev, false);
 
       setTimeout(() => {
         clearAllEventHighlights();
@@ -1902,6 +1896,7 @@ var business_logic = (() => {
 
     board.resetAll();
 
+    roundNumber = 0;
     selectedIdx = -1;
     activeDigit = 0;
     activeColorIndex = 0;
@@ -1909,6 +1904,8 @@ var business_logic = (() => {
 
     setMode("value");
     refreshColorSelectionUI();
+    clearAllEventHighlights();
+    setUndoAvailable(false);
 
     appendLog("Reagordo: krado purigita.");
 
@@ -1920,6 +1917,8 @@ var business_logic = (() => {
 
   function importSudoku(text) {
     stopSolving();
+
+    resetGrid();
 
     const res = board.importFromString(text);
     if (!res.ok) {

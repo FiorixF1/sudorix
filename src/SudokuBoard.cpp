@@ -420,6 +420,16 @@ DigitSet SudokuBoard::getUnsolvedDigits() const {
   return result;
 }
 
+CellSet SudokuBoard::getBivalues() const {
+  CellSet result;
+  for (Cell i = 0; i < 81; i++) {
+    if (countCandidates(i) == 2) {
+      result.insert(i);
+    }
+  }
+  return result;
+}
+
 bool SudokuBoard::_recalcAllCandidatesFromValues() {
   // Reset completo
   for (Cell i = 0; i < 81; i++) {

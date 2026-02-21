@@ -99,6 +99,8 @@ public:
 
   DigitSet getUnsolvedDigits() const;
 
+  CellSet getBivalues() const;
+
 private:
   // We keep a local copy (owned) so that solver techniques can mutate freely
   SudokuCell cells[81];
