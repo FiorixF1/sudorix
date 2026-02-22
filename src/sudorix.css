@@ -42,6 +42,21 @@
 
       --timerBg: rgba(0, 0, 0, 0.18);
       --timerLine: rgba(230, 238, 252, 0.14);
+
+      --cellHoverBg: rgba(15, 22, 36, 0.95);
+
+      --valueColor: #eaf2ff;
+      --givenValueColor: #f3f7ff;
+
+      --candText: rgba(230, 238, 252, 0.78);
+      --candOnBg: rgba(122, 162, 255, 0.12);
+      --candOnBorder: rgba(122, 162, 255, 0.18);
+      --candOnText: #e9f1ff;
+
+      --flashSourceOutline: rgba(124, 255, 0, 0.95);
+      --flashSourceGlow: rgba(124, 255, 0, 0.35);
+      --flashRemoveOutline2: rgba(255, 77, 77, 0.95);
+      --flashRemoveGlow2: rgba(255, 77, 77, 0.35);
     }
 
     * { box-sizing: border-box; }
@@ -76,14 +91,68 @@
       text-align: right;
     }
 
-    /* 3-column layout: Left (import+log) | Center (grid) | Right (manual input) */
+    /* ===== Top import bar ===== */
+    .topBar {
+      margin: 12px auto 0;
+      padding: 0 12px;
+    }
+
+    .topBarInner {
+      padding: 12px 12px;
+    }
+
+    .importWrap {
+      display: flex;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .importLeft {
+      flex: 1 1 auto;
+      min-width: 320px;
+    }
+
+    .importRow {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .importTextSingle {
+      flex: 1 1 520px;
+      min-width: 320px;
+      height: 44px;
+      min-height: 44px;
+      max-height: 44px;
+      resize: none;
+      overflow: hidden;
+      padding-top: 10px;
+      padding-bottom: 10px;
+    }
+
+    .importBtns {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex: 0 0 auto;
+      flex-wrap: wrap;
+    }
+
+    .importBtns button {
+      height: 44px;
+    }
+
+    /* 3-column layout: Left (log) | Center (grid) | Right (manual input) */
     .layout {
       display: grid;
       grid-template-columns: minmax(520px, 1.0fr) auto minmax(240px, 1.0fr);
       gap: 14px;
       padding: 14px;
-      align-items: start;
+      align-items: stretch;
     }
+
+    .layout > .panel { height: 100%; }
 
     .panel {
       background: linear-gradient(180deg, rgba(11, 18, 32, 0.95), rgba(9, 14, 24, 0.95));
@@ -217,7 +286,7 @@
       border-top: 2px solid var(--thin);
       border-left: 2px solid var(--thin);
     }
-    .cell:hover { background: rgba(15, 22, 36, 0.95); }
+    .cell:hover { background: var(--cellHoverBg); }
 
     .cell.selected {
       outline: 2px solid rgba(122, 162, 255, 0.70);
@@ -261,20 +330,20 @@
       font-size: 38px;
       font-weight: 600;
       letter-spacing: 0.4px;
-      color: #eaf2ff;
+      color: var(--valueColor);
       text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
       z-index: 3;
     }
 
     .cell.given .value {
       opacity: 0.96;
-      color: #f3f7ff;
+      color: var(--givenValueColor);
     }
 
     .cell .cands {
       position: absolute;
       inset: 0;
-      padding: 4px; /* 6px; */
+      padding: 4px;
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       grid-template-rows: repeat(3, 1fr);
@@ -282,7 +351,7 @@
       align-items: center;
       justify-items: center;
       font-size: 11px;
-      color: rgba(230, 238, 252, 0.78);
+      color: var(--candText);
       z-index: 3;
     }
 
@@ -297,9 +366,9 @@
       cursor: pointer;
     }
     .cand.on {
-      background: rgba(122, 162, 255, 0.12);
-      border-color: rgba(122, 162, 255, 0.18);
-      color: #e9f1ff;
+      background: var(--candOnBg);
+      border-color: var(--candOnBorder);
+      color: var(--candOnText);
       font-weight: 700;
       opacity: 1;
     }
@@ -308,18 +377,18 @@
      }
 
     .cand.flashSource {
-      outline: 2px solid rgba(124, 255, 0, 0.95);
-      box-shadow: 0 0 0 2px rgba(124, 255, 0, 0.35);
+      outline: 2px solid var(--flashSourceOutline);
+      box-shadow: 0 0 0 2px var(--flashSourceGlow);
     }
 
     .cand.flashSetCand {
-      outline: 2px solid rgba(124, 255, 0, 0.95);
-      box-shadow: 0 0 0 2px rgba(124, 255, 0, 0.35);
+      outline: 2px solid var(--flashSourceOutline);
+      box-shadow: 0 0 0 2px var(--flashSourceGlow);
     }
 
     .cand.flashRemoveCand {
-      outline: 2px solid rgba(255, 77, 77, 0.95);
-      box-shadow: 0 0 0 2px rgba(255, 77, 77, 0.35);
+      outline: 2px solid var(--flashRemoveOutline2);
+      box-shadow: 0 0 0 2px var(--flashRemoveGlow2);
     }
 
     .cand.holdFlash {
@@ -354,8 +423,8 @@
 
     /* Left log block */
     .logArea {
-      min-height: 360px;
-      height: 52vh;
+      min-height: 220px;
+      height: 38vh;
       resize: vertical;
       line-height: 1.35;
       font-size: 12px;
@@ -539,4 +608,35 @@
       header .hint { text-align: left; }
       .gridPanel { width: 100%; }
       .sudoku { margin: 0 auto; }
+    }
+
+
+    /* Undo/Redo buttons under grid */
+    .undoRedo {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .iconBtn {
+      min-width: 34px;
+      height: 28px;
+      padding: 0 6px;
+      border-radius: 8px;
+      border: 1px solid var(--borderColor, rgba(50, 60, 70, 0.35));
+      background: var(--panelBg, rgba(50, 60, 70, 0.18));
+      color: var(--textColor, #e7eef6);
+      font-size: 16px;
+      line-height: 26px;
+      cursor: pointer;
+    }
+
+    .iconBtn:hover {
+      background: var(--panelBgHover, rgba(50, 60, 70, 0.26));
+    }
+
+    .iconBtn.disabled {
+      opacity: 0.45;
+      cursor: default;
+      pointer-events: none;
     }

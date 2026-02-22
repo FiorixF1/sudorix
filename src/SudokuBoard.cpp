@@ -386,13 +386,7 @@ void SudokuBoard::applySetValue(Cell idx, Digit digit) {
 }
 
 void SudokuBoard::applyRemoveCandidate(Cell idx, Digit digit) {
-  // Remove + Auto place if applicable
   disableCandidate(idx, digit);
-  // auto place not supported in UI
-  //int only = getSingleCandidate(idx);
-  //if (only) {
-  //  return applySetValue(idx, only);
-  //}
 }
 
 void SudokuBoard::autoClearPeersAfterPlacement(Cell idx, Digit digit) {

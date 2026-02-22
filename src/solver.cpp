@@ -631,8 +631,7 @@ static bool is_operation_applicable(SudokuBoard &board, EventType type, Operatio
 static int drain_event(SudokuBoard &board,
                        uint32_t *out,
                        uint32_t out_words,
-                       uint32_t fromPrev,
-                       bool apply_to_board) {
+                       uint32_t fromPrev) {
   if (!out || out_words < 5) {
     return 0;
   }
@@ -688,12 +687,17 @@ static int drain_event(SudokuBoard &board,
       out[opsBase + 2 * opCount + 1] = op.mask.to_uint32();
       opCount++;
 
-      if (apply_to_board) {
-        if (type == EventType::SetValue) {
-          board.applySetValue(op.idx, *op.mask.begin());
-        } else if (type == EventType::RemoveCandidate) {
-          for (Digit d : op.mask) {
-            board.applyRemoveCandidate(op.idx, d);
+      if (type == EventType::SetValue) {
+        board.applySetValue(op.idx, *op.mask.begin());
+      } else if (type == EventType::RemoveCandidate) {
+        for (Digit d : op.mask) {
+          // Remove + Auto place if applicable
+          board.applyRemoveCandidate(op.idx, d);
+          int only = board.getSingleCandidate(op.idx);
+          if (only) {
+            Event event(EventType::SetValue, ReasonId::NakedSingle);
+            event.addOperation(op.idx, only);
+            g_eventQueue.enqueue(board, event);
           }
         }
       }
@@ -702,45 +706,27 @@ static int drain_event(SudokuBoard &board,
   out[3] = opCount;
 
   // If opCount == 0, discard and continue draining.
-  return (opCount > 0) ? 1 : drain_event(board, out, out_words, fromPrev, apply_to_board);
+  return (opCount > 0) ? 1 : drain_event(board, out, out_words, fromPrev);
 }
 
 // Run techniques to fill the queue if needed, then return a single event.
-// If apply_to_board is true, the drained operations are also applied to 'board'.
+// The drained operations are applied to 'board'.
 static int compute_next_event(SudokuBoard &board,
                               uint32_t *out,
-                              uint32_t out_words,
-                              bool apply_to_board) {
-  // 1) if we already have pending events, return them immediately.
-  if (drain_event(board, out, out_words, 1u, apply_to_board)) {
+                              uint32_t out_words) {
+  // If we already have pending events, return them immediately.
+  if (drain_event(board, out, out_words, 1u)) {
     return 1;
   }
 
-  // 2) run techniques in priority order; stop at the first technique that enqueues anything.
+  // Run techniques in priority order; stop at the first technique that enqueues anything,
+  // then verify, apply and return.
   for (TechniqueFn tech : TECHNIQUES) {
-    const size_t before = g_eventQueue.size();
     tech(board);
-    if (g_eventQueue.size() != before) {
-      // validate event
-      Event tmp;
-      g_eventQueue.peek(tmp);
-      int counter = 0;
-      for (Operation &op : tmp.getOperations()) {
-        counter += is_operation_applicable(board, tmp.type, op) ? 1 : 0;
-      }
-      if (counter == 0) {
-        // discard event and go on
-        g_eventQueue.dequeue(tmp);
-      } else {
-        // found valid event, break loop
-        break;
-      }
+    // If something has been generated, drain as "fromPrev=0".
+    if (drain_event(board, out, out_words, 0u)) {
+      return 1;
     }
-  }
-
-  // 3) if something has been generated, drain as "fromPrev=0".
-  if (drain_event(board, out, out_words, 0u, apply_to_board)) {
-    return 1;
   }
 
   // No events produced.
@@ -789,7 +775,7 @@ extern "C"
     const int guardMax = 200000;
 
     while (guard++ < guardMax) {
-      const int ok = compute_next_event(board, tmp, 1024, true);
+      const int ok = compute_next_event(board, tmp, 1024);
       if (!ok) {
         break;
       }
@@ -833,7 +819,7 @@ extern "C"
     }
 
     // Compute one event, apply it locally and return it to the caller.
-    const int ok = compute_next_event(g_sudokuBoard, out, out_words, true);
+    const int ok = compute_next_event(g_sudokuBoard, out, out_words);
     return ok ? 1 : 0;
   }
 
@@ -858,7 +844,7 @@ extern "C"
     // Clear internal queue state for this hint computation.
     g_eventQueue = EventQueue();
 
-    const int ok = compute_next_event(board, out, out_words, false);
+    const int ok = compute_next_event(board, out, out_words);
     return ok ? 1 : 0;
   }
 } // extern "C"

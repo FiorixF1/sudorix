@@ -1001,6 +1001,7 @@ var business_logic = (() => {
   const btnPauseEl = $("btnPause");
 
   const btnUndoEl = $("btnUndo");
+  const btnRedoEl = $("btnRedo");
 
   const modalOverlayCheck = $("modalOverlayCheck");
   const modalMsgCheck = $("modalMsgCheck");
@@ -1027,7 +1028,9 @@ var business_logic = (() => {
   let roundNumber = 0;
   let solveTimer = null;
   let pendingStepEvent = null;
-  let undoSnapshot = null;
+  let undoStack = [];
+  let redoStack = [];
+  const HISTORY_LIMIT = 100;
 
   /* timer state */
   let timerStart = 0;
@@ -1162,7 +1165,6 @@ var business_logic = (() => {
     resumeTimerAfterPause = true;
     stopTimer();
     openPauseModal();
-    appendLog("Tempomezurilo: paŭzo.");
   });
 
   /* =========================================================
@@ -1238,19 +1240,14 @@ var business_logic = (() => {
 
     if (highlightDigit === digit) {
       highlightDigit = 0;
-      appendLog(`Emfazo: OFF (digit ${digit}).`);
     } else {
       highlightDigit = digit;
-      appendLog(`Emfazo: ON (digit ${digit}).`);
     }
   }
 
   optHighlightEl.addEventListener("change", () => {
     if (!optHighlightEl.checked) {
       highlightDigit = 0;
-      appendLog("Emfazo: malŝaltita.");
-    } else {
-      appendLog("Emfazo: ŝaltita.");
     }
     renderAll();
   });
@@ -1371,13 +1368,11 @@ var business_logic = (() => {
           /* Kolorigado: if candidate absent, treat as transparent => toggle cell color */
           if (!board.hasCandidate(idx, d)) {
             const res = board.toggleCellColor(idx, activeColorIndex);
-            appendLog(`Kolorigado: ĉelo r${rowOf(idx) + 1}c${colOf(idx) + 1} -> ${res.enabled ? (activeColorIndex + 1) : "OFF"}`);
             renderCell(idx);
             return;
           }
 
           const res = board.toggleCandidateColor(idx, d, activeColorIndex);
-          appendLog(`Kolorigado: kandidato ${d} r${rowOf(idx) + 1}c${colOf(idx) + 1} -> ${res.enabled ? (activeColorIndex + 1) : "OFF"}`);
           renderCell(idx);
           return;
         }
@@ -1448,7 +1443,6 @@ var business_logic = (() => {
 
     if (mode === "color") {
       const res = board.toggleCellColor(idx, activeColorIndex);
-      appendLog(`Kolorigado: ĉelo r${rowOf(idx) + 1}c${colOf(idx) + 1} -> ${res.enabled ? (activeColorIndex + 1) : "OFF"}`);
       renderCell(idx);
       return;
     }
@@ -1494,13 +1488,6 @@ var business_logic = (() => {
       return;
     }
 
-    const { r, c } = idxToRC(selectedIdx);
-    if (digit === 0 || res.action === "clear") {
-      appendLog(`Mane: malplenigita r${r}c${c}`);
-    } else {
-      appendLog(`Mane: agordita r${r}c${c} = ${digit} (ne validigita)`);
-    }
-
     renderCell(selectedIdx);
 
     if (optAutoClearEl.checked && digit !== 0 && res.action === "set") {
@@ -1525,9 +1512,6 @@ var business_logic = (() => {
       return;
     }
 
-    const { r, c } = idxToRC(selectedIdx);
-    appendLog(`Mane: ŝalti kandidaton ${digit} su r${r}c${c} -> ${res.nowOn ? "ON" : "OFF"}`);
-
     renderCell(selectedIdx);
   }
 
@@ -1550,10 +1534,6 @@ var business_logic = (() => {
 
     if (res.ok) {
       stopTimer(); /* stop but do not reset */
-      appendLog("Tempomezurilo: HALT (ĝusta solvo).");
-    } else {
-      /* keep running */
-      appendLog("Kontrolo: malsukcesis (tempomezurilo daŭras).");
     }
   }
 
@@ -1576,42 +1556,98 @@ var business_logic = (() => {
     }
   }
 
-  function setUndoAvailable(on) {
-    if (on) {
+  function updateHistoryButtons() {
+    if (undoStack.length > 0) {
       btnUndoEl.classList.remove("disabled");
     } else {
       btnUndoEl.classList.add("disabled");
-      pendingStepEvent = null;
-      undoSnapshot = null;
     }
+
+    if (redoStack.length > 0) {
+      btnRedoEl.classList.remove("disabled");
+    } else {
+      btnRedoEl.classList.add("disabled");
+    }
+  }
+
+  function clearHistory() {
+    undoStack = [];
+    redoStack = [];
+    pendingStepEvent = null;
+    updateHistoryButtons();
+  }
+
+  function pushUndoSnapshot() {
+    const snap = board.exportState();
+    undoStack.push(snap);
+    if (undoStack.length > HISTORY_LIMIT) {
+      undoStack.shift();
+    }
+    redoStack = [];
+    updateHistoryButtons();
   }
 
   function saveUndoSnapshot() {
-    undoSnapshot = board.exportState();
-    setUndoAvailable(true);
+    pushUndoSnapshot();
   }
 
   function doUndo() {
-    if (!undoSnapshot) {
+    if (undoStack.length == 0) {
       return;
     }
+
     stopSolving();
     clearAllEventHighlights();
-    const res = board.importState(undoSnapshot);
-    setUndoAvailable(false);
+    pendingStepEvent = null;
+
+    const current = board.exportState();
+    redoStack.push(current);
+    if (redoStack.length > HISTORY_LIMIT) {
+      redoStack.shift();
+    }
+
+    const prev = undoStack.pop();
+    const res = board.importState(prev);
+    updateHistoryButtons();
+
     if (!res.ok) {
       openCheckModal(`Malfara eraro: ${res.error}`);
       return;
     }
+
     renderAll();
-    appendLog("Malfaro: revenis unu paŝon reen.");
+  }
+
+  function doRedo() {
+    if (redoStack.length == 0) {
+      return;
+    }
+
+    stopSolving();
+    clearAllEventHighlights();
+    pendingStepEvent = null;
+
+    const current = board.exportState();
+    undoStack.push(current);
+    if (undoStack.length > HISTORY_LIMIT) {
+      undoStack.shift();
+    }
+
+    const next = redoStack.pop();
+    const res = board.importState(next);
+    updateHistoryButtons();
+
+    if (!res.ok) {
+      openCheckModal(`Refara eraro: ${res.error}`);
+      return;
+    }
+
+    renderAll();
   }
 
   function stopSolving() {
     if (solveTimer) {
-      //clearInterval(solveTimer);
       solveTimer = null;
-      appendLog("Solvilo: halti.");
     }
   }
 
@@ -1641,7 +1677,7 @@ var business_logic = (() => {
         }
 
         const { r, c } = idxToRC(idx);
-        appendLog(`Round ${roundNumber} - ${ev.reason || "Solver"}: r${r}c${c} = ${digit}`);
+        appendLog(`Rundo ${roundNumber} - ${ev.reason || "Solver"}: r${r}c${c} = ${digit}`);
 
         /* update candidates */
         board.autoClearPeersAfterPlacement(idx, digit);
@@ -1905,9 +1941,9 @@ var business_logic = (() => {
     setMode("value");
     refreshColorSelectionUI();
     clearAllEventHighlights();
-    setUndoAvailable(false);
+    clearHistory();
 
-    appendLog("Reagordo: krado purigita.");
+    logEl.value = "";
 
     /* Timer: reset and STOP */
     resetTimer(true);
@@ -1923,7 +1959,6 @@ var business_logic = (() => {
     const res = board.importFromString(text);
     if (!res.ok) {
       openCheckModal(`Enporta eraro: ${res.error}`);
-      appendLog(`Enporto: malsukcesis (${res.error})`);
       return;
     }
 
@@ -1931,9 +1966,6 @@ var business_logic = (() => {
 
     if (optPrefillEl.checked) {
       board.recalcAllCandidatesFromValues();
-      appendLog("Enporto: Sudoku ŝargita. Antaŭplenigo aktiva -> kandidatoj kalkulitaj.");
-    } else {
-      appendLog("Enporto: Sudoku ŝargita. Kandidatoj ne kalkulitaj (premu 'Rekalkuli kandidatojn' se vi volas).");
     }
 
     renderAll();
@@ -1941,7 +1973,6 @@ var business_logic = (() => {
     /* Timer: reset and START */
     resetTimer(true);
     startTimer();
-    appendLog("Tempomezurilo: reagordo + starto (enporto).");
 
     /* If import is already complete (rare), auto-check immediately */
     triggerAutoCheckIfComplete();
@@ -1969,7 +2000,6 @@ var business_logic = (() => {
     /* Arrow-key navigation */
     if (isModeToggleKey(e)) {
       setMode(mode === "value" ? "cand" : "value");
-      appendLog(`UI: ŝanĝi reĝimon -> ${mode === "value" ? "Valoro" : "Kandidato"}`);
       e.preventDefault();
       return;
     }
@@ -2004,10 +2034,7 @@ var business_logic = (() => {
    * ========================================================= */
   $("btnImport").addEventListener("click", () => importSudoku(importEl.value));
   $("btnClear").addEventListener("click", () => resetGrid());
-  $("btnRecalc").addEventListener("click", () => {
-    recalcCandidates();
-    appendLog("Kandidatoj: rekalkulo finita.");
-  });
+  $("btnRecalc").addEventListener("click", () => recalcCandidates());
 
   $("btnCheck").addEventListener("click", () => {
     const res = board.checkSolvedGrid();
@@ -2021,11 +2048,12 @@ var business_logic = (() => {
 
   $("btnClearLog").addEventListener("click", () => { logEl.value = ""; });
 
-  $("btnDemoStep").addEventListener("click", () => {
+  $("btnStep").addEventListener("click", () => {
     solveOneStep();
   });
 
   $("btnUndo").addEventListener("click", () => doUndo());
+  $("btnRedo").addEventListener("click", () => doRedo());
 
   // Wire up right mode buttons
   $("modeValue").addEventListener("click", () => setMode("value"));

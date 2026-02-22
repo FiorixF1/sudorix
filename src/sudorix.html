@@ -13,31 +13,42 @@
   <h1>Sudorix - Sudokua Logika Solvilo el Fiorix</h1>
 </header>
 
+<div class="topBar">
+  <div class="topBarInner panel">
+
+    <div class="importWrap">
+      <div class="importLeft">
+        <h2>Enporto</h2>
+
+        <div class="importRow">
+          <textarea id="importText" class="importTextSingle" placeholder="Algluu ĉenon de 81 ciferoj. Por indiki malplenajn ĉelojn uzu 0 aŭ '.'."></textarea>
+
+          <div class="importBtns">
+            <button id="btnImport" class="ok">Enporti Sudokuon</button>
+            <button id="btnClear" class="danger">Reagordi kradon</button>
+            <button id="btnRecalc" class="secondary">Rekalkuli kandidatojn</button>
+            <button id="btnCheck" class="secondary">Kontroli</button>
+          </div>
+        </div>
+
+        <div class="optRow">
+          <label><input type="checkbox" id="optPrefill" /> Antaŭplenigo</label>
+          <label><input type="checkbox" id="optAutoClear" /> Aŭtomata forigo</label>
+          <label><input type="checkbox" id="optHighlight" /> Emfazo</label>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="layout">
   <div class="panel">
-    <h2>Enporto</h2>
-    <textarea id="importText" placeholder="Algluu ĉenon de 81 ciferoj. Por indiki malplenajn ĉelojn uzu 0 aŭ '.'."></textarea>
-
-    <div class="optRow">
-      <label><input type="checkbox" id="optPrefill" /> Antaŭplenigo</label>
-      <label><input type="checkbox" id="optAutoClear" /> Aŭtomata forigo</label>
-      <label><input type="checkbox" id="optHighlight" /> Emfazo</label>
-    </div>
-
-    <div class="row">
-      <button id="btnImport" class="ok">Enporti Sudokuon</button>
-      <button id="btnClear" class="danger">Reagordi kradon</button>
-      <button id="btnRecalc" class="secondary">Rekalkuli kandidatojn</button>
-      <button id="btnCheck" class="secondary">Kontroli</button>
-    </div>
-
-    <h2 style="margin-top: 14px;">Protokolo</h2>
+    <h2>Protokolo</h2>
     <textarea id="log" class="logArea" readonly placeholder="La solvilo skribos ĉi tie la paŝojn (ekz. 'Naked single: r3c7 = 8')."></textarea>
     <div class="row">
       <button id="btnClearLog" class="secondary">Viŝi protokolon</button>
-      <button id="btnDemoStep" class="secondary">Ruli 1 paŝon</button>
-      <button id="btnUndo" class="secondary disabled">Malfari</button>
-    </div>
+      <button id="btnStep" class="secondary">Ruli 1 paŝon</button>
+</div>
 
     <div class="row" style="margin-top: 12px;">
       <button id="btnSolve" class="ok">Komenci solvadon</button>
@@ -50,8 +61,11 @@
     <h2>Krado</h2>
     <div class="sudoku" id="sudokuGrid" aria-label="Sudoku-krado"></div>
 
-    <!-- TIMER UNDER GRID -->
     <div class="timerBar" aria-label="Tempomezurilo">
+      <div class="undoRedo" aria-label="Malfari/Refari">
+        <button id="btnUndo" class="iconBtn disabled" title="Malfari" aria-label="Malfari">↶</button>
+        <button id="btnRedo" class="iconBtn disabled" title="Refari" aria-label="Refari">↷</button>
+      </div>
       <div class="timerText" id="timerText">00:00</div>
       <div class="pauseBtn" id="btnPause" title="Paŭzo">
         <div class="pauseIcon" aria-hidden="true"></div>
@@ -73,10 +87,10 @@
     <div class="helpBox">
       Fulmoklavoj:<br/>
       - <b>Numpad .</b>: ŝanĝi Valoro/Kandidato (nur en Valoro/Kandidato)<br/>
-      - <b>Frecce</b>: navigado inter ĉeloj<br/>
+      - <b>Sagoj</b>: navigado inter ĉeloj<br/>
       - <b>1–9</b>: (Valoro) agordi/ŝalti valoron; (Kandidato) ŝalti kandidaton<br/>
       - <b>Del/Backspace/0</b>: forigi valoron (nur en Valoro)<br/>
-      - <b>Highlight</b>: kun ŝaltita markobutono, alklaku solvitajn ĉelojn (en Valoro/Kandidato) por emfazi numeron<br/>
+      - <b>Emfazo</b>: kun ŝaltita markobutono, alklaku solvitajn ĉelojn (en Valoro/Kandidato) por emfazi numeron<br/>
       - <b>Kolorigado</b>: alklaku ĉelon/kandidaton por ŝalti koloron
     </div>
   </div>
