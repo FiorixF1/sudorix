@@ -38,8 +38,9 @@ jobs:
 
       - name: Ensure index.html exists
         run: |
-          test -f web/sudorix.html
-          cp -f web/sudorix.html web/index.html
+        	cp src/sudorix.html web/index.html
+	        cp src/sudorix.css web/sudorix.css
+	        cp src/sudorix.js web/sudorix.js
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
