@@ -31,7 +31,8 @@ enum class ReasonId : uint8_t {
   Jellyfish,
   XYWing,
   XYZWing,
-  BUG
+  BUGPlusOne,
+  Skyscraper
 };
 
 // one operation = set value(s) or remove candidate(s)

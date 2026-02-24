@@ -185,6 +185,7 @@ int SudokuBoard::importFromString(const char *values) {
       // given
       cells[i].setValue(ch - '0');
       ++counter[ch - '0'];
+      ++solvedCells;
       ++tokens;
     } else if (ch == '0' || ch == '.') {
       // empty
@@ -225,6 +226,7 @@ int SudokuBoard::importFromBuffers(const uint8_t *values, const uint16_t *cands)
       cells[i].setCandidates(DigitSet(  cands[i]   ));  // treat candidates as mask
     } else {
       ++counter[values[i]];
+      ++solvedCells;
       cells[i].setCandidates(DigitSet( {values[i]} ));  // single value, use { ... }
     }
   }
@@ -249,11 +251,13 @@ bool SudokuBoard::isSolved(Cell idx) const {
 
 void SudokuBoard::setValue(Cell idx, Digit digit) {
   ++counter[digit];
+  ++solvedCells;
   cells[idx].setValue(digit);
 }
 
 void SudokuBoard::clearValue(Cell idx) {
   --counter[cells[idx].getValue()];
+  --solvedCells;
   cells[idx].clearValue();
 }
 
@@ -284,7 +288,7 @@ void SudokuBoard::disableCandidate(Cell idx, Digit digit) {
 
 // --- peers API ---
 CellSet SudokuBoard::getPeers(Cell idx) const {
-  return PEERS[idx];
+  return PEERS[idx].filter([&](Cell i){ return !isSolved(i); });
 }
 
 CellSet SudokuBoard::getPeers(const CellSet &idxSet) const {
@@ -299,6 +303,14 @@ CellSet SudokuBoard::getPeers(const CellSet &idxSet) const {
     }
   }
   return result;
+}
+
+CellSet SudokuBoard::getPeersContaining(Cell idx, Digit digit) const {
+  return getPeers(idx).filter([&](Cell i){ return hasCandidate(i, digit); });
+}
+
+CellSet SudokuBoard::getPeersContaining(const CellSet &idxSet, Digit digit) const {
+  return getPeers(idxSet).filter([&](Cell i){ return hasCandidate(i, digit); });
 }
 
 bool SudokuBoard::sees(Cell a, Cell b) const {
@@ -343,17 +355,17 @@ const Unit &SudokuBoard::getBoxByLocation(Location idx) const {
 }
 
 Location SudokuBoard::getRowLocation(Cell idx) const {
-  return (int)(idx / 9);
+  return (Location)(idx / 9);
 }
 
 Location SudokuBoard::getColumnLocation(Cell idx) const {
-  return (int)(idx % 9);
+  return (Location)(idx % 9);
 }
 
 Location SudokuBoard::getBoxLocation(Cell idx) const {
-  const int r = getRowLocation(idx);
-  const int c = getColumnLocation(idx);
-  return (int)((r / 3) * 3 + (c / 3));
+  const Location r = getRowLocation(idx);
+  const Location c = getColumnLocation(idx);
+  return (Location)((r / 3) * 3 + (c / 3));
 }
 
 CellSet SudokuBoard::getPositionsOfDigit(Unit unit, Digit d) const {
@@ -380,7 +392,6 @@ DigitSet SudokuBoard::getDigitsInLocation(Unit unit, Location i) const {
 
 // --- events API ---
 void SudokuBoard::applySetValue(Cell idx, Digit digit) {
-  // Set + Auto clear 
   setValue(idx, digit);
   autoClearPeersAfterPlacement(idx, digit);
 }
@@ -412,6 +423,10 @@ DigitSet SudokuBoard::getUnsolvedDigits() const {
     }
   }
   return result;
+}
+
+int SudokuBoard::getNumberOfSolvedCells() const {
+  return solvedCells;
 }
 
 CellSet SudokuBoard::getBivalues() const {
@@ -446,13 +461,13 @@ bool SudokuBoard::_recalcAllCandidatesFromValues() {
     int c = getColumnLocation(idx);
     int b = getBoxLocation(idx);
 
-    if ((rowUsed[r].contains(value))) {
+    if (rowUsed[r].contains(value)) {
       return false;
     }
-    if ((colUsed[c].contains(value))) {
+    if (colUsed[c].contains(value)) {
       return false;
     }
-    if ((boxUsed[b].contains(value))) {
+    if (boxUsed[b].contains(value)) {
       return false;
     }
 

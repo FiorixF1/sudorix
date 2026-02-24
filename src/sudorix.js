@@ -54,7 +54,8 @@ var business_logic = (() => {
     "Jellyfish",
     "XY-Wing",
     "XYZ-Wing",
-    "BUG"
+    "BUG+1",
+    "Skyscraper"
   ];
 
   function initWasmSolver() {
@@ -1651,6 +1652,45 @@ var business_logic = (() => {
     }
   }
 
+  // print event without applying - some sanity checks are skipped
+  function formatEventLog(ev) {
+    if (!ev || !ev.ops || ev.ops.length === 0) {
+      return;
+    }
+
+    if (ev.type === "setValue") {
+      for (const op of ev.ops) {
+        const idx = op.idx;
+        const digit = maskToSingleDigit(op.mask);
+
+        if (!assertDigit(digit)) {
+          continue;
+        }
+
+        const { r, c } = idxToRC(idx);
+        appendLog(`Rundo ${roundNumber} - ${ev.reason || "Solver"}: r${r}c${c} = ${digit}`);
+      }
+    }
+
+    if (ev.type === "removeCandidate") {
+      let any = false;
+      let removedCount = 0;
+
+      for (const op of ev.ops) {
+        const digits = maskToDigits(op.mask);
+        for (const digit of digits) {
+          removedCount++;
+          any = true;
+        }
+      }
+
+      if (any) {
+        const j = removedCount == 1 ? '' : 'j';
+        appendLog(`Rundo ${roundNumber} - ${ev.reason || "Solver"}: ${removedCount} kandidato${j} forigita${j}`);
+      }
+    }
+  }
+
   function applyEvent(ev) {
     if (!ev || !ev.ops || ev.ops.length === 0) {
       return false;
@@ -1675,9 +1715,6 @@ var business_logic = (() => {
         if (wasSolved && board.getValue(idx) === digit) {
           continue;
         }
-
-        const { r, c } = idxToRC(idx);
-        appendLog(`Rundo ${roundNumber} - ${ev.reason || "Solver"}: r${r}c${c} = ${digit}`);
 
         /* update candidates */
         board.autoClearPeersAfterPlacement(idx, digit);
@@ -1705,11 +1742,6 @@ var business_logic = (() => {
             any = true;
           }
         }
-      }
-
-      if (any) {
-        const j = removedCount == 1 ? '' : 'j';
-        appendLog(`Rundo ${roundNumber} - ${ev.reason || "Solver"}: ${removedCount} kandidato${j} forigita${j}`);
       }
 
       return any;
@@ -1755,6 +1787,7 @@ var business_logic = (() => {
     setTimeout(() => {
       // Phase 2: apply, then highlight again on the updated grid.
       saveUndoSnapshot();
+      formatEventLog(ev);
       const did = applyEvent(ev);
       renderAll();
       clearAllEventHighlights();
@@ -1851,8 +1884,7 @@ var business_logic = (() => {
       renderAll();
       clearAllEventHighlights();
       highlightSourcesAndOps(ev, true);
-      // qui dovrei già mostrare l'evento nel log appendLog(formatEventLog(ev));
-      appendLog("Paŝo: antaŭrigardo (klaku denove por apliki).");
+      formatEventLog(ev);
       return;
     }
 

@@ -52,6 +52,10 @@ public:
 
   CellSet getPeers(const CellSet &idxSet) const;
 
+  CellSet getPeersContaining(Cell idx, Digit digit) const;
+
+  CellSet getPeersContaining(const CellSet &idxSet, Digit digit) const;
+
   bool sees(Cell a, Cell b) const;
 
   // --- positions API ---
@@ -99,6 +103,8 @@ public:
 
   DigitSet getUnsolvedDigits() const;
 
+  int getNumberOfSolvedCells() const;
+
   CellSet getBivalues() const;
 
 private:
@@ -107,6 +113,8 @@ private:
 
   // Keep track of how many times a digit is solved, speeds up advanced techniques
   std::map<Digit, int> counter;
+
+  int solvedCells = 0;
 
   bool _recalcAllCandidatesFromValues();
 };

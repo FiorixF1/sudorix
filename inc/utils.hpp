@@ -15,7 +15,7 @@
 #endif
 
 #ifdef DEBUG
-  #define console_log(fmt,  ...) emscripten_log(EM_LOG_CONSOLE,  fmt,  ##__VA_ARGS__)
+  #define console_log(fmt,  ...) emscripten_log(EM_LOG_CONSOLE,  fmt "\n",  ##__VA_ARGS__)
 #else
   #define console_log(fmt,  ...)
 #endif

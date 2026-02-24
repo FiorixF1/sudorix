@@ -17,7 +17,10 @@ void EventQueue::enqueue(SudokuBoard &board, Event &event) {
           }),
       event.ops.end()
     );
-    q.push(event);
+    // check again if the event is valid
+    if (event.getNumberOfOperations() > 0) {
+      q.push(event);
+    }
   }
 }
 
