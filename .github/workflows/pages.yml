@@ -24,14 +24,13 @@ jobs:
       - name: Install system deps
         run: sudo apt-get update && sudo apt-get install -y git cmake python3 nodejs npm
 
-      - name: Install emsdk
-        run: |
-          git clone https://github.com/emscripten-core/emsdk.git $HOME/emsdk
-          cd $HOME/emsdk
-          ./emsdk install latest
-          ./emsdk activate latest
+      - name: Setup Emscripten (cached)
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+          actions-cache-folder: emsdk-cache
 
-      - name: Build WASM (and web assets)
+      - name: Build WASM
         run: |
           source "$HOME/emsdk/emsdk_env.sh"
           make wasm
