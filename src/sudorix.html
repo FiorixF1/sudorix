@@ -28,6 +28,7 @@
             <button id="btnClear" class="danger">Reagordi kradon</button>
             <button id="btnRecalc" class="secondary">Rekalkuli kandidatojn</button>
             <button id="btnCheck" class="secondary">Kontroli</button>
+            <button id="btnCountSolutions" class="secondary">Kalkuli solvojn</button>
           </div>
         </div>
 
@@ -45,15 +46,21 @@
   <div class="panel">
     <h2>Protokolo</h2>
     <textarea id="log" class="logArea" readonly placeholder="La solvilo skribos ĉi tie la paŝojn (ekz. 'Naked single: r3c7 = 8')."></textarea>
-    <div class="row">
+
+    <div class="solverStatus" aria-label="Stato del solvilo">
+      <span id="solverStatusDot" class="statusDot statusDotRed"></span>
+      <span id="solverStatusText" class="statusText">WASM solvilo ne preta.</span>
+    </div>
+
+    <div class="logBtnGrid">
       <button id="btnClearLog" class="secondary">Viŝi protokolon</button>
       <button id="btnStep" class="secondary">Ruli 1 paŝon</button>
-</div>
+    </div>
 
-    <div class="row" style="margin-top: 12px;">
+    <div class="logBtnGrid logBtnGridWide" style="margin-top: 12px;">
       <button id="btnSolve" class="ok">Komenci solvadon</button>
+      <button id="btnStop" class="danger">Halti</button>
       <button id="btnSolveWasmFull" class="secondary">WASM plen-solve</button>
-      <button id="btnStop" class="secondary">Halti</button>
     </div>
   </div>
 

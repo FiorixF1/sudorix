@@ -6,6 +6,7 @@
 // Sudorix Solver Core API
 //
 // Exported functions:
+//   int sudorix_solver_count_solutions(const char *in81);
 //   int sudorix_solver_full(const char *in81, char *out81);
 //   int sudorix_solver_init_board(const char *in81);
 //   int sudorix_solver_next_step(uint32_t *out, uint32_t out_words);
@@ -45,6 +46,8 @@
 
 extern "C"
 {
+  int sudorix_solver_count_solutions(const char *in81);
+
   int sudorix_solver_full(const char *in81, char *out81);
   
   int sudorix_solver_init_board(const char *in81);

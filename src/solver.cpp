@@ -941,6 +941,13 @@ static int compute_next_event(SudokuBoard &board,
 
 extern "C"
 {
+  // Calculates the number of solutions of a Sudoku given its initial representation.
+  // Returns -1 in case of error, else the number of solutions.
+  EMSCRIPTEN_KEEPALIVE
+  int sudorix_solver_count_solutions(const char *in81) {
+    return -1;
+  }
+
   // Solves an entire Sudoku given its initial representation in one shot.
   // Returns 0 in case of error, else 1.
   EMSCRIPTEN_KEEPALIVE

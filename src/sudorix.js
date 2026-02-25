@@ -28,8 +28,10 @@ var business_logic = (() => {
   let wasmSolveInit = null;      // cwrap'd function
   let wasmSolveNextStep = null;  // cwrap'd function
   let wasmSolveHint = null;      // cwrap'd function
+  let wasmCountSolutions = null; // cwrap'd function
   let wasmBufValues = 0;         // malloc'ed pointers in WASM heap
   let wasmBufCands  = 0;
+  let wasmBufInStr  = 0;
   let wasmBufOut    = 0;
   const WASM_OUT_WORDS = 1024;
 
@@ -61,7 +63,7 @@ var business_logic = (() => {
   function initWasmSolver() {
     // createSudorixSolver is defined by solver_wasm.js (Emscripten output)
     if (typeof createSudorixSolver !== "function") {
-      appendLog("WASM: solver_wasm.js ne ŝargita. Solvilo ne disponebla.");
+      setSolverStatus(false, "solver_wasm.js ne ŝargita. Solvilo ne disponebla.");
       return;
     }
 
@@ -73,16 +75,17 @@ var business_logic = (() => {
       wasmSolveInit = wasmModule.cwrap("sudorix_solver_init_board", "number", ["number"]);
       wasmSolveNextStep = wasmModule.cwrap("sudorix_solver_next_step", "number", ["number", "number"]);
       wasmSolveHint = wasmModule.cwrap("sudorix_solver_hint", "number", ["number", "number", "number", "number"]);
+      wasmCountSolutions = wasmModule.cwrap("sudorix_solver_count_solutions", "number", ["number"]);
 
       wasmBufValues = wasmModule._malloc(81);          // uint8_t[81]
       wasmBufCands  = wasmModule._malloc(81 * 2);      // uint16_t[81]
       wasmBufInStr  = wasmModule._malloc(82);          // char[81] + '\0'
       wasmBufOut    = wasmModule._malloc(WASM_OUT_WORDS * 4); // uint32_t[WASM_OUT_WORDS]
 
-      appendLog("WASM: solvilo preta.");
+      setSolverStatus(true, "WASM solvilo preta.");
       return Module;
     }).catch((e) => {
-      appendLog("WASM: malsukcesis ŝargi solvilon: " + (e && e.message ? e.message : String(e)));
+      setSolverStatus(false, "WASM malsukcesis: " + (e && e.message ? e.message : String(e)));
       wasmModule = null;
       wasmSolveFull = null;
       wasmSolveInit = null;
@@ -114,6 +117,28 @@ var business_logic = (() => {
       wasmModule._free(inPtr);
       wasmModule._free(outPtr);
     }
+  }
+
+  function wasmCountSolutionsFromString(boardRef) {
+    if (!wasmModule || !wasmCountSolutions) {
+      return { ok: false, err: "Funkcio sudorix_solver_count_solutions ne disponeblas en ĉi tiu WASM build." };
+    }
+
+    const s = boardRef.exportToString();
+    const enc = new TextEncoder();
+    const bytes = enc.encode(String(s || ""));
+    // Copy at most 81 chars; terminate.
+    const max = Math.min(bytes.length, 81);
+    for (let i = 0; i < max; i++) {
+      wasmModule.HEAPU8[wasmBufInStr + i] = bytes[i];
+    }
+    for (let i = max; i < 81; i++) {
+      wasmModule.HEAPU8[wasmBufInStr + i] = 46; // '.'
+    }
+    wasmModule.HEAPU8[wasmBufInStr + 81] = 0;
+
+    const n = wasmCountSolutions(wasmBufInStr);
+    return { ok: true, n };
   }
 
   function wasmInitBoard(boardRef) {
@@ -333,7 +358,57 @@ var business_logic = (() => {
     return list && list[digit - 1] ? list[digit - 1] : null;
   }
 
-  function clearAllEventHighlights() {
+  
+  /* =========================================================
+   * Event highlight persistence (candidates)
+   * ========================================================= */
+  const candFlashSourceMask = new Uint16Array(81);
+  const candFlashSetMask = new Uint16Array(81);
+  const candFlashRemoveMask = new Uint16Array(81);
+  const candFlashHoldMask = new Uint16Array(81);
+
+  function clearCandidateFlashMasks() {
+    candFlashSourceMask.fill(0);
+    candFlashSetMask.fill(0);
+    candFlashRemoveMask.fill(0);
+    candFlashHoldMask.fill(0);
+  }
+
+  function addCandidateFlashMask(idx, kind, mask, hold) {
+    const m = (mask & 0x1FF);
+    if (!m) {
+      return;
+    }
+    if (kind === "source") {
+      candFlashSourceMask[idx] |= m;
+    } else if (kind === "set") {
+      candFlashSetMask[idx] |= m;
+    } else if (kind === "remove") {
+      candFlashRemoveMask[idx] |= m;
+    }
+    if (hold) {
+      candFlashHoldMask[idx] |= m;
+    }
+  }
+
+  function applyCandidateFlashClasses(spanEl, idx, digit) {
+    const bit = digitToBit(digit);
+    if (candFlashSourceMask[idx] & bit) {
+      spanEl.classList.add("flashSource");
+    }
+    if (candFlashSetMask[idx] & bit) {
+      spanEl.classList.add("flashSetCand");
+    }
+    if (candFlashRemoveMask[idx] & bit) {
+      spanEl.classList.add("flashRemoveCand");
+    }
+    if (candFlashHoldMask[idx] & bit) {
+      spanEl.classList.add("holdFlash");
+    }
+  }
+
+function clearAllEventHighlights() {
+    clearCandidateFlashMasks();
     for (let i = 0; i < 81; i++) {
       const cellEl = gridEl.children[i];
       if (!cellEl) {
@@ -358,19 +433,20 @@ var business_logic = (() => {
     if (!ev) {
       return;
     }
-    const holdClass = hold ? "holdFlash" : "";
+
+    const isHold = !!hold;
+
     // Sources: green
     if (ev.sources) {
       for (const s of ev.sources) {
         const idx = s.idx;
+        addCandidateFlashMask(idx, "source", s.mask, isHold);
+
         const digits = maskToDigits(s.mask);
         for (const d of digits) {
           const el = getCandidateElement(idx, d);
           if (el) {
-            el.classList.add("flashSource");
-            if (holdClass) {
-              el.classList.add(holdClass);
-            }
+            applyCandidateFlashClasses(el, idx, d);
           }
         }
       }
@@ -380,29 +456,29 @@ var business_logic = (() => {
     if (ev.ops) {
       for (const op of ev.ops) {
         const idx = op.idx;
+
         if (ev.type === "setValue") {
+          addCandidateFlashMask(idx, "set", op.mask, isHold);
+
           const d = maskToSingleDigit(op.mask);
           if (d) {
             const el = getCandidateElement(idx, d);
             if (el) {
-              el.classList.add("flashSetCand");
-              if (holdClass) {
-                el.classList.add(holdClass);
-              }
+              applyCandidateFlashClasses(el, idx, d);
             }
           }
         } else if (ev.type === "removeCandidate") {
+          addCandidateFlashMask(idx, "remove", op.mask, isHold);
+
           const digits = maskToDigits(op.mask);
           for (const d of digits) {
             const el = getCandidateElement(idx, d);
             if (el) {
-              el.classList.add("flashRemoveCand");
-              if (holdClass) {
-                el.classList.add(holdClass);
-              }
+              applyCandidateFlashClasses(el, idx, d);
             }
           }
         }
+
         flashCell(idx, ev.type);
       }
     }
@@ -1048,6 +1124,18 @@ var business_logic = (() => {
     logEl.scrollTop = logEl.scrollHeight;
   }
 
+
+  function setSolverStatus(ok, text) {
+    const dot = $("solverStatusDot");
+    const label = $("solverStatusText");
+    if (!dot || !label) {
+      return;
+    }
+    dot.classList.toggle("statusDotGreen", !!ok);
+    dot.classList.toggle("statusDotRed", !ok);
+    label.textContent = text || (ok ? "WASM solvilo preta." : "WASM solvilo ne preta.");
+  }
+
   function openCheckModal(msg) {
     modalMsgCheck.textContent = msg;
     modalOverlayCheck.classList.add("open");
@@ -1358,6 +1446,8 @@ var business_logic = (() => {
         span.style.fontWeight = "800";
       }
 
+      applyCandidateFlashClasses(span, idx, d);
+
       /* Candidate click behavior:
          - Kolorigado: toggleCandidateColor
          - Otherwise: no-op (no mouse candidate edits, no highlight from candidates) */
@@ -1653,6 +1743,17 @@ var business_logic = (() => {
   }
 
   // print event without applying - some sanity checks are skipped
+  function logEventOnce(ev) {
+    if (!ev) {
+      return;
+    }
+    if (ev._logged) {
+      return;
+    }
+    formatEventLog(ev);
+    ev._logged = true;
+  }
+
   function formatEventLog(ev) {
     if (!ev || !ev.ops || ev.ops.length === 0) {
       return;
@@ -1759,7 +1860,7 @@ var business_logic = (() => {
       "La solvilo WASM ne estas disponebla.\n\n" +
       "Kontrolu ke vi lanĉas la paĝon per HTTP (ne per file://) kaj ke solver_wasm.js/.wasm estas ĉeestaj."
     );
-    appendLog("Solvilo: WASM ne disponebla.");
+    setSolverStatus(false, "WASM ne disponebla.");
     return false;
   }
 
@@ -1787,7 +1888,7 @@ var business_logic = (() => {
     setTimeout(() => {
       // Phase 2: apply, then highlight again on the updated grid.
       saveUndoSnapshot();
-      formatEventLog(ev);
+      logEventOnce(ev);
       const did = applyEvent(ev);
       renderAll();
       clearAllEventHighlights();
@@ -1807,8 +1908,6 @@ var business_logic = (() => {
       return;
     }
 
-    appendLog("Solvilo: starto (WASM, interna event-vico).");
-
     board.recalcAllCandidatesFromValues();
     renderAll();
     wasmInitBoard(board);
@@ -1821,7 +1920,7 @@ var business_logic = (() => {
       }
       solverTick((keepGoing) => {
         if (!keepGoing) {
-          appendLog("Solvilo: halti (neniu plia evento).");
+          appendLog("Halti (neniu plia evento).");
           stopSolving();
           return;
         }
@@ -1871,7 +1970,7 @@ var business_logic = (() => {
       // don't recalculate candidates, otherwise you could end up in an infinite loop
       const ev = wasmComputeHint(board);
       if (!ev) {
-        appendLog("Paŝo: neniu evento.");
+        appendLog("Neniu plia evento.");
         return;
       }
 
@@ -1904,7 +2003,7 @@ var business_logic = (() => {
     }, 200);
 
     if (!did) {
-      appendLog("Paŝo: evento ne aplikebla.");
+      appendLog("Evento ne aplikebla.");
     }
   }
 
@@ -2074,6 +2173,25 @@ var business_logic = (() => {
     /* Manual check: do not auto-stop timer here; only stop on auto-check success at completion */
   });
 
+  $("btnCountSolutions").addEventListener("click", () => {
+    // Count solutions on the current grid (values only)
+    const r = wasmCountSolutionsFromString(board);
+    if (!r.ok) {
+      openCheckModal(r.err);
+      return;
+    }
+
+    if (r.n === -1) {
+      openCheckModal("Eraro: malvalida Sudoku-ĉeno (kodiga eraro).");
+    } else if (r.n === 0) {
+      openCheckModal("Rezulto: neniu solvo (0).");
+    } else if (r.n === 1) {
+      openCheckModal("Rezulto: unu sola solvo (unika).");
+    } else {
+      openCheckModal("Rezulto: pluraj solvoj (" + r.n + ").");
+    }
+  });
+
   $("btnSolve").addEventListener("click", () => startSolving());
   $("btnSolveWasmFull").addEventListener("click", () => solveWasmFull());
   $("btnStop").addEventListener("click", () => stopSolving());
@@ -2102,14 +2220,14 @@ var business_logic = (() => {
     buildColorPad3x3();
     buildGridUI();
 
+    setSolverStatus(false, "WASM solvilo ne preta.");
+
     initWasmSolver();
 
     setMode("value");
 
     renderTimer();
     updatePauseButtonState();
-
-    appendLog("Preta. Algluu Sudokuon kaj premu 'Enporti Sudokuon'.");
   }
 
   init();

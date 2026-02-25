@@ -3,7 +3,7 @@
 Sudorix estas logika solvilo de Sudokuo realigita en C++ kaj alirebla per eleganta reta interfaco pere de WASM.
 Tamen Sudorix ankaŭ povas esti kompilata kaj rulata kiel memstara programo.
 
-La plej nova versio de Sudorix estas ĉiam je dispono ĉe [GitHub Pages]([Sudorix](https://fiorixf1.github.io/sudorix)).
+La plej nova versio de Sudorix estas ĉiam je dispono ĉe [GitHub Pages](https://fiorixf1.github.io/sudorix).
 
 ## Kompilado
 
@@ -115,6 +115,8 @@ Eventoj estas priskribataj per `uint32_t out[1024]`:
 
 ### API
 
+- `int sudorix_solver_count_solutions(const char *in81)`
+  - ricevas Sudokuon kiel ĉenon kaj redonas la nombron da solvoj; malplenaj ĉeloj estas markitaj per `0` aŭ `.`
 - `int sudorix_solver_full(const char *in81, char *out81)`
   - ricevas Sudokuon kiel ĉenon kaj redonas la solvon kiel ĉenon; malplenaj ĉeloj estas markitaj per `0` aŭ `.`
 - `int sudorix_solver_init_board(const char *in81)`
