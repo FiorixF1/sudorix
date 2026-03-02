@@ -417,6 +417,91 @@ static void techBoxLineReduction(SudokuBoard &board) {
   }
 }
 
+static void techBUGPlusOne(SudokuBoard &board) {
+  // Condition 1: only bivalue cells except for one trivalue cell
+  Cell trivalueCell = -1;
+  for (Cell i = 0; i < 81; i++) {
+    if (board.isSolved(i)) {
+      continue;
+    }
+
+    DigitSet candidates = board.getCandidates(i);
+    if (candidates.size() == 3) {
+      if (trivalueCell != -1) {
+        // not applicable
+        return;
+      }
+      trivalueCell = i;
+    } else if (candidates.size() != 2) {
+      // not applicable
+      return;
+    }
+  }
+
+  if (trivalueCell != -1) {
+    // Condition 2: each digit appears twice, except for one digit that appears three times
+    Digit trilocationDigitRowValue = 0;
+    Location trilocationDigitRowLocation = -1;
+    for (Digit d : board.getUnsolvedDigits()) {
+      for (Location l = 0; l < 9; ++l) {
+        const Unit &row = board.getRowByLocation(l);
+        const CellSet &tmp = board.getPositionsOfDigit(row, d);
+        if (!tmp.empty()) {
+          if (tmp.size() == 3) {
+            if (trilocationDigitRowLocation != -1) {
+              // not applicable
+              return;
+            }
+            trilocationDigitRowValue = d;
+            trilocationDigitRowLocation = l;
+          } else if (tmp.size() != 2) {
+            // not applicable
+            return;
+          }
+        }
+      }
+    }
+
+    Digit trilocationDigitColumnValue = 0;
+    Location trilocationDigitColumnLocation = -1;
+    for (Digit d : board.getUnsolvedDigits()) {
+      for (Location l = 0; l < 9; ++l) {
+        const Unit &column = board.getColumnByLocation(l);
+        const CellSet &tmp = board.getPositionsOfDigit(column, d);
+        if (!tmp.empty()) {
+          if (tmp.size() == 3) {
+            if (trilocationDigitColumnLocation != -1) {
+              // not applicable
+              return;
+            }
+            trilocationDigitColumnValue = d;
+            trilocationDigitColumnLocation = l;
+          } else if (tmp.size() != 2) {
+            // not applicable
+            return;
+          }
+        }
+      }
+    }
+
+    if (trilocationDigitRowValue == trilocationDigitColumnValue &&
+        board.getRowLocation(trivalueCell) == trilocationDigitRowLocation &&
+        board.getColumnLocation(trivalueCell) == trilocationDigitColumnLocation) {
+      // BUG+1 spotted
+      Digit solution = trilocationDigitRowValue;
+      Event event(EventType::SetValue, ReasonId::BUGPlusOne);
+      // the source is the trivalue cell and its peers containing the BUG value
+      CellSet sourceSet = CellSet({trivalueCell}) | board.getPeersContaining(trivalueCell, solution);
+      for (Cell idx : sourceSet) {
+        event.addSource(idx, solution);
+      }
+      // set the BUG value in the trivalue cell
+      event.addOperation(trivalueCell, solution);
+      g_eventQueue.enqueue(board, event);
+    }
+  }
+}
+
 static void techXWing(SudokuBoard &board) {
   auto scanDigit = [&](Digit digit) -> void
   {
@@ -443,7 +528,7 @@ static void techXWing(SudokuBoard &board) {
 
         int posCount = positionsInner.size();
         if (posCount != 2) {
-          continue; // X-Wing requires exactly two positions
+          continue;
         }
       
         std::vector<int> positionsInnerList = positionsInner.to_vector();
@@ -518,7 +603,7 @@ static void techXWing(SudokuBoard &board) {
 
         int posCount = positionsInner.size();
         if (posCount != 2) {
-          continue; // X-Wing requires exactly two positions
+          continue;
         }
       
         std::vector<int> positionsInnerList = positionsInner.to_vector();
@@ -648,88 +733,154 @@ static void techXYZWing(SudokuBoard &board) {
   }
 }
 
-static void techBUGPlusOne(SudokuBoard &board) {
-  // Condition 1: only bivalue cells except for one trivalue cell
-  Cell trivalueCell = -1;
-  for (Cell i = 0; i < 81; i++) {
-    if (board.isSolved(i)) {
-      continue;
-    }
+static void techSwordfish(SudokuBoard &board) {
+  auto scanDigit = [&](Digit digit) -> void
+  {
+    // rows
+    const std::vector<Unit> &rows = board.getRows();
+    for (Location a = 0; a < 7; ++a) {
+      // get cells where the digit is present in the row
+      const Unit &row = rows[a];
+      CellSet positions = board.getPositionsOfDigit(row, digit);
 
-    DigitSet candidates = board.getCandidates(i);
-    if (candidates.size() == 3) {
-      if (trivalueCell != -1) {
-        // not applicable
-        return;
+      int posCount = positions.size();
+      if (posCount < 2 || posCount > 3) {
+        continue; // Swordfish requires up to three positions
       }
-      trivalueCell = i;
-    } else if (candidates.size() != 2) {
-      // not applicable
-      return;
-    }
-  }
 
-  if (trivalueCell != -1) {
-    // Condition 2: each digit appears twice, except for one digit that appears three times
-    Digit trilocationDigitRowValue = 0;
-    Location trilocationDigitRowLocation = -1;
-    for (Digit d : board.getUnsolvedDigits()) {
-      for (Location l = 0; l < 9; ++l) {
-        const Unit &row = board.getRowByLocation(l);
-        const CellSet &tmp = board.getPositionsOfDigit(row, d);
-        if (!tmp.empty()) {
-          if (tmp.size() == 3) {
-            if (trilocationDigitRowLocation != -1) {
-              // not applicable
-              return;
+      // get the columns corresponding to the positions of the digit
+      LocationSet locationSet;
+      for (Cell idx : positions) {
+        locationSet.insert(board.getColumnLocation(idx));
+      }
+
+      for (Location b = a+1; b < 8; ++b) {
+        const Unit &row = rows[b];
+        CellSet positionsInner = board.getPositionsOfDigit(row, digit);
+
+        int posCount = positionsInner.size();
+        if (posCount < 2 || posCount > 3) {
+          continue;
+        }
+
+        LocationSet locationInnerSet;
+        for (Cell idx : positionsInner) {
+          locationInnerSet.insert(board.getColumnLocation(idx));
+        }
+
+        if ((locationSet | locationInnerSet).size() == 3) {
+          for (Location c = b+1; c < 9; ++c) {
+            const Unit &row = rows[c];
+            CellSet positionsInner2 = board.getPositionsOfDigit(row, digit);
+
+            int posCount = positionsInner2.size();
+            if (posCount < 2 || posCount > 3) {
+              continue;
             }
-            trilocationDigitRowValue = d;
-            trilocationDigitRowLocation = l;
-          } else if (tmp.size() != 2) {
-            // not applicable
-            return;
+
+            LocationSet locationInner2Set;
+            for (Cell idx : positionsInner2) {
+              locationInner2Set.insert(board.getColumnLocation(idx));
+            }
+
+            if ((locationSet | locationInnerSet | locationInner2Set).size() == 3) {
+              // Swordfish spotted
+              Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
+              // the source is the cells forming the Swordfish
+              CellSet sourceSet = positions | positionsInner | positionsInner2;
+              for (Cell idx : sourceSet) {
+                event.addSource(idx, digit);
+              }
+              // remove instances of the digit from the three columns, excluding the three rows
+              CellSet set;
+              for (Cell idx : sourceSet) {
+                set |= board.getColumnByCell(idx);
+              }
+              set -= sourceSet;
+              for (Cell idx : set) {
+                event.addOperation(idx, digit);
+              }
+              g_eventQueue.enqueue(board, event);
+            }
           }
         }
       }
     }
 
-    Digit trilocationDigitColumnValue = 0;
-    Location trilocationDigitColumnLocation = -1;
-    for (Digit d : board.getUnsolvedDigits()) {
-      for (Location l = 0; l < 9; ++l) {
-        const Unit &column = board.getColumnByLocation(l);
-        const CellSet &tmp = board.getPositionsOfDigit(column, d);
-        if (!tmp.empty()) {
-          if (tmp.size() == 3) {
-            if (trilocationDigitColumnLocation != -1) {
-              // not applicable
-              return;
+    // columns
+    const std::vector<Unit> &columns = board.getColumns();
+    for (Location a = 0; a < 7; ++a) {
+      // get cells where the digit is present in the column
+      const Unit &column = columns[a];
+      CellSet positions = board.getPositionsOfDigit(column, digit);
+
+      int posCount = positions.size();
+      if (posCount < 2 || posCount > 3) {
+        continue; // Swordfish requires up to three positions
+      }
+
+      // get the rows corresponding to the positions of the digit
+      LocationSet locationSet;
+      for (Cell idx : positions) {
+        locationSet.insert(board.getRowLocation(idx));
+      }
+
+      for (Location b = a+1; b < 8; ++b) {
+        const Unit &column = columns[b];
+        CellSet positionsInner = board.getPositionsOfDigit(column, digit);
+
+        int posCount = positionsInner.size();
+        if (posCount < 2 || posCount > 3) {
+          continue;
+        }
+
+        LocationSet locationInnerSet;
+        for (Cell idx : positionsInner) {
+          locationInnerSet.insert(board.getRowLocation(idx));
+        }
+
+        if ((locationSet | locationInnerSet).size() == 3) {
+          for (Location c = b+1; c < 9; ++c) {
+            const Unit &column = columns[c];
+            CellSet positionsInner2 = board.getPositionsOfDigit(column, digit);
+
+            int posCount = positionsInner2.size();
+            if (posCount < 2 || posCount > 3) {
+              continue;
             }
-            trilocationDigitColumnValue = d;
-            trilocationDigitColumnLocation = l;
-          } else if (tmp.size() != 2) {
-            // not applicable
-            return;
+
+            LocationSet locationInner2Set;
+            for (Cell idx : positionsInner2) {
+              locationInner2Set.insert(board.getRowLocation(idx));
+            }
+
+            if ((locationSet | locationInnerSet | locationInner2Set).size() == 3) {
+              // Swordfish spotted
+              Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
+              // the source is the cells forming the Swordfish
+              CellSet sourceSet = positions | positionsInner | positionsInner2;
+              for (Cell idx : sourceSet) {
+                event.addSource(idx, digit);
+              }
+              // remove instances of the digit from the three rows, excluding the three columns
+              CellSet set;
+              for (Cell idx : sourceSet) {
+                set |= board.getRowByCell(idx);
+              }
+              set -= sourceSet;
+              for (Cell idx : set) {
+                event.addOperation(idx, digit);
+              }
+              g_eventQueue.enqueue(board, event);
+            }
           }
         }
       }
     }
+  };
 
-    if (trilocationDigitRowValue == trilocationDigitColumnValue &&
-        board.getRowLocation(trivalueCell) == trilocationDigitRowLocation &&
-        board.getColumnLocation(trivalueCell) == trilocationDigitColumnLocation) {
-      // BUG+1 spotted
-      Digit solution = trilocationDigitRowValue;
-      Event event(EventType::SetValue, ReasonId::BUGPlusOne);
-      // the source is the trivalue cell and its peers containing the BUG value
-      CellSet sourceSet = CellSet({trivalueCell}) | board.getPeersContaining(trivalueCell, solution);
-      for (Cell idx : sourceSet) {
-        event.addSource(idx, solution);
-      }
-      // set the BUG value in the trivalue cell
-      event.addOperation(trivalueCell, solution);
-      g_eventQueue.enqueue(board, event);
-    }
+  for (Digit digit : board.getUnsolvedDigits()) {
+    scanDigit(digit);
   }
 }
 
@@ -772,6 +923,7 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techXWing,  // includes skyscrapers
   techXYWing,
   techXYZWing,
+  techSwordfish,
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Operation &op) {
@@ -893,7 +1045,7 @@ static int compute_next_event(SudokuBoard &board,
 
   // Run techniques in priority order; stop at the first technique that enqueues anything,
   // then verify, apply and return.
-  if (board.getNumberOfSolvedCells() < 40) {
+  if (board.getNumberOfSolvedCells() < 36) {
     // Cross-hatching order when the grid is mostly empty.
     for (TechniqueFn tech : EASY_TECHNIQUES_SPARSE) {
       tech(board);
@@ -930,6 +1082,80 @@ static int compute_next_event(SudokuBoard &board,
   return 0;
 }
 
+static void count_solutions_impl(SudokuBoard &board, Cell current_cell, int &found_solutions) {
+  if (board.isCompletelySolved()) {
+    // validate rows
+    for (const Unit &row : board.getRows()) {
+      DigitSet set;
+      for (Cell idx : row) {
+        set.insert(board.getValue(idx));
+      }
+      if (set != ALL_DIGITS) {
+        return;
+      }
+    }
+
+    // validate columns
+    for (const Unit &column : board.getColumns()) {
+      DigitSet set;
+      for (Cell idx : column) {
+        set.insert(board.getValue(idx));
+      }
+      if (set != ALL_DIGITS) {
+        return;
+      }
+    }
+
+    // validate boxes
+    for (const Unit &box : board.getBoxes()) {
+      DigitSet set;
+      for (Cell idx : box) {
+        set.insert(board.getValue(idx));
+      }
+      if (set != ALL_DIGITS) {
+        return;
+      }
+    }
+
+    // solution found
+    ++found_solutions;
+    return;
+  }
+
+  if (board.isSolved(current_cell)) {
+    // this cell is already filled, go on with the next one
+    return count_solutions_impl(board, current_cell+1, found_solutions);
+  }
+
+  for (Digit d = 1; d <= 9; ++d) {
+    const CellSet &peers = board.getRowByCell(current_cell) |
+                           board.getColumnByCell(current_cell) |
+                           board.getBoxByCell(current_cell);
+
+    bool valid = true;
+    for (Cell idx : peers) {
+      if (board.isSolved(idx) && board.getValue(idx) == d) {
+        // not valid digit, test next one
+        valid = false;
+        break;
+      }
+    }
+    if (!valid) continue;
+
+    // d is a valid digit
+    board.setValue(current_cell, d);
+    count_solutions_impl(board, current_cell+1, found_solutions);
+    // restore previous status
+    board.clearValue(current_cell);
+  }
+}
+
+static int count_solutions(SudokuBoard &board) {
+  int solutions = 0;
+  count_solutions_impl(board, 0, solutions);
+  return solutions;
+}
+
 //
 // FOR DEBUGGING compile with -DDEBUG and use this function:
 // debug_log("Queue has %d elements", g_eventQueue.size());
@@ -945,7 +1171,25 @@ extern "C"
   // Returns -1 in case of error, else the number of solutions.
   EMSCRIPTEN_KEEPALIVE
   int sudorix_solver_count_solutions(const char *in81) {
-    return -1;
+    if (in81 == nullptr) {
+      return -1;
+    }
+
+    // Import Sudoku from string
+    SudokuBoard board;
+    if (!board.importFromString(in81)) {
+      return -1;
+    }
+
+    // It is proven that a Sudoku needs at least 17 clues to have a unique solution
+    if (board.getNumberOfSolvedCells() < 17) {
+      return 999;
+    }
+
+    // Count solutions
+    int result = count_solutions(board);
+
+    return result;
   }
 
   // Solves an entire Sudoku given its initial representation in one shot.

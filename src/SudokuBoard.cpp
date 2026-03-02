@@ -407,12 +407,7 @@ void SudokuBoard::autoClearPeersAfterPlacement(Cell idx, Digit digit) {
 }
 
 bool SudokuBoard::isCompletelySolved() const {
-  for (const SudokuCell &cell : cells) {
-    if (!cell.isSolved()) {
-      return false;
-    }
-  }
-  return true;
+  return solvedCells == 81;
 }
 
 DigitSet SudokuBoard::getUnsolvedDigits() const {
