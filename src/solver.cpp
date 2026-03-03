@@ -305,7 +305,7 @@ static void techPointingSet(SudokuBoard &board) {
 
       int posCount = positions.size();
       if (posCount < 2 || posCount > 3) {
-        continue; // locked candidates is about confinement with 2 or 3
+        continue; // pointing set is about confinement with 2 or 3
       }
 
       ReasonId reasonId;
@@ -491,7 +491,8 @@ static void techBUGPlusOne(SudokuBoard &board) {
       Digit solution = trilocationDigitRowValue;
       Event event(EventType::SetValue, ReasonId::BUGPlusOne);
       // the source is the trivalue cell and its peers containing the BUG value
-      CellSet sourceSet = CellSet({trivalueCell}) | board.getPeersContaining(trivalueCell, solution);
+      event.addSource(trivalueCell, solution);
+      CellSet sourceSet = board.getPeersContaining(trivalueCell, solution);
       for (Cell idx : sourceSet) {
         event.addSource(idx, solution);
       }
@@ -537,9 +538,11 @@ static void techXWing(SudokuBoard &board) {
         if (ca0 == cb0 && ca1 == cb1) {
           // X-Wing spotted
           Event event(EventType::RemoveCandidate, ReasonId::XWing);
-          // the source is the four cells forming the X-Wing
-          CellSet sourceSet = positions | positionsInner;
-          for (Cell idx : sourceSet) {
+          // the source is the four cells forming the X-Wing, unit by unit
+          for (Cell idx : positions) {
+            event.addSource(idx, digit);
+          }
+          for (Cell idx : positionsInner) {
             event.addSource(idx, digit);
           }
           // remove instances of the digit from the two columns, excluding the two rows
@@ -551,27 +554,33 @@ static void techXWing(SudokuBoard &board) {
           g_eventQueue.enqueue(board, event);
         }
 
-        // look for skyscrapers, A and B are the ends of the chain
+        // look for skyscrapers, A and D are the ends of the chain
         Cell A = -1;
         Cell B = -1;
+        Cell C = -1;
+        Cell D = -1;
         if (ca0 == cb0 && ca1 != cb1) {
           A = positionsList[1];
-          B = positionsInnerList[1];
+          B = positionsList[0];
+          C = positionsInnerList[0];
+          D = positionsInnerList[1];
         } else if (ca0 != cb0 && ca1 == cb1) {
           A = positionsList[0];
-          B = positionsInnerList[0];
+          B = positionsList[1];
+          C = positionsInnerList[1];
+          D = positionsInnerList[0];
         }
 
-        if (A != -1 && B != -1) {
+        if (A != -1 && D != -1) {
           // Skyscraper spotted
           Event event(EventType::RemoveCandidate, ReasonId::Skyscraper);
-          // the source is the four cells forming the skyscraper
-          CellSet sourceSet = positions | positionsInner;
-          for (Cell idx : sourceSet) {
-            event.addSource(idx, digit);
-          }
+          // the source is the four cells forming the skyscraper, following the chain
+          event.addSource(A, digit);
+          event.addSource(B, digit);
+          event.addSource(C, digit);
+          event.addSource(D, digit);
           // remove instances of the digit from peers of the ends
-          CellSet set = board.getPeersContaining(CellSet({A, B}), digit);
+          CellSet set = board.getPeersContaining(CellSet({A, D}), digit);
           for (Cell idx : set) {
             event.addOperation(idx, digit);
           }
@@ -612,9 +621,11 @@ static void techXWing(SudokuBoard &board) {
         if (ra0 == rb0 && ra1 == rb1) {
           // X-Wing spotted
           Event event(EventType::RemoveCandidate, ReasonId::XWing);
-          // the source is the four cells forming the X-Wing
-          CellSet sourceSet = positions | positionsInner;
-          for (Cell idx : sourceSet) {
+          // the source is the four cells forming the X-Wing, unit by unit
+          for (Cell idx : positions) {
+            event.addSource(idx, digit);
+          }
+          for (Cell idx : positionsInner) {
             event.addSource(idx, digit);
           }
           // remove instances of the digit from the two rows, excluding the two columns
@@ -626,27 +637,33 @@ static void techXWing(SudokuBoard &board) {
           g_eventQueue.enqueue(board, event);
         }
 
-        // look for skyscrapers, A and B are the ends of the chain
+        // look for skyscrapers, A and D are the ends of the chain
         Cell A = -1;
         Cell B = -1;
+        Cell C = -1;
+        Cell D = -1;
         if (ra0 == rb0 && ra1 != rb1) {
           A = positionsList[1];
-          B = positionsInnerList[1];
+          B = positionsList[0];
+          C = positionsInnerList[0];
+          D = positionsInnerList[1];
         } else if (ra0 != rb0 && ra1 == rb1) {
           A = positionsList[0];
-          B = positionsInnerList[0];
+          B = positionsList[1];
+          C = positionsInnerList[1];
+          D = positionsInnerList[0];
         }
 
-        if (A != -1 && B != -1) {
+        if (A != -1 && D != -1) {
           // Skyscraper spotted
           Event event(EventType::RemoveCandidate, ReasonId::Skyscraper);
-          // the source is the four cells forming the skyscraper
-          CellSet sourceSet = positions | positionsInner;
-          for (Cell idx : sourceSet) {
-            event.addSource(idx, digit);
-          }
+          // the source is the four cells forming the skyscraper, following the chain
+          event.addSource(A, digit);
+          event.addSource(B, digit);
+          event.addSource(C, digit);
+          event.addSource(D, digit);
           // remove instances of the digit from peers of the ends
-          CellSet set = board.getPeersContaining(CellSet({A, B}), digit);
+          CellSet set = board.getPeersContaining(CellSet({A, D}), digit);
           for (Cell idx : set) {
             event.addOperation(idx, digit);
           }
@@ -680,10 +697,9 @@ static void techXYWing(SudokuBoard &board) {
             // XY-Wing spotted
             Event event(EventType::RemoveCandidate, ReasonId::XYWing);
             // the source is the three cells forming the XY-Wing
-            CellSet sourceSet = CellSet({a, b, c});
-            for (Cell idx : sourceSet) {
-              event.addSource(idx, DigitSet({x, y, z}));
-            }
+            event.addSource(a, DigitSet({x, z}));  // wing
+            event.addSource(b, DigitSet({x, y}));  // hinge
+            event.addSource(c, DigitSet({y, z}));  // wing
             // remove instances of Z from peers of extreme cells
             CellSet set = board.getPeersContaining(CellSet({a, c}), z);
             for (Cell idx : set) {
@@ -716,10 +732,9 @@ static void techXYZWing(SudokuBoard &board) {
             Digit z = *(xz & yz).begin();
             Event event(EventType::RemoveCandidate, ReasonId::XYZWing);
             // the source is the three cells forming the XYZ-Wing
-            CellSet sourceSet = CellSet({a, b, c});
-            for (Cell idx : sourceSet) {
-              event.addSource(idx, DigitSet({x, y, z}));
-            }
+            event.addSource(a, DigitSet({x, z}));     // wing
+            event.addSource(b, DigitSet({x, y, z}));  // hinge
+            event.addSource(c, DigitSet({y, z}));     // wing
             // remove instances of Z from peers of all cells
             CellSet set = board.getPeersContaining(CellSet({a, b, c}), z);
             for (Cell idx : set) {
@@ -786,9 +801,15 @@ static void techSwordfish(SudokuBoard &board) {
             if ((locationSet | locationInnerSet | locationInner2Set).size() == 3) {
               // Swordfish spotted
               Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
-              // the source is the cells forming the Swordfish
+              // the source is the cells forming the Swordfish, unit by unit
               CellSet sourceSet = positions | positionsInner | positionsInner2;
-              for (Cell idx : sourceSet) {
+              for (Cell idx : positions) {
+                event.addSource(idx, digit);
+              }
+              for (Cell idx : positionsInner) {
+                event.addSource(idx, digit);
+              }
+              for (Cell idx : positionsInner2) {
                 event.addSource(idx, digit);
               }
               // remove instances of the digit from the three columns, excluding the three rows
@@ -857,9 +878,15 @@ static void techSwordfish(SudokuBoard &board) {
             if ((locationSet | locationInnerSet | locationInner2Set).size() == 3) {
               // Swordfish spotted
               Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
-              // the source is the cells forming the Swordfish
+              // the source is the cells forming the Swordfish, unit by unit
               CellSet sourceSet = positions | positionsInner | positionsInner2;
-              for (Cell idx : sourceSet) {
+              for (Cell idx : positions) {
+                event.addSource(idx, digit);
+              }
+              for (Cell idx : positionsInner) {
+                event.addSource(idx, digit);
+              }
+              for (Cell idx : positionsInner2) {
                 event.addSource(idx, digit);
               }
               // remove instances of the digit from the three rows, excluding the three columns
@@ -893,10 +920,10 @@ typedef void (*TechniqueFn)(SudokuBoard &);
 static constexpr TechniqueFn EASY_TECHNIQUES_SPARSE[] = {
   techFullHouse,
   techHiddenSinglesBox,
+  techHiddenSinglesRowColumn,
   techPointingSet,
   techBoxLineReduction,
   techHiddenPairsBox,
-  techHiddenSinglesRowColumn,
   techHiddenPairsRowColumn,
   techNakedSingles,
   techNakedPairs,

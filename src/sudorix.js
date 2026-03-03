@@ -54,10 +54,38 @@ var business_logic = (() => {
     "X-Wing",
     "Swordfish",
     "Jellyfish",
+    "Finned X-Wing",
+    "Finned Swordfish",
+    "Finned Jellyfish",
+    "Franken Fish",
+    "Mutant Fish",
+    "Siamese Fish",
+    "Finned Franken Fish",
+    "Finned Mutant Fish",
     "XY-Wing",
     "XYZ-Wing",
+    "WXYZ-Wing",
+    "Chute Remote Pair",
+    "W-Wing",
+    "Unique Rectangle",
+    "Hidden Rectangle",
+    "Avoidable Rectangle",
     "BUG+1",
-    "Skyscraper"
+    "Simple Coloring",
+    "3D Medusa",
+    "Skyscraper",
+    "Two-String Kite",
+    "Crane",
+    "Empty Rectangle",
+    "Remote Pair",
+    "X-Chain",
+    "XY-Chain",
+    "Alternating Inference Chain",
+    "Grouped Alternating Inference Chain",
+    "Sue-de-Coq",
+    "ALS-XZ",
+    "ALS-XY",
+    "Death Blossom",
   ];
 
   function initWasmSolver() {
@@ -94,6 +122,28 @@ var business_logic = (() => {
     });
   }
 
+  function wasmCountSolutionsFromString(boardRef) {
+    if (!wasmModule || !wasmCountSolutions) {
+      return { ok: false, err: "Funkcio sudorix_solver_count_solutions ne disponeblas en ĉi tiu WASM build." };
+    }
+
+    const s = boardRef.exportToString();
+    const enc = new TextEncoder();
+    const bytes = enc.encode(String(s || ""));
+    // Copy at most 81 chars; terminate.
+    const max = Math.min(bytes.length, 81);
+    for (let i = 0; i < max; i++) {
+      wasmModule.HEAPU8[wasmBufInStr + i] = bytes[i];
+    }
+    for (let i = max; i < 81; i++) {
+      wasmModule.HEAPU8[wasmBufInStr + i] = 46; // '.'
+    }
+    wasmModule.HEAPU8[wasmBufInStr + 81] = 0;
+
+    const n = wasmCountSolutions(wasmBufInStr);
+    return { ok: true, n };
+  }
+
   function wasmRunFullSolve(in81) {
     if (!wasmModule || !wasmSolveFull) {
       return null;
@@ -117,28 +167,6 @@ var business_logic = (() => {
       wasmModule._free(inPtr);
       wasmModule._free(outPtr);
     }
-  }
-
-  function wasmCountSolutionsFromString(boardRef) {
-    if (!wasmModule || !wasmCountSolutions) {
-      return { ok: false, err: "Funkcio sudorix_solver_count_solutions ne disponeblas en ĉi tiu WASM build." };
-    }
-
-    const s = boardRef.exportToString();
-    const enc = new TextEncoder();
-    const bytes = enc.encode(String(s || ""));
-    // Copy at most 81 chars; terminate.
-    const max = Math.min(bytes.length, 81);
-    for (let i = 0; i < max; i++) {
-      wasmModule.HEAPU8[wasmBufInStr + i] = bytes[i];
-    }
-    for (let i = max; i < 81; i++) {
-      wasmModule.HEAPU8[wasmBufInStr + i] = 46; // '.'
-    }
-    wasmModule.HEAPU8[wasmBufInStr + 81] = 0;
-
-    const n = wasmCountSolutions(wasmBufInStr);
-    return { ok: true, n };
   }
 
   function wasmInitBoard(boardRef) {
@@ -171,9 +199,7 @@ var business_logic = (() => {
       return null;
     }
 
-    // C++ batch ABI (words):
-    // out[0]=type, out[1]=reasonId, out[2]=fromPrev, out[3]=opCount, out[4]=srcCount
-    // then srcCount pairs (idx, mask), then opCount pairs (idx, mask)
+    // C++ batch ABI - see solver.hpp
     const ok = wasmSolveNextStep(wasmBufOut, WASM_OUT_WORDS);
     if (!ok) {
       return null;
@@ -205,6 +231,7 @@ var business_logic = (() => {
       ev.sources.push({ idx: idx, mask: mask & 0x1FF });
     }
 
+    // operations
     const opsBase = 5 + 2 * srcCount;
     for (let i = 0; i < opCount; i++) {
       const idx = out[opsBase + 2 * i + 0] >>> 0;
@@ -272,7 +299,7 @@ var business_logic = (() => {
   }
 
   /* =========================================================
-   * Small utils (no board knowledge)
+   * Utils
    * ========================================================= */
   const rowOf = (idx) => Math.floor(idx / 9);
   const colOf = (idx) => idx % 9;
@@ -345,6 +372,21 @@ var business_logic = (() => {
     return 0;
   }
 
+  function singleBitIndex(mask) {
+    // return 0..8 for least significant set bit
+    const m = mask & 0x1FF;
+    const lb = m & -m;
+    return Math.log2(lb) | 0;
+  }
+
+  function digitToBit(digit) {
+    return 1 << (digit - 1);
+  }
+
+  function assertDigit(digit) {
+    return Number.isInteger(digit) && digit >= 1 && digit <= 9;
+  }
+
   function getCandidateElement(idx, digit) {
     const cellEl = gridEl.children[idx];
     if (!cellEl) {
@@ -357,7 +399,6 @@ var business_logic = (() => {
     const list = candsEl.querySelectorAll(".cand");
     return list && list[digit - 1] ? list[digit - 1] : null;
   }
-
   
   /* =========================================================
    * Event highlight persistence (candidates)
@@ -407,7 +448,7 @@ var business_logic = (() => {
     }
   }
 
-function clearAllEventHighlights() {
+  function clearAllEventHighlights() {
     clearCandidateFlashMasks();
     for (let i = 0; i < 81; i++) {
       const cellEl = gridEl.children[i];
@@ -482,21 +523,6 @@ function clearAllEventHighlights() {
         flashCell(idx, ev.type);
       }
     }
-  }
-
-  function singleBitIndex(mask) {
-    // return 0..8 for least significant set bit
-    const m = mask & 0x1FF;
-    const lb = m & -m;
-    return Math.log2(lb) | 0;
-  }
-
-  function digitToBit(digit) {
-    return 1 << (digit - 1);
-  }
-
-  function assertDigit(digit) {
-    return Number.isInteger(digit) && digit >= 1 && digit <= 9;
   }
 
   function getDigitFromKeyEvent(e) {
@@ -1088,7 +1114,7 @@ function clearAllEventHighlights() {
   const btnModalOkPause = $("btnModalOkPause");
 
   /* =========================================================
-   * App state (no direct cell access)
+   * App state
    * ========================================================= */
   const board = new SudokuBoard();
 
@@ -1112,18 +1138,278 @@ function clearAllEventHighlights() {
   /* timer state */
   let timerStart = 0;
   let timerSeconds = 0;
+  let timerSecondsBeforePause = 0;
   let timerInterval = null;
   let resumeTimerAfterPause = false;
 
   /* =========================================================
-   * Logging / Modals
+   * Rich Log (clickable) + Snapshot Preview
    * ========================================================= */
-  function appendLog(line) {
-    const ts = new Date().toISOString().slice(11, 19);
-    logEl.value += `[${ts}] ${line}\n`;
+  const eventLogEntries = [];
+  let previewActive = false;
+  let previewSavedLiveState = null;
+  let previewActiveIndex = -1;
+
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  function idxToRef(idx) {
+    const r = Math.floor(idx / 9) + 1;
+    const c = (idx % 9) + 1;
+    return `r${r}c${c}`;
+  }
+
+  function clearLog() {
+    logEl.innerHTML = "";
+    eventLogEntries.length = 0;
+    exitLogPreview();
+  }
+
+  function setControlsDuringPreview(disabled) {
+    const ids = ["btnStep", "btnSolve", "btnStop", "btnSolveWasmFull"];
+    for (const id of ids) {
+      const b = $(id);
+      if (b) {
+        b.disabled = !!disabled;
+        b.classList.toggle("disabled", !!disabled);
+      }
+    }
+    // different handling for undo/redo
+    if (disabled) {
+      // save previous state
+      oldUndoDisabled = $("btnUndo").disabled;
+      oldRedoDisabled = $("btnRedo").disabled;
+      oldUndoContainsDisabled = $("btnUndo").classList.contains("disabled");
+      oldRedoContainsDisabled = $("btnRedo").classList.contains("disabled");
+      $("btnUndo").disabled = !!disabled;
+      $("btnUndo").classList.toggle("disabled", !!disabled);
+      $("btnRedo").disabled = !!disabled;
+      $("btnRedo").classList.toggle("disabled", !!disabled);
+    } else {
+      // restore previous state
+      $("btnUndo").disabled = oldUndoDisabled;
+      oldUndoContainsDisabled ? $("btnUndo").classList.add("disabled")
+                              : $("btnUndo").classList.remove("disabled");
+      $("btnRedo").disabled = oldRedoDisabled;
+      oldRedoContainsDisabled ? $("btnRedo").classList.add("disabled")
+                              : $("btnRedo").classList.remove("disabled");
+    }
+  }
+
+  // print event once without applying
+  function logEventOnce(ev) {
+    if (!ev) {
+      return;
+    }
+    if (ev._logged) {
+      return;
+    }
+    appendEvent(ev);
+    ev._logged = true;
+  }
+
+  function appendEvent(ev) {
+    const object = formatEventLog(ev);
+    const title = object.title;
+    const bodyHtml = object.bodyHtml;
+    saveEventLogEntry({ title, bodyHtml, boardState: board.exportState(), ev });
+  }
+
+  function saveEventLogEntry({ title, bodyHtml, boardState, ev }) {
+    const index = eventLogEntries.length;
+    eventLogEntries.push({ title, bodyHtml, boardState, ev });
+    appendLogEntryWithIndex(index, { title, bodyHtml });
+  }
+
+  function appendLogEntryWithIndex(index, { title, bodyHtml }) {
+    const entry = document.createElement("div");
+    entry.className = "logEntry";
+    entry.dataset.logIndex = String(index);
+
+    const h = document.createElement("div");
+    h.className = "logEntryTitle";
+    h.textContent = title;
+
+    const b = document.createElement("div");
+    b.className = "logEntryBody";
+    b.innerHTML = bodyHtml;
+
+    entry.appendChild(h);
+    entry.appendChild(b);
+
+    // Click-to-preview toggle
+    entry.addEventListener("click", () => {
+      const idx = Number(entry.dataset.logIndex);
+      if (!Number.isFinite(idx)) {
+        return;
+      }
+      if (previewActive && previewActiveIndex == idx) {
+        exitLogPreview();
+        return;
+      }
+      enterLogPreview(idx);
+    });
+
+    logEl.appendChild(entry);
     logEl.scrollTop = logEl.scrollHeight;
   }
 
+  function appendInfo(text) {
+    const ts = new Date().toISOString().slice(11, 19);
+    const title = "Info";
+    const bodyHtml = `<div class="logEntryBody">${escapeHtml(text)}</div>`;
+    appendLogEntry({ title, bodyHtml });
+  }
+
+  function appendLogEntry({ title, bodyHtml }) {
+    const entry = document.createElement("div");
+    entry.className = "logEntry";
+
+    const h = document.createElement("div");
+    h.className = "logEntryTitle";
+    h.textContent = title;
+
+    const b = document.createElement("div");
+    b.innerHTML = bodyHtml;
+
+    entry.appendChild(h);
+    entry.appendChild(b);
+    logEl.appendChild(entry);
+
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function enterLogPreview(index) {
+    const entry = eventLogEntries[index];
+    if (!entry) {
+      return;
+    }
+
+    // Close any existing preview
+    if (previewActive) {
+      exitLogPreview();
+    }
+
+    // Save current live state without touching undo/redo stacks
+    previewSavedLiveState = board.exportState();
+    previewActive = true;
+    previewActiveIndex = index;
+
+    setControlsDuringPreview(true);
+
+    // Restore snapshot corresponding to this log entry
+    board.importState(entry.boardState);
+    renderAll();
+
+    clearAllEventHighlights();
+    if (entry.ev) {
+      highlightSourcesAndOps(entry.ev, true);
+    }
+
+    // Mark active
+    logEl.querySelectorAll(".logEntry.active").forEach(x => x.classList.remove("active"));
+    const node = logEl.querySelector(`.logEntry[data-log-index="${index}"]`);
+    if (node) {
+      node.classList.add("active");
+    }
+  }
+
+  function exitLogPreview() {
+    if (!previewActive) {
+      return;
+    }
+
+    clearAllEventHighlights();
+
+    if (previewSavedLiveState) {
+      board.importState(previewSavedLiveState);
+      renderAll();
+    }
+
+    previewSavedLiveState = null;
+    previewActive = false;
+    previewActiveIndex = -1;
+
+    logEl.querySelectorAll(".logEntry.active").forEach(x => x.classList.remove("active"));
+
+    setControlsDuringPreview(false);
+  }
+
+  function formatEventLog(ev) {
+    // Returns { title, bodyHtml } for appendLogEntry.
+    const reasonName = ev.reason || `Reason ${ev.reason}`;
+    const typeName = (ev.type == "setValue") ? "Set" : (ev.type == "removeCandidate") ? "Remove" : "Event";
+
+    // Dispatcher hook: allow per-technique formatting later.
+    if (typeof formatEventLogByReason === "function") {
+      const custom = formatEventLogByReason(ev);
+      if (custom) {
+        return custom;
+      }
+    }
+
+    let title = `${reasonName}`;
+    if (!title || title === "undefined") {
+      title = `${typeName}`;
+    }
+
+    const parts = [];
+
+    // Sources (optional)
+    if (ev.sources && ev.sources.length > 0) {
+      parts.push(`<div><span class="logCellRef">Sources</span></div>`);
+      for (const s of ev.sources) {
+        const ref = idxToRef(s.idx);
+        const digs = maskToDigits(s.mask);
+        if (digs.length == 0) {
+          continue;
+        }
+        parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> : {${escapeHtml(digs.join(","))}}</div>`);
+      }
+      parts.push(`<div style="margin-top:6px;"><span class="logCellRef">Ops</span></div>`);
+    }
+
+    // Operations
+    if (!ev.ops || ev.ops.length === 0) {
+      parts.push(`<div>Neniu operacio.</div>`);
+      return { title, bodyHtml: parts.join("") };
+    }
+
+    if (ev.type === "setValue") {
+      for (const op of ev.ops) {
+        const d = maskToSingleDigit(op.mask);
+        const ref = idxToRef(op.idx);
+        if (!d) {
+          const digs = maskToDigits(op.mask);
+          parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> <span class="logOpSet">=</span> <span class="logOpSet">${escapeHtml(digs.join(","))}</span></div>`);
+        } else {
+          parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> <span class="logOpSet">=</span> <span class="logOpSet">${d}</span></div>`);
+        }
+      }
+    } else if (ev.type === "removeCandidate") {
+      for (const op of ev.ops) {
+        const ref = idxToRef(op.idx);
+        const digs = maskToDigits(op.mask);
+        for (const d of digs) {
+          parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> <span class="logOpRemove">&lt;&gt;</span> <span class="logOpRemove">${d}</span></div>`);
+        }
+      }
+    } else {
+      for (const op of ev.ops) {
+        const ref = idxToRef(op.idx);
+        const digs = maskToDigits(op.mask);
+        parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> ${escapeHtml(digs.join(","))}</div>`);
+      }
+    }
+
+    return { title, bodyHtml: parts.join("") };
+  }
 
   function setSolverStatus(ok, text) {
     const dot = $("solverStatusDot");
@@ -1136,6 +1422,9 @@ function clearAllEventHighlights() {
     label.textContent = text || (ok ? "WASM solvilo preta." : "WASM solvilo ne preta.");
   }
 
+  /* =========================================================
+   * Modals
+   * ========================================================= */
   function openCheckModal(msg) {
     modalMsgCheck.textContent = msg;
     modalOverlayCheck.classList.add("open");
@@ -1192,7 +1481,7 @@ function clearAllEventHighlights() {
   });
 
   /* =========================================================
-   * Timer logic
+   * Timer
    * ========================================================= */
   function formatMMSS(totalSeconds) {
     const mm = Math.floor(totalSeconds / 60);
@@ -1219,7 +1508,7 @@ function clearAllEventHighlights() {
     }
     timerStart = Date.now();
     timerInterval = setInterval(() => {
-      var delta = Date.now() - timerStart;
+      var delta = Date.now() - timerStart + timerSecondsBeforePause*1000;
       timerSeconds = Math.floor(delta / 1000);
       renderTimer();
     }, 1000);
@@ -1227,6 +1516,7 @@ function clearAllEventHighlights() {
   }
 
   function stopTimer() {
+    timerSecondsBeforePause = timerSeconds;
     if (!timerInterval) {
       updatePauseButtonState();
       return;
@@ -1242,6 +1532,7 @@ function clearAllEventHighlights() {
     }
     timerStart = 0;
     timerSeconds = 0;
+    timerSecondsBeforePause = 0;
     renderTimer();
     updatePauseButtonState();
   }
@@ -1296,7 +1587,7 @@ function clearAllEventHighlights() {
   }
 
   /* =========================================================
-   * Highlight behavior (still checkbox-driven)
+   * Highlight behavior (checkbox-driven)
    * ========================================================= */
   function canApplyHighlight() {
     /* only apply when in Value/Cand */
@@ -1342,7 +1633,7 @@ function clearAllEventHighlights() {
   });
 
   /* =========================================================
-   * Rendering (no direct cell internals)
+   * Rendering
    * ========================================================= */
   function applyCellBaseBackground(el, idx) {
     const colorIndex = board.getCellColorIndex(idx);
@@ -1647,6 +1938,9 @@ function clearAllEventHighlights() {
     }
   }
 
+  /* =========================================================
+   * History management
+   * ========================================================= */
   function updateHistoryButtons() {
     if (undoStack.length > 0) {
       btnUndoEl.classList.remove("disabled");
@@ -1742,56 +2036,9 @@ function clearAllEventHighlights() {
     }
   }
 
-  // print event without applying - some sanity checks are skipped
-  function logEventOnce(ev) {
-    if (!ev) {
-      return;
-    }
-    if (ev._logged) {
-      return;
-    }
-    formatEventLog(ev);
-    ev._logged = true;
-  }
-
-  function formatEventLog(ev) {
-    if (!ev || !ev.ops || ev.ops.length === 0) {
-      return;
-    }
-
-    if (ev.type === "setValue") {
-      for (const op of ev.ops) {
-        const idx = op.idx;
-        const digit = maskToSingleDigit(op.mask);
-
-        if (!assertDigit(digit)) {
-          continue;
-        }
-
-        const { r, c } = idxToRC(idx);
-        appendLog(`Rundo ${roundNumber} - ${ev.reason || "Solver"}: r${r}c${c} = ${digit}`);
-      }
-    }
-
-    if (ev.type === "removeCandidate") {
-      let any = false;
-      let removedCount = 0;
-
-      for (const op of ev.ops) {
-        const digits = maskToDigits(op.mask);
-        for (const digit of digits) {
-          removedCount++;
-          any = true;
-        }
-      }
-
-      if (any) {
-        const j = removedCount == 1 ? '' : 'j';
-        appendLog(`Rundo ${roundNumber} - ${ev.reason || "Solver"}: ${removedCount} kandidato${j} forigita${j}`);
-      }
-    }
-  }
-
+  /* =========================================================
+   * Solver
+   * ========================================================= */
   function applyEvent(ev) {
     if (!ev || !ev.ops || ev.ops.length === 0) {
       return false;
@@ -1920,7 +2167,11 @@ function clearAllEventHighlights() {
       }
       solverTick((keepGoing) => {
         if (!keepGoing) {
-          appendLog("Halti (neniu plia evento).");
+          if (board.checkSolvedGrid().ok) {
+            appendInfo("Sudokuo solvita.");
+          } else {
+            appendInfo("Halti (neniu plia evento).");
+          }
           stopSolving();
           return;
         }
@@ -1948,12 +2199,12 @@ function clearAllEventHighlights() {
 
     if (!out81 || out81.length < 81) {
       openCheckModal("WASM plen-solve malsukcesis (neniu rezulto).");
-      appendLog("WASM plen-solve: malsukceso.");
+      appendInfo("WASM plen-solve: malsukceso.");
       return;
     }
 
     importSudoku(out81);
-    appendLog("WASM plen-solve: finita.");
+    appendInfo("WASM plen-solve: finita.");
   }
 
   function solveOneStep() {
@@ -1970,7 +2221,7 @@ function clearAllEventHighlights() {
       // don't recalculate candidates, otherwise you could end up in an infinite loop
       const ev = wasmComputeHint(board);
       if (!ev) {
-        appendLog("Neniu plia evento.");
+        appendInfo("Neniu plia evento.");
         return;
       }
 
@@ -1983,7 +2234,7 @@ function clearAllEventHighlights() {
       renderAll();
       clearAllEventHighlights();
       highlightSourcesAndOps(ev, true);
-      formatEventLog(ev);
+      logEventOnce(ev);
       return;
     }
 
@@ -2003,7 +2254,7 @@ function clearAllEventHighlights() {
     }, 200);
 
     if (!did) {
-      appendLog("Evento ne aplikebla.");
+      appendInfo("Evento ne aplikebla.");
     }
   }
 
@@ -2056,7 +2307,7 @@ function clearAllEventHighlights() {
   }
 
   /* =========================================================
-   * Import / Reset (via board API)
+   * Import / Reset
    * ========================================================= */
   function resetGrid() {
     stopSolving();
@@ -2073,8 +2324,7 @@ function clearAllEventHighlights() {
     refreshColorSelectionUI();
     clearAllEventHighlights();
     clearHistory();
-
-    logEl.value = "";
+    clearLog();
 
     /* Timer: reset and STOP */
     resetTimer(true);
@@ -2196,11 +2446,9 @@ function clearAllEventHighlights() {
   $("btnSolveWasmFull").addEventListener("click", () => solveWasmFull());
   $("btnStop").addEventListener("click", () => stopSolving());
 
-  $("btnClearLog").addEventListener("click", () => { logEl.value = ""; });
+  $("btnClearLog").addEventListener("click", () => clearLog());
 
-  $("btnStep").addEventListener("click", () => {
-    solveOneStep();
-  });
+  $("btnStep").addEventListener("click", () => solveOneStep());
 
   $("btnUndo").addEventListener("click", () => doUndo());
   $("btnRedo").addEventListener("click", () => doRedo());
@@ -2226,6 +2474,7 @@ function clearAllEventHighlights() {
 
     setMode("value");
 
+    appendInfo("La solvilo skribos ĉi tie la paŝojn.");
     renderTimer();
     updatePauseButtonState();
   }

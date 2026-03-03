@@ -430,6 +430,61 @@
       font-size: 12px;
     }
 
+    .logRich {
+      overflow: auto;
+      padding: 10px 10px;
+      background: var(--panel2);
+      border: 1px solid rgba(230, 238, 252, 0.12);
+      border-radius: 10px;
+      font-family: var(--font);
+    }
+    .logEntry {
+      padding: 10px 10px;
+      border: 1px solid rgba(230, 238, 252, 0.10);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.10);
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .logEntry:hover {
+      border-color: rgba(230, 238, 252, 0.18);
+    }
+    .logEntry.active {
+      outline: 2px solid rgba(255, 200, 30, 0.35);
+      box-shadow: 0 4px 12px rgba(255, 200, 70, 0.08);
+    }
+    .logEntryTitle {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      margin: 0 0 6px 0;
+      color: var(--text);
+    }
+    .logEntryBody {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .logOpSet {
+      color: var(--ok);
+      font-weight: 750;
+    }
+    .logOpRemove {
+      color: var(--danger);
+      font-weight: 750;
+    }
+    .logCellRef {
+      color: var(--accent);
+      font-weight: 750;
+    }
+    .logPreviewHint {
+      font-size: 11px;
+      opacity: 0.8;
+      margin-top: 6px;
+    }
+
     /* Right manual input: smaller panel, bigger 3x3 digits */
     .modeBar {
       display: flex;
@@ -649,8 +704,6 @@
       margin-top: 10px;
       margin-bottom: 10px;
       padding: 8px 10px;
-      border: 1px solid rgba(230, 238, 252, 0.12);
-      border-radius: 10px;
       background: rgba(0, 0, 0, 0.10);
     }
 

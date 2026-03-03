@@ -17,6 +17,12 @@ void EventQueue::enqueue(SudokuBoard &board, Event &event) {
           }),
       event.ops.end()
     );
+
+    // remove not available candidates from sources
+    for (Source &source : event.sources) {
+      source.mask = source.mask & board.getCandidates(source.idx);
+    }
+
     // check again if the event is valid
     if (event.getNumberOfOperations() > 0) {
       q.push(event);
