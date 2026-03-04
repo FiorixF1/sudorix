@@ -135,9 +135,7 @@ $(WASM_JS) $(WASM_WASM): $(SRCS) | $(WEB_DIR)
 # ----------------
 copy: wasm
 	@echo "Copying web assets"
-	cp $(SRC_DIR)/sudorix.html $(WEB_DIR)
-	cp $(SRC_DIR)/sudorix.css $(WEB_DIR)
-	cp $(SRC_DIR)/*.js $(WEB_DIR)
+	cp $(SRC_DIR)/ui/* $(WEB_DIR)
 
 # ----------------
 # Serve web assets
