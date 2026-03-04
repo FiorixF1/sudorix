@@ -26,6 +26,7 @@ public:
   void exportToBuffers(Digit *values, DigitSet *cands) const;
 
   // --- values API ---
+
   Digit getValue(Cell idx) const;
 
   bool isSolved(Cell idx) const;
@@ -35,6 +36,7 @@ public:
   void clearValue(Cell idx);
 
   // --- candidates API ---
+
   DigitSet getCandidates(Cell idx) const;
 
   void setCandidates(Cell idx, DigitSet candidates);
@@ -48,6 +50,7 @@ public:
   void disableCandidate(Cell idx, Digit digit);
 
   // --- peers API ---
+
   CellSet getPeers(Cell idx) const;
 
   CellSet getPeers(const CellSet &idxSet) const;
@@ -67,36 +70,39 @@ public:
   DigitSet getDigitsInLocation(Unit unit, Location i) const;
 
   // --- events API ---
+
   void applySetValue(Cell idx, Digit digit);
 
   void applyRemoveCandidate(Cell idx, Digit digit);
 
-  // --- units API ---
-  const std::vector<Unit> &getRows() const;
+  // --- utility API ---
 
-  const std::vector<Unit> &getColumns() const;
+  static const std::vector<Unit> &getRows();
 
-  const std::vector<Unit> &getBoxes() const;
+  static const std::vector<Unit> &getColumns();
 
-  const Unit &getRowByCell(Cell idx) const;
+  static const std::vector<Unit> &getBoxes();
 
-  const Unit &getColumnByCell(Cell idx) const;
+  static const Unit &getRowByCell(Cell idx);
 
-  const Unit &getBoxByCell(Cell idx) const;
+  static const Unit &getColumnByCell(Cell idx);
 
-  const Unit &getRowByLocation(Location idx) const;
+  static const Unit &getBoxByCell(Cell idx);
 
-  const Unit &getColumnByLocation(Location idx) const;
+  static const Unit &getRowByLocation(Location idx);
 
-  const Unit &getBoxByLocation(Location idx) const;
+  static const Unit &getColumnByLocation(Location idx);
 
-  Location getRowLocation(Cell idx) const;
+  static const Unit &getBoxByLocation(Location idx);
 
-  Location getColumnLocation(Cell idx) const;
+  static Location getRowLocation(Cell idx);
 
-  Location getBoxLocation(Cell idx) const;
+  static Location getColumnLocation(Cell idx);
+
+  static Location getBoxLocation(Cell idx);
 
   // --- other ---
+
   void autoClearPeersAfterPlacement(Cell idx, Digit digit);
 
   bool isCompletelySolved() const;

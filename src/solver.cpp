@@ -91,10 +91,8 @@ static void techNakedPairs(SudokuBoard &board) {
             // naked pair spotted
             Event event(EventType::RemoveCandidate, ReasonId::NakedPair);
             CellSet sourceSet = CellSet({unitList[a], unitList[b]});
-            for (Cell idx : sourceSet) {
-              // the source is the two cells containing the pair
-              event.addSource(idx, digitsOfLocation[a]);
-            }
+            // the source is the two cells containing the pair
+            event.addSource(sourceSet, digitsOfLocation[a]);
             for (Cell idx : board.getPeers(sourceSet)) {
               // remove digits present in a and b from other cells they can see
               event.addOperation(idx, digitsOfLocation[a]);
@@ -138,10 +136,8 @@ static void techNakedTriples(SudokuBoard &board) {
                 Event event(EventType::RemoveCandidate, ReasonId::NakedTriple);
                 DigitSet lockedSet = digitsOfLocation[a] | digitsOfLocation[b] | digitsOfLocation[c];
                 CellSet sourceSet = CellSet({unitList[a], unitList[b], unitList[c]});
-                for (Cell idx : sourceSet) {
-                  // the source is the three cells containing the triple
-                  event.addSource(idx, lockedSet);
-                }
+                // the source is the three cells containing the triple
+                event.addSource(sourceSet, lockedSet);
                 for (Cell idx : board.getPeers(sourceSet)) {
                   // remove digits present in a, b, c from other cells they can see
                   event.addOperation(idx, lockedSet);
@@ -215,10 +211,8 @@ static void techHiddenPairs(SudokuBoard &board, const Unit &unit) {
           Event event(EventType::RemoveCandidate, ReasonId::HiddenPair);
           CellSet lockedSet = positionsOfDigit[a];
           CellSet sourceSet = lockedSet;
-          for (Cell idx : sourceSet) {
-            // the source is the two cells containing the pair
-            event.addSource(idx, DigitSet({a, b}));
-          }
+          // the source is the two cells containing the pair
+          event.addSource(sourceSet, DigitSet({a, b}));
           for (Cell idx : lockedSet) {
             // remove digits different from a and b from the cells of the pair
             event.addOperation(idx, board.getUnsolvedDigits() - DigitSet({a, b}));
@@ -265,10 +259,8 @@ static void techHiddenTriples(SudokuBoard &board) {
                 Event event(EventType::RemoveCandidate, ReasonId::HiddenTriple);
                 CellSet lockedSet = positionsOfDigit[a] | positionsOfDigit[b] | positionsOfDigit[c];
                 CellSet sourceSet = lockedSet;
-                for (Cell idx : sourceSet) {
-                  // the source is the three cells containing the triple
-                  event.addSource(idx, DigitSet({a, b, c}));
-                }
+                // the source is the three cells containing the triple
+                event.addSource(sourceSet, DigitSet({a, b, c}));
                 for (Cell idx : lockedSet) {
                   // remove digits different from a, b, c from the cells of the triple
                   event.addOperation(idx, board.getCandidates(idx) - DigitSet({a, b, c}));
@@ -315,10 +307,10 @@ static void techPointingSet(SudokuBoard &board) {
         reasonId = ReasonId::PointingTriple;
       }
 
-      const Location r0 = board.getRowLocation(*positions.begin());
+      const Location r0 = SudokuBoard::getRowLocation(*positions.begin());
       bool sameRow = true;
       for (Cell pos : positions) {
-        if (board.getRowLocation(pos) != r0) {
+        if (SudokuBoard::getRowLocation(pos) != r0) {
           sameRow = false;
           break;
         }
@@ -328,21 +320,19 @@ static void techPointingSet(SudokuBoard &board) {
         Event event(EventType::RemoveCandidate, reasonId);
         // the source is the cells containing the digit
         CellSet sourceSet = positions;
-        for (Cell idx : sourceSet) {
-          event.addSource(idx, digit);
-        }
+        event.addSource(sourceSet, digit);
         // remove digit from row r0, excluding cells in this box
-        CellSet set = board.getRowByLocation(r0).difference_with(box);
+        CellSet set = SudokuBoard::getRowByLocation(r0).difference_with(box);
         for (Cell idx : set) {
           event.addOperation(idx, digit);
         }
         g_eventQueue.enqueue(board, event);
       }
 
-      const Location c0 = board.getColumnLocation(*positions.begin());
+      const Location c0 = SudokuBoard::getColumnLocation(*positions.begin());
       bool sameCol = true;
       for (Cell pos : positions) {
-        if (board.getColumnLocation(pos) != c0) {
+        if (SudokuBoard::getColumnLocation(pos) != c0) {
           sameCol = false;
           break;
         }
@@ -352,11 +342,9 @@ static void techPointingSet(SudokuBoard &board) {
         Event event(EventType::RemoveCandidate, reasonId);
         // the source is the cells containing the digit
         CellSet sourceSet = positions;
-        for (Cell idx : sourceSet) {
-          event.addSource(idx, digit);
-        }
+        event.addSource(sourceSet, digit);
         // remove digit from column c0, excluding cells in this box
-        CellSet set = board.getColumnByLocation(c0).difference_with(box);
+        CellSet set = SudokuBoard::getColumnByLocation(c0).difference_with(box);
         for (Cell idx : set) {
           event.addOperation(idx, digit);
         }
@@ -388,7 +376,7 @@ static void techBoxLineReduction(SudokuBoard &board) {
       LocationSet boxes;
       bool sameBlock = true;
       for (Cell pos : positions) {
-        boxes.insert(board.getBoxLocation(pos));
+        boxes.insert(SudokuBoard::getBoxLocation(pos));
       }
 
       if (boxes.size() == 1) {
@@ -396,11 +384,9 @@ static void techBoxLineReduction(SudokuBoard &board) {
         Event event(EventType::RemoveCandidate, reasonId);
         // the source is the cells containing the digit
         CellSet sourceSet = positions;
-        for (Cell idx : sourceSet) {
-          event.addSource(idx, digit);
-        }
+        event.addSource(sourceSet, digit);
         // remove digit from this box, excluding cells in this row/column
-        CellSet set = board.getBoxByLocation(boxIdx).difference_with(unit);
+        CellSet set = SudokuBoard::getBoxByLocation(boxIdx).difference_with(unit);
         for (Cell idx : set) {
           event.addOperation(idx, digit);
         }
@@ -444,7 +430,7 @@ static void techBUGPlusOne(SudokuBoard &board) {
     Location trilocationDigitRowLocation = -1;
     for (Digit d : board.getUnsolvedDigits()) {
       for (Location l = 0; l < 9; ++l) {
-        const Unit &row = board.getRowByLocation(l);
+        const Unit &row = SudokuBoard::getRowByLocation(l);
         const CellSet &tmp = board.getPositionsOfDigit(row, d);
         if (!tmp.empty()) {
           if (tmp.size() == 3) {
@@ -466,7 +452,7 @@ static void techBUGPlusOne(SudokuBoard &board) {
     Location trilocationDigitColumnLocation = -1;
     for (Digit d : board.getUnsolvedDigits()) {
       for (Location l = 0; l < 9; ++l) {
-        const Unit &column = board.getColumnByLocation(l);
+        const Unit &column = SudokuBoard::getColumnByLocation(l);
         const CellSet &tmp = board.getPositionsOfDigit(column, d);
         if (!tmp.empty()) {
           if (tmp.size() == 3) {
@@ -485,17 +471,15 @@ static void techBUGPlusOne(SudokuBoard &board) {
     }
 
     if (trilocationDigitRowValue == trilocationDigitColumnValue &&
-        board.getRowLocation(trivalueCell) == trilocationDigitRowLocation &&
-        board.getColumnLocation(trivalueCell) == trilocationDigitColumnLocation) {
+        SudokuBoard::getRowLocation(trivalueCell) == trilocationDigitRowLocation &&
+        SudokuBoard::getColumnLocation(trivalueCell) == trilocationDigitColumnLocation) {
       // BUG+1 spotted
       Digit solution = trilocationDigitRowValue;
       Event event(EventType::SetValue, ReasonId::BUGPlusOne);
       // the source is the trivalue cell and its peers containing the BUG value
       event.addSource(trivalueCell, solution);
       CellSet sourceSet = board.getPeersContaining(trivalueCell, solution);
-      for (Cell idx : sourceSet) {
-        event.addSource(idx, solution);
-      }
+      event.addSource(sourceSet, solution);
       // set the BUG value in the trivalue cell
       event.addOperation(trivalueCell, solution);
       g_eventQueue.enqueue(board, event);
@@ -520,8 +504,8 @@ static void techXWing(SudokuBoard &board) {
 
       // get the columns corresponding to the positions of the digit
       std::vector<int> positionsList = positions.to_vector();
-      Location ca0 = board.getColumnLocation(positionsList[0]);
-      Location ca1 = board.getColumnLocation(positionsList[1]);
+      Location ca0 = SudokuBoard::getColumnLocation(positionsList[0]);
+      Location ca1 = SudokuBoard::getColumnLocation(positionsList[1]);
 
       for (Location b = a+1; b < 9; ++b) {
         const Unit &row = rows[b];
@@ -533,20 +517,16 @@ static void techXWing(SudokuBoard &board) {
         }
       
         std::vector<int> positionsInnerList = positionsInner.to_vector();
-        Location cb0 = board.getColumnLocation(positionsInnerList[0]);
-        Location cb1 = board.getColumnLocation(positionsInnerList[1]);
+        Location cb0 = SudokuBoard::getColumnLocation(positionsInnerList[0]);
+        Location cb1 = SudokuBoard::getColumnLocation(positionsInnerList[1]);
         if (ca0 == cb0 && ca1 == cb1) {
           // X-Wing spotted
           Event event(EventType::RemoveCandidate, ReasonId::XWing);
           // the source is the four cells forming the X-Wing, unit by unit
-          for (Cell idx : positions) {
-            event.addSource(idx, digit);
-          }
-          for (Cell idx : positionsInner) {
-            event.addSource(idx, digit);
-          }
+          event.addSource(positions, digit);
+          event.addSource(positionsInner, digit);
           // remove instances of the digit from the two columns, excluding the two rows
-          CellSet set = (board.getColumnByLocation(ca0) | board.getColumnByLocation(ca1)) - 
+          CellSet set = (SudokuBoard::getColumnByLocation(ca0) | SudokuBoard::getColumnByLocation(ca1)) - 
                         (rows[a] | rows[b]);
           for (Cell idx : set) {
             event.addOperation(idx, digit);
@@ -603,8 +583,8 @@ static void techXWing(SudokuBoard &board) {
 
       // get the rows corresponding to the positions of the digit
       std::vector<int> positionsList = positions.to_vector();
-      Location ra0 = board.getRowLocation(positionsList[0]);
-      Location ra1 = board.getRowLocation(positionsList[1]);
+      Location ra0 = SudokuBoard::getRowLocation(positionsList[0]);
+      Location ra1 = SudokuBoard::getRowLocation(positionsList[1]);
 
       for (Location b = a+1; b < 9; ++b) {
         const Unit &column = columns[b];
@@ -616,20 +596,16 @@ static void techXWing(SudokuBoard &board) {
         }
       
         std::vector<int> positionsInnerList = positionsInner.to_vector();
-        Location rb0 = board.getRowLocation(positionsInnerList[0]);
-        Location rb1 = board.getRowLocation(positionsInnerList[1]);
+        Location rb0 = SudokuBoard::getRowLocation(positionsInnerList[0]);
+        Location rb1 = SudokuBoard::getRowLocation(positionsInnerList[1]);
         if (ra0 == rb0 && ra1 == rb1) {
           // X-Wing spotted
           Event event(EventType::RemoveCandidate, ReasonId::XWing);
           // the source is the four cells forming the X-Wing, unit by unit
-          for (Cell idx : positions) {
-            event.addSource(idx, digit);
-          }
-          for (Cell idx : positionsInner) {
-            event.addSource(idx, digit);
-          }
+          event.addSource(positions, digit);
+          event.addSource(positionsInner, digit);
           // remove instances of the digit from the two rows, excluding the two columns
-          CellSet set = (board.getRowByLocation(ra0) | board.getRowByLocation(ra1)) - 
+          CellSet set = (SudokuBoard::getRowByLocation(ra0) | SudokuBoard::getRowByLocation(ra1)) - 
                         (columns[a] | columns[b]);
           for (Cell idx : set) {
             event.addOperation(idx, digit);
@@ -766,7 +742,7 @@ static void techSwordfish(SudokuBoard &board) {
       // get the columns corresponding to the positions of the digit
       LocationSet locationSet;
       for (Cell idx : positions) {
-        locationSet.insert(board.getColumnLocation(idx));
+        locationSet.insert(SudokuBoard::getColumnLocation(idx));
       }
 
       for (Location b = a+1; b < 8; ++b) {
@@ -780,7 +756,7 @@ static void techSwordfish(SudokuBoard &board) {
 
         LocationSet locationInnerSet;
         for (Cell idx : positionsInner) {
-          locationInnerSet.insert(board.getColumnLocation(idx));
+          locationInnerSet.insert(SudokuBoard::getColumnLocation(idx));
         }
 
         if ((locationSet | locationInnerSet).size() == 3) {
@@ -795,7 +771,7 @@ static void techSwordfish(SudokuBoard &board) {
 
             LocationSet locationInner2Set;
             for (Cell idx : positionsInner2) {
-              locationInner2Set.insert(board.getColumnLocation(idx));
+              locationInner2Set.insert(SudokuBoard::getColumnLocation(idx));
             }
 
             if ((locationSet | locationInnerSet | locationInner2Set).size() == 3) {
@@ -803,15 +779,9 @@ static void techSwordfish(SudokuBoard &board) {
               Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
               // the source is the cells forming the Swordfish, unit by unit
               CellSet sourceSet = positions | positionsInner | positionsInner2;
-              for (Cell idx : positions) {
-                event.addSource(idx, digit);
-              }
-              for (Cell idx : positionsInner) {
-                event.addSource(idx, digit);
-              }
-              for (Cell idx : positionsInner2) {
-                event.addSource(idx, digit);
-              }
+              event.addSource(positions, digit);
+              event.addSource(positionsInner, digit);
+              event.addSource(positionsInner2, digit);
               // remove instances of the digit from the three columns, excluding the three rows
               CellSet set;
               for (Cell idx : sourceSet) {
@@ -843,7 +813,7 @@ static void techSwordfish(SudokuBoard &board) {
       // get the rows corresponding to the positions of the digit
       LocationSet locationSet;
       for (Cell idx : positions) {
-        locationSet.insert(board.getRowLocation(idx));
+        locationSet.insert(SudokuBoard::getRowLocation(idx));
       }
 
       for (Location b = a+1; b < 8; ++b) {
@@ -857,7 +827,7 @@ static void techSwordfish(SudokuBoard &board) {
 
         LocationSet locationInnerSet;
         for (Cell idx : positionsInner) {
-          locationInnerSet.insert(board.getRowLocation(idx));
+          locationInnerSet.insert(SudokuBoard::getRowLocation(idx));
         }
 
         if ((locationSet | locationInnerSet).size() == 3) {
@@ -872,7 +842,7 @@ static void techSwordfish(SudokuBoard &board) {
 
             LocationSet locationInner2Set;
             for (Cell idx : positionsInner2) {
-              locationInner2Set.insert(board.getRowLocation(idx));
+              locationInner2Set.insert(SudokuBoard::getRowLocation(idx));
             }
 
             if ((locationSet | locationInnerSet | locationInner2Set).size() == 3) {
@@ -880,15 +850,9 @@ static void techSwordfish(SudokuBoard &board) {
               Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
               // the source is the cells forming the Swordfish, unit by unit
               CellSet sourceSet = positions | positionsInner | positionsInner2;
-              for (Cell idx : positions) {
-                event.addSource(idx, digit);
-              }
-              for (Cell idx : positionsInner) {
-                event.addSource(idx, digit);
-              }
-              for (Cell idx : positionsInner2) {
-                event.addSource(idx, digit);
-              }
+              event.addSource(positions, digit);
+              event.addSource(positionsInner, digit);
+              event.addSource(positionsInner2, digit);
               // remove instances of the digit from the three rows, excluding the three columns
               CellSet set;
               for (Cell idx : sourceSet) {
@@ -920,9 +884,9 @@ typedef void (*TechniqueFn)(SudokuBoard &);
 static constexpr TechniqueFn EASY_TECHNIQUES_SPARSE[] = {
   techFullHouse,
   techHiddenSinglesBox,
-  techHiddenSinglesRowColumn,
   techPointingSet,
   techBoxLineReduction,
+  techHiddenSinglesRowColumn,
   techHiddenPairsBox,
   techHiddenPairsRowColumn,
   techNakedSingles,
@@ -966,6 +930,98 @@ static bool is_operation_applicable(SudokuBoard &board, EventType type, Operatio
   return false;
 }
 
+// ---- Source CellSet serialization (CellSet -> uint32_t) ----
+// Encoding (uint32):
+//   bits[0..4]   : unitId (0..26)
+//   bits[5..13]  : 9-bit mask of cells inside the unit
+// unitId mapping:
+//   0..8   rows
+//   9..17  cols
+//   18..26 boxes
+static inline uint32_t encode_unit_cells(uint32_t unitId, uint32_t mask9) {
+  return ((mask9 & 0x1FFu) << 5) | (unitId & 0x1Fu);
+}
+
+static bool cellset_common_row(const std::vector<int> &cells, int &rowOut, uint32_t &mask9Out) {
+  if (cells.empty()) return false;
+  int r = SudokuBoard::getRowLocation(cells[0]);
+  uint32_t m = 0;
+  for (int idx : cells) {
+    if (SudokuBoard::getRowLocation(idx) != r) return false;
+    m |= (1u << (uint32_t)SudokuBoard::getColumnLocation(idx));
+  }
+  rowOut = r;
+  mask9Out = m;
+  return true;
+}
+
+static bool cellset_common_col(const std::vector<int> &cells, int &colOut, uint32_t &mask9Out) {
+  if (cells.empty()) return false;
+  int c = SudokuBoard::getColumnLocation(cells[0]);
+  uint32_t m = 0;
+  for (int idx : cells) {
+    if (SudokuBoard::getColumnLocation(idx) != c) return false;
+    m |= (1u << (uint32_t)SudokuBoard::getRowLocation(idx));
+  }
+  colOut = c;
+  mask9Out = m;
+  return true;
+}
+
+static bool cellset_common_box(const std::vector<int> &cells, int &boxOut, uint32_t &mask9Out) {
+  if (cells.empty()) return false;
+  int b = SudokuBoard::getBoxLocation(cells[0]);
+  uint32_t m = 0;
+  for (int idx : cells) {
+    if (SudokuBoard::getBoxLocation(idx) != b) return false;
+    int r = SudokuBoard::getRowLocation(idx) % 3;
+    int c = SudokuBoard::getColumnLocation(idx) % 3;
+    int pos = r * 3 + c;
+    m |= (1u << (uint32_t)pos);
+  }
+  boxOut = b;
+  mask9Out = m;
+  return true;
+}
+
+static std::vector<uint32_t> serialize_cellset_to_unitcodes(const CellSet &cells) {
+  std::vector<uint32_t> out;
+  const std::vector<int> v = cells.to_vector();
+  if (v.empty()) return out;
+
+  int r = -1, c = -1, b = -1;
+  uint32_t mask9 = 0;
+
+  if (cellset_common_row(v, r, mask9)) {
+    out.push_back(encode_unit_cells((uint32_t)r, mask9));
+    return out;
+  }
+  if (cellset_common_col(v, c, mask9)) {
+    out.push_back(encode_unit_cells((uint32_t)(9 + c), mask9));
+    return out;
+  }
+  if (cellset_common_box(v, b, mask9)) {
+    out.push_back(encode_unit_cells((uint32_t)(18 + b), mask9));
+    return out;
+  }
+
+  // No single common unit: split by box (always possible).
+  uint32_t boxMasks[9] = {0};
+  for (int idx : v) {
+    int bb = SudokuBoard::getBoxLocation(idx);
+    int rr = SudokuBoard::getRowLocation(idx) % 3;
+    int cc = SudokuBoard::getColumnLocation(idx) % 3;
+    int pos = rr * 3 + cc;
+    boxMasks[bb] |= (1u << (uint32_t)pos);
+  }
+  for (int bb = 0; bb < 9; bb++) {
+    if (boxMasks[bb]) {
+      out.push_back(encode_unit_cells((uint32_t)(18 + bb), boxMasks[bb]));
+    }
+  }
+  return out;
+}
+
 // Drain the next event and serialize the operations into out[] as described by API.
 // The function returns only events and operations that are applicable to the current 
 // state of the board. This implies that some events in queue could be discarded.
@@ -991,7 +1047,11 @@ static int drain_event(SudokuBoard &board,
   const EventType type = first.type;
   const ReasonId reason = first.reason;
 
-  const uint32_t need_words = 5u + 2u * (uint32_t)first.getNumberOfOperations() + 2u * (uint32_t)first.getNumberOfSources();
+  uint32_t srcChunks = 0;
+  for (const Source &src : first.getSources()) {
+    srcChunks += (uint32_t)serialize_cellset_to_unitcodes(src.cells).size();
+  }
+  const uint32_t need_words = 5u + 2u * (uint32_t)first.getNumberOfOperations() + 2u * srcChunks;
   if (need_words > out_words) {
     // Not enough space in output buffer. TODO notify caller
     out[0] = 0;
@@ -1010,12 +1070,15 @@ static int drain_event(SudokuBoard &board,
   out[3] = 0;
   out[4] = 0;
 
-  // Serialize sources first (no filtering besides solved-cells removal).
+  // Serialize sources first (may split CellSet into multiple unit-codes).
   uint32_t srcCount = 0;
   for (const Source &src : first.getSources()) {
-    out[5 + 2 * srcCount + 0] = (uint32_t)src.idx;
-    out[5 + 2 * srcCount + 1] = src.mask.to_uint32();
-    srcCount++;
+    const std::vector<uint32_t> codes = serialize_cellset_to_unitcodes(src.cells);
+    for (uint32_t code : codes) {
+      out[5 + 2 * srcCount + 0] = code;
+      out[5 + 2 * srcCount + 1] = src.mask.to_uint32();
+      srcCount++;
+    }
   }
   out[4] = srcCount;
 

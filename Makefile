@@ -58,7 +58,7 @@ TEST_BIN        := $(BIN_DIR)/sudorix_test
 WASM_JS         := $(WEB_DIR)/solver_wasm.js
 WASM_WASM       := $(WEB_DIR)/solver_wasm.wasm
 
-.PHONY: all wasm native test run serve clean distclean help
+.PHONY: all wasm native test run copy serve clean distclean help
 
 all: wasm native test
 
@@ -68,6 +68,7 @@ help:
 	@echo "  make native      -> build native object (solver.o)"
 	@echo "  make test        -> build test binary"
 	@echo "  make run         -> run tests (PUZZLES=..., MODE=full|step)"
+	@echo "  make copy        -> copy web assets to WEB_DIR
 	@echo "  make serve       -> serve WEB_DIR via http.server (requires wasm)"
 	@echo "  make clean       -> remove build artifacts"
 	@echo ""
@@ -130,13 +131,19 @@ $(WASM_JS) $(WASM_WASM): $(SRCS) | $(WEB_DIR)
 	@echo "Built: $(WASM_JS) + $(WASM_WASM)"
 
 # ----------------
-# Serve web assets
+# Copy web assets
 # ----------------
-serve: wasm
-	@echo "Serving $(WEB_DIR) on http://localhost:8000"
+copy: wasm
+	@echo "Copying web assets"
 	cp $(SRC_DIR)/sudorix.html $(WEB_DIR)
 	cp $(SRC_DIR)/sudorix.css $(WEB_DIR)
-	cp $(SRC_DIR)/sudorix.js $(WEB_DIR)
+	cp $(SRC_DIR)/*.js $(WEB_DIR)
+
+# ----------------
+# Serve web assets
+# ----------------
+serve: copy
+	@echo "Serving $(WEB_DIR) on http://localhost:8000"
 	cd $(WEB_DIR) && $(PYTHON) -m http.server 8000
 
 # -------

@@ -63,15 +63,15 @@ enum class ReasonId : uint8_t {
   DeathBlossom,
 };
 
-// one operation = set value(s) or remove candidate(s)
+// one operation = set value(s) or remove candidate(s) in a cell
 struct Operation {
   Cell idx;
   DigitSet mask;
 };
 
-// one source = a (cell, mask) pair explaining why the rule triggers
+// one source = a (cells, mask) pair explaining why the rule triggers
 struct Source {
-  Cell idx;
+  CellSet cells;
   DigitSet mask;
 };
 
@@ -93,11 +93,14 @@ public:
   size_t getNumberOfSources() const;
   void addSource(Cell idx, Digit digit);
   void addSource(Cell idx, DigitSet mask);
+  void addSource(CellSet cells, Digit digit);
+  void addSource(CellSet cells, DigitSet mask);
 
 private:
   friend class EventQueue;
   // an event is a set of multiple operations
   std::vector<Operation> ops;
+  // an event can be described by more sources
   std::vector<Source> sources;
 };
 

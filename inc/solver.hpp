@@ -22,15 +22,20 @@
 //
 // Output buffer (uint32_t words, caller-allocated):
 //   Layout:
-//     out[0] = type     (0 = none, 1 = setValue, 2 = removeCandidate)
-//     out[1] = reasonId
-//     out[2] = fromPrev (1 if it was already queued, 0 if generated in this iteration)
-//     out[3] = opCount  (#operations)
-//     out[4] = srcCount (#sources)
-//     then srcCount pairs: (idx, mask)
+//     out[0] = type      (0 = none, 1 = setValue, 2 = removeCandidate)
+//     out[1] = reasonId  (see Event.hpp)
+//     out[2] = fromPrev  (1 if it was already queued, 0 if generated in this iteration)
+//     out[3] = opCount   (#operations)
+//     out[4] = srcCount  (#sources)
+//     then srcCount pairs: (cells, mask)
 //     then opCount  pairs: (idx, mask)
 //
-//   Mask is 9-bit: bit0=digit1 .. bit8=digit9.
+//   mask is 9-bit: bit0=digit1 .. bit8=digit9.
+//   idx is a cell identified by an index in range 0..80.
+//   cells identifies more cells inside a unit in 14 bits:
+//     bit0..bit4=unitId (0..8 rows, 9..17 columns, 18..26 boxes)
+//     bit5=cell1 .. bit13 = cell9
+//
 //   Minimum out_words is 5.
 //   NOTE: For SetValue, mask must contain exactly one bit.
 //

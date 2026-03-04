@@ -14,7 +14,7 @@ public:
 
   bool dequeue(Event &ev);
 
-  bool peek(Event &) const;
+  bool peek(Event &ev) const;
 
   size_t size() const;
 

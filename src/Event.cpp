@@ -33,9 +33,17 @@ size_t Event::getNumberOfSources() const {
 }
 
 void Event::addSource(Cell idx, Digit digit) {
-  sources.push_back({idx, DigitSet({digit})});
+  sources.push_back({CellSet({idx}), DigitSet({digit})});
 }
 
 void Event::addSource(Cell idx, DigitSet mask) {
-  sources.push_back({idx, mask});
+  sources.push_back({CellSet({idx}), mask});
+}
+
+void Event::addSource(CellSet cells, Digit digit) {
+  sources.push_back({cells, DigitSet({digit})});
+}
+
+void Event::addSource(CellSet cells, DigitSet mask) {
+  sources.push_back({cells, mask});
 }

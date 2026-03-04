@@ -224,11 +224,11 @@ var business_logic = (() => {
       sources: []
     };
 
-    // sources
+    // sources (already decoded)
     for (let i = 0; i < srcCount; i++) {
-      const idx = out[5 + 2 * i + 0] >>> 0;
+      const cells = out[5 + 2 * i + 0] >>> 0;
       const mask = out[5 + 2 * i + 1] >>> 0;
-      ev.sources.push({ idx: idx, mask: mask & 0x1FF });
+      ev.sources.push({ cells: decodeSourceCellCode(cells), mask: mask & 0x1FF });
     }
 
     // operations
@@ -282,12 +282,14 @@ var business_logic = (() => {
       sources: []
     };
 
+    // sources (already decoded)
     for (let i = 0; i < srcCount; i++) {
-      const idx = out[5 + 2 * i + 0] >>> 0;
+      const cells = out[5 + 2 * i + 0] >>> 0;
       const mask = out[5 + 2 * i + 1] >>> 0;
-      ev.sources.push({ idx: idx, mask: mask & 0x1FF });
+      ev.sources.push({ cells: decodeSourceCellCode(cells), mask: mask & 0x1FF });
     }
 
+    // operations
     const opsBase = 5 + 2 * srcCount;
     for (let i = 0; i < opCount; i++) {
       const idx = out[opsBase + 2 * i + 0] >>> 0;
@@ -310,6 +312,12 @@ var business_logic = (() => {
 
   function RCToIdx(r, c) {
     return r*9 + c;
+  }
+
+  function idxToRef(idx) {
+    const r = Math.floor(idx / 9) + 1;
+    const c = (idx % 9) + 1;
+    return `r${r}c${c}`;
   }
 
   function parseHexColor(hex) {
@@ -399,7 +407,88 @@ var business_logic = (() => {
     const list = candsEl.querySelectorAll(".cand");
     return list && list[digit - 1] ? list[digit - 1] : null;
   }
-  
+
+  // Encoding (uint32):
+  //   bits[0..4]   : unitId (0..26)
+  //   bits[5..13]  : 9-bit mask of cells inside the unit
+  // unitId mapping:
+  //   0..8   rows
+  //   9..17  cols
+  //   18..26 boxes
+  // Output:
+  //   { unitId, kind (row|col|box), mask9, idxs }
+  function decodeSourceCellCode(code) {
+    const unitId = (code & 0x1F) >>> 0;
+    const mask9 = (code >>> 5) & 0x1FF;
+    const idxs = [];
+
+    if (unitId <= 8) {
+      const r = unitId;
+      for (let c = 0; c < 9; c++) {
+        if (mask9 & (1 << c)) {
+          idxs.push(r * 9 + c);
+        }
+      }
+      return { unitId, kind: "row", mask9, idxs };
+    }
+
+    if (unitId <= 17) {
+      const c = unitId - 9;
+      for (let r = 0; r < 9; r++) {
+        if (mask9 & (1 << r)) {
+          idxs.push(r * 9 + c);
+        }
+      }
+      return { unitId, kind: "col", mask9, idxs };
+    }
+
+    if (unitId <= 26) {
+      const b = unitId - 18;
+      const br = Math.floor(b / 3) * 3;
+      const bc = (b % 3) * 3;
+      for (let p = 0; p < 9; p++) {
+        if (mask9 & (1 << p)) {
+          const r = br + Math.floor(p / 3);
+          const c = bc + (p % 3);
+          idxs.push(r * 9 + c);
+        }
+      }
+      return { unitId, kind: "box", mask9, idxs, box: b };
+    }
+
+    return { unitId, kind: "unknown", mask9, idxs };
+  }
+
+  function formatEurekaCellCode(source) {
+    if (source.kind === "row") {
+      const r = source.unitId + 1;
+      const cols = [];
+      for (let c = 0; c < 9; c++) {
+        if (source.mask9 & (1 << c)) {
+          cols.push(String(c + 1));
+        }
+      }
+      return `r${r}c${cols.join("")}`;
+    }
+
+    if (source.kind === "col") {
+      const c = (source.unitId - 9) + 1;
+      const rows = [];
+      for (let r = 0; r < 9; r++) {
+        if (source.mask9 & (1 << r)) {
+          rows.push(String(r + 1));
+        }
+      }
+      return `r${rows.join("")}c${c}`;
+    }
+
+    if (source.kind === "box") {
+      return source.idxs.map(idx => idxToRef(idx)).join("|");
+    }
+
+    return source.idxs.map(idx => idxToRef(idx)).join(",");
+  }
+
   /* =========================================================
    * Event highlight persistence (candidates)
    * ========================================================= */
@@ -480,14 +569,16 @@ var business_logic = (() => {
     // Sources: green
     if (ev.sources) {
       for (const s of ev.sources) {
-        const idx = s.idx;
-        addCandidateFlashMask(idx, "source", s.mask, isHold);
-
+        const idxList = s.cells.idxs;
         const digits = maskToDigits(s.mask);
-        for (const d of digits) {
-          const el = getCandidateElement(idx, d);
-          if (el) {
-            applyCandidateFlashClasses(el, idx, d);
+
+        for (const idx of idxList) {
+          addCandidateFlashMask(idx, "source", s.mask, isHold);
+          for (const d of digits) {
+            const el = getCandidateElement(idx, d);
+            if (el) {
+              applyCandidateFlashClasses(el, idx, d);
+            }
           }
         }
       }
@@ -1159,12 +1250,6 @@ var business_logic = (() => {
       .replaceAll("'", "&#39;");
   }
 
-  function idxToRef(idx) {
-    const r = Math.floor(idx / 9) + 1;
-    const c = (idx % 9) + 1;
-    return `r${r}c${c}`;
-  }
-
   function clearLog() {
     logEl.innerHTML = "";
     eventLogEntries.length = 0;
@@ -1365,7 +1450,7 @@ var business_logic = (() => {
     if (ev.sources && ev.sources.length > 0) {
       parts.push(`<div><span class="logCellRef">Sources</span></div>`);
       for (const s of ev.sources) {
-        const ref = idxToRef(s.idx);
+        const ref = formatEurekaCellCode(s.cells);
         const digs = maskToDigits(s.mask);
         if (digs.length == 0) {
           continue;
@@ -1396,8 +1481,10 @@ var business_logic = (() => {
       for (const op of ev.ops) {
         const ref = idxToRef(op.idx);
         const digs = maskToDigits(op.mask);
-        for (const d of digs) {
-          parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> <span class="logOpRemove">&lt;&gt;</span> <span class="logOpRemove">${d}</span></div>`);
+        if (digs.length > 1) {
+          parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> <span class="logOpRemove">&lt;&gt;</span> <span class="logOpRemove">{${escapeHtml(digs.join(","))}}</span></div>`);
+        } else {
+          parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> <span class="logOpRemove">&lt;&gt;</span> <span class="logOpRemove">${digs[0]}</span></div>`);
         }
       }
     } else {

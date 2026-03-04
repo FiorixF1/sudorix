@@ -20,7 +20,11 @@ void EventQueue::enqueue(SudokuBoard &board, Event &event) {
 
     // remove not available candidates from sources
     for (Source &source : event.sources) {
-      source.mask = source.mask & board.getCandidates(source.idx);
+      DigitSet allowed;
+      for (int idx : source.cells.to_vector()) {
+        allowed |= board.getCandidates((Cell)idx);
+      }
+      source.mask = source.mask & allowed;
     }
 
     // check again if the event is valid

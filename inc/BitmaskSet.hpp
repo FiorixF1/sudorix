@@ -90,7 +90,7 @@ private:
   }
 
 public:
-  // ---- ctors ----
+  // ---- default ctor ----
   constexpr BitmaskSet() = default;
 
   // ---- ctor from list of integers

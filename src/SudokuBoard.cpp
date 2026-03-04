@@ -318,51 +318,51 @@ bool SudokuBoard::sees(Cell a, Cell b) const {
 }
 
 // --- positions API ---
-const std::vector<Unit> &SudokuBoard::getRows() const {
+const std::vector<Unit> &SudokuBoard::getRows() {
   return ROW_UNITS;
 } 
 
-const std::vector<Unit> &SudokuBoard::getColumns() const {
+const std::vector<Unit> &SudokuBoard::getColumns() {
   return COL_UNITS;
 }
 
-const std::vector<Unit> &SudokuBoard::getBoxes() const {
+const std::vector<Unit> &SudokuBoard::getBoxes() {
   return BOX_UNITS;
 }
 
-const Unit &SudokuBoard::getRowByCell(Cell idx) const {
+const Unit &SudokuBoard::getRowByCell(Cell idx) {
   return ROW_UNITS[getRowLocation(idx)];
 } 
 
-const Unit &SudokuBoard::getColumnByCell(Cell idx) const {
+const Unit &SudokuBoard::getColumnByCell(Cell idx) {
   return COL_UNITS[getColumnLocation(idx)];
 }
 
-const Unit &SudokuBoard::getBoxByCell(Cell idx) const {
+const Unit &SudokuBoard::getBoxByCell(Cell idx) {
   return BOX_UNITS[getBoxLocation(idx)];
 }
 
-const Unit &SudokuBoard::getRowByLocation(Location idx) const {
+const Unit &SudokuBoard::getRowByLocation(Location idx) {
   return ROW_UNITS[idx];
 } 
 
-const Unit &SudokuBoard::getColumnByLocation(Location idx) const {
+const Unit &SudokuBoard::getColumnByLocation(Location idx) {
   return COL_UNITS[idx];
 }
 
-const Unit &SudokuBoard::getBoxByLocation(Location idx) const {
+const Unit &SudokuBoard::getBoxByLocation(Location idx) {
   return BOX_UNITS[idx];
 }
 
-Location SudokuBoard::getRowLocation(Cell idx) const {
+Location SudokuBoard::getRowLocation(Cell idx) {
   return (Location)(idx / 9);
 }
 
-Location SudokuBoard::getColumnLocation(Cell idx) const {
+Location SudokuBoard::getColumnLocation(Cell idx) {
   return (Location)(idx % 9);
 }
 
-Location SudokuBoard::getBoxLocation(Cell idx) const {
+Location SudokuBoard::getBoxLocation(Cell idx) {
   const Location r = getRowLocation(idx);
   const Location c = getColumnLocation(idx);
   return (Location)((r / 3) * 3 + (c / 3));
