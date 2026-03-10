@@ -90,8 +90,8 @@ static void techNakedPairs(SudokuBoard &board) {
           if (digitsOfLocation[a] == digitsOfLocation[b]) {
             // naked pair spotted
             Event event(EventType::RemoveCandidate, ReasonId::NakedPair);
-            CellSet sourceSet = CellSet({unitList[a], unitList[b]});
             // the source is the two cells containing the pair
+            CellSet sourceSet = CellSet({unitList[a], unitList[b]});
             event.addSource(sourceSet, digitsOfLocation[a]);
             for (Cell idx : board.getPeers(sourceSet)) {
               // remove digits present in a and b from other cells they can see
@@ -135,8 +135,8 @@ static void techNakedTriples(SudokuBoard &board) {
                 // naked triple spotted
                 Event event(EventType::RemoveCandidate, ReasonId::NakedTriple);
                 DigitSet lockedSet = digitsOfLocation[a] | digitsOfLocation[b] | digitsOfLocation[c];
-                CellSet sourceSet = CellSet({unitList[a], unitList[b], unitList[c]});
                 // the source is the three cells containing the triple
+                CellSet sourceSet = CellSet({unitList[a], unitList[b], unitList[c]});
                 event.addSource(sourceSet, lockedSet);
                 for (Cell idx : board.getPeers(sourceSet)) {
                   // remove digits present in a, b, c from other cells they can see
@@ -209,9 +209,9 @@ static void techHiddenPairs(SudokuBoard &board, const Unit &unit) {
         if (positionsOfDigit[a] == positionsOfDigit[b]) {
           // hidden pair spotted
           Event event(EventType::RemoveCandidate, ReasonId::HiddenPair);
+          // the source is the two cells containing the pair
           CellSet lockedSet = positionsOfDigit[a];
           CellSet sourceSet = lockedSet;
-          // the source is the two cells containing the pair
           event.addSource(sourceSet, DigitSet({a, b}));
           for (Cell idx : lockedSet) {
             // remove digits different from a and b from the cells of the pair
@@ -257,9 +257,9 @@ static void techHiddenTriples(SudokuBoard &board) {
               if (!positionsOfDigit[c].empty() && (positionsOfDigit[a] | positionsOfDigit[b] | positionsOfDigit[c]).size() == 3) {
                 // hidden triple spotted
                 Event event(EventType::RemoveCandidate, ReasonId::HiddenTriple);
+                // the source is the three cells containing the triple
                 CellSet lockedSet = positionsOfDigit[a] | positionsOfDigit[b] | positionsOfDigit[c];
                 CellSet sourceSet = lockedSet;
-                // the source is the three cells containing the triple
                 event.addSource(sourceSet, DigitSet({a, b, c}));
                 for (Cell idx : lockedSet) {
                   // remove digits different from a, b, c from the cells of the triple
@@ -676,6 +676,9 @@ static void techXYWing(SudokuBoard &board) {
             event.addSource(a, DigitSet({x, z}));  // wing
             event.addSource(b, DigitSet({x, y}));  // hinge
             event.addSource(c, DigitSet({y, z}));  // wing
+            event.addDelimiter();
+            event.addSource(a, DigitSet({z}));     // mark Z for UI
+            event.addSource(c, DigitSet({z}));
             // remove instances of Z from peers of extreme cells
             CellSet set = board.getPeersContaining(CellSet({a, c}), z);
             for (Cell idx : set) {
@@ -711,6 +714,10 @@ static void techXYZWing(SudokuBoard &board) {
             event.addSource(a, DigitSet({x, z}));     // wing
             event.addSource(b, DigitSet({x, y, z}));  // hinge
             event.addSource(c, DigitSet({y, z}));     // wing
+            event.addDelimiter();
+            event.addSource(a, DigitSet({z}));        // mark Z for UI
+            event.addSource(b, DigitSet({z}));
+            event.addSource(c, DigitSet({z}));
             // remove instances of Z from peers of all cells
             CellSet set = board.getPeersContaining(CellSet({a, b, c}), z);
             for (Cell idx : set) {
@@ -938,6 +945,7 @@ static bool is_operation_applicable(SudokuBoard &board, EventType type, Operatio
 //   0..8   rows
 //   9..17  cols
 //   18..26 boxes
+// Special case when bits[5..13] are all zero: delimiter of group of sources or digit-only source
 static inline uint32_t encode_unit_cells(uint32_t unitId, uint32_t mask9) {
   return ((mask9 & 0x1FFu) << 5) | (unitId & 0x1Fu);
 }
@@ -987,7 +995,11 @@ static bool cellset_common_box(const std::vector<int> &cells, int &boxOut, uint3
 static std::vector<uint32_t> serialize_cellset_to_unitcodes(const CellSet &cells) {
   std::vector<uint32_t> out;
   const std::vector<int> v = cells.to_vector();
-  if (v.empty()) return out;
+  if (v.empty()) {
+    // special case: encode the empty set as a string of zeroes
+    out.push_back(encode_unit_cells(0, 0));
+    return out;
+  }
 
   int r = -1, c = -1, b = -1;
   uint32_t mask9 = 0;
@@ -1248,7 +1260,7 @@ static int count_solutions(SudokuBoard &board) {
 
 //
 // FOR DEBUGGING compile with -DDEBUG and use this function:
-// debug_log("Queue has %d elements", g_eventQueue.size());
+// console_log("Queue has %d elements", g_eventQueue.size());
 //
 
 // =========================================================

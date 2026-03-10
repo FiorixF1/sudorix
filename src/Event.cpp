@@ -47,3 +47,7 @@ void Event::addSource(CellSet cells, Digit digit) {
 void Event::addSource(CellSet cells, DigitSet mask) {
   sources.push_back({cells, mask});
 }
+
+void Event::addDelimiter() {
+  sources.push_back({CellSet(), DigitSet()});
+}

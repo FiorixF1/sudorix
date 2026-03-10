@@ -110,21 +110,32 @@ Eventoj estas priskribataj per `uint32_t out[1024]`:
 - `out[2]` = 1 se la evento estis produktita en antaŭa iteracio
 - `out[3]` = nombro da operacioj
 - `out[4]` = nombro da fontoj
-- listo de fontoj esprimitaj kiel duopo indekso (0..80) / cifermasko (1..9)
-- listo de operacioj esprimitaj kiel duopo indekso (0..80) / cifermasko (1..9)
+- listo de fontoj esprimitaj kiel duopo **(ĉelaro, cifermasko)**
+- listo de operacioj esprimitaj kiel duopo **(indekso, cifermasko)**
 
-### API
+La **cifermasko** estas masko por prezenti unu aŭ plurajn ciferojn per naŭ bitoj. Ekzemploj:
 
-- `int sudorix_solver_count_solutions(const char *in81)`
-  - ricevas Sudokuon kiel ĉenon kaj redonas la nombron da solvoj; malplenaj ĉeloj estas markitaj per `0` aŭ `.`
-- `int sudorix_solver_full(const char *in81, char *out81)`
-  - ricevas Sudokuon kiel ĉenon kaj redonas la solvon kiel ĉenon; malplenaj ĉeloj estas markitaj per `0` aŭ `.`
-- `int sudorix_solver_init_board(const char *in81)`
-  - ricevas Sudokuon kiel ĉenon kaj konservas ĝin en la interna memoro de la solvilo
-- `int sudorix_solver_next_step(uint32_t *out, uint32_t out_words)`
-  - redonas unu paŝon por solvi la Sudokuon ŝargitan per `sudorix_solver_init_board` kaj ĝisdatigas la internan staton; la eligo estas skribita en `out` kaj `out_words` estas la longeco utiligita el la bufro:
-  - `out[0]=type`, `out[1]=reasonId`, `out[2]=fromPrev`, `out[3]=opCount`, `out[4]=srcCount`, `out[..srcCount..]=cells/mask`, `out[..opCount..]=idx/mask`
-- `int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out, uint32_t out_words)`
-  - ricevas Sudokuon kiel tabelojn enhavantajn kaj la jam solvitajn ĉelojn kaj la kandidatojn por ĉiu ĉelo, kaj redonas unu paŝon por daŭrigi la solvon; la eligo estas skribita en `out` kaj `out_words` estas la longeco utiligita el la bufro:
-  - `out[0]=type`, `out[1]=reasonId`, `out[2]=fromPrev`, `out[3]=opCount`, `out[4]=srcCount`, `out[..srcCount..]=cells/mask`, `out[..opCount..]=idx/mask`
-  - **neniu interna stato estas ĝisdatigata**
+- `000000001` = cifero 1
+- `000000010` = cifero 2
+- `001000111` = ciferoj {1, 2, 3, 7}
+
+La **indekso** estas nombro inter 0 kaj 80 por indiki unu ĉelon el la krado, ekzemple 0 por r1c1, 80 por r9c9, 9 por r2c1, 50 por r6c6 ktp
+
+La **ĉelaro** estas kunmetita dateno por prezenti unu aŭ plurajn ĉelojn el unuo. La lastaj kvin bitoj kodas nombron, kiu indikas unuon laŭ tiu ĉi dispartigo:
+
+- `0..8` = Linio
+- `9..17` = Kolumno
+- `18..26` = Bloko
+
+La sekvantaj naŭ bitoj estas masko por indiki la ĉelojn de tiu unuo. Ekzemplo:
+
+```
+0000000000000000000 11000000 01101
+                    |        ^ 01101 = 13 = kvina kolumno
+                    ^ 11000000 = oka kaj naŭa ĉelo de la unuo
+```
+
+Tiu ĉi nombro prezentas la okan kaj naŭan ĉelon de la kvina kolumno, aŭ **r89c5** en eŭreka simbolaro.
+La masko por ĉeloj povas esti malplena kaj tiukaze ĝi prezentas malplenan aron. Tiu speciala valoro estas ofte uzata por disigi logike malsamajn grupojn de fontoj.
+
+Pluraj informoj pri la interfacoj, funkcioj kaj datenspecoj estas en dediĉita [dokumento](API.md).

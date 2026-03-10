@@ -17,7 +17,7 @@
 #ifdef DEBUG
   #define console_log(fmt,  ...) emscripten_log(EM_LOG_CONSOLE,  fmt "\n",  ##__VA_ARGS__)
 #else
-  #define console_log(fmt,  ...)
+  #define console_log(fmt,  ...) do { } while (0);
 #endif
 
 using Digit = uint8_t;                // a digit in range 1..9

@@ -13,53 +13,72 @@ enum class EventType : uint8_t {
 
 enum class ReasonId : uint8_t {
   Solver = 0,
+  // naked sets
   FullHouse,
   NakedSingle,
   NakedPair,
   NakedTriple,
   NakedQuad,
+  // hidden sets
   HiddenSingle,
   HiddenPair,
   HiddenTriple,
   HiddenQuad,
+  // intersections
   PointingPair,
   PointingTriple,
   ClaimingPair,
   ClaimingTriple,
+  // basic fish
   XWing,
   Swordfish,
   Jellyfish,
+  // finned and sashimi fish
   FinnedXWing,
   FinnedSwordfish,
   FinnedJellyfish,
-  FrankenFish,
+  SashimiXWing,
+  SashimiSwordfish,
+  SashimiJellyfish,
+  // advanced fish
+  FrankenXWing,
+  FrankenSwordfish,
+  FinnedFrankenXWing,
+  FinnedFrankenSwordfish,
   MutantFish,
-  SiameseFish,
-  FinnedFrankenFish,
   FinnedMutantFish,
+  SiameseFish,
+  KrakenFish,
+  // single digit patterns
+  Skyscraper,
+  TwoStringKite,
+  Crane,
+  EmptyRectangle,
+  // uniqueness
+  UniqueRectangle,
+  HiddenRectangle,
+  AvoidableRectangle,
+  BUGPlusOne,
+  // wings
   XYWing,
   XYZWing,
   WXYZWing,
   ChuteRemotePair,
   WWing,
-  UniqueRectangle,
-  HiddenRectangle,
-  AvoidableRectangle,
-  BUGPlusOne,
+  // coloring
   SimpleColoring,
   _3DMedusa,
-  Skyscraper,
-  TwoStringKite,
-  Crane,
-  EmptyRectangle,
+  // chains
   RemotePair,
   XChain,
   XYChain,
-  AlternatingInferenceChain,
-  GroupedAlternatingInferenceChain,
-  SueDeCoq,
+  AIC,
+  GroupedAIC,
+  // almost locked sets
   ALSXZ,
   ALSXY,
+  ALSChain,
+  SueDeCoq,
   DeathBlossom,
 };
 
@@ -95,6 +114,7 @@ public:
   void addSource(Cell idx, DigitSet mask);
   void addSource(CellSet cells, Digit digit);
   void addSource(CellSet cells, DigitSet mask);
+  void addDelimiter();
 
 private:
   friend class EventQueue;

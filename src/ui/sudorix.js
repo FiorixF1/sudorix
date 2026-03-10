@@ -57,34 +57,41 @@ var business_logic = (() => {
     "Finned X-Wing",
     "Finned Swordfish",
     "Finned Jellyfish",
-    "Franken Fish",
+    "Sashimi X-Wing",
+    "Sashimi Swordfish",
+    "Sashimi Jellyfish",
+    "Franken X-Wing",
+    "Franken Swordfish",
+    "Finned Franken X-Wing",
+    "Finned Franken Swordfish",
     "Mutant Fish",
-    "Siamese Fish",
-    "Finned Franken Fish",
     "Finned Mutant Fish",
+    "Siamese Fish",
+    "Kraken Fish",
+    "Skyscraper",
+    "Two-String Kite",
+    "Crane",
+    "Empty Rectangle",
+    "Unique Rectangle",
+    "Hidden Rectangle",
+    "Avoidable Rectangle",
+    "BUG+1",
     "XY-Wing",
     "XYZ-Wing",
     "WXYZ-Wing",
     "Chute Remote Pair",
     "W-Wing",
-    "Unique Rectangle",
-    "Hidden Rectangle",
-    "Avoidable Rectangle",
-    "BUG+1",
     "Simple Coloring",
     "3D Medusa",
-    "Skyscraper",
-    "Two-String Kite",
-    "Crane",
-    "Empty Rectangle",
     "Remote Pair",
-    "X-Chain",
+    "X.Chain",
     "XY-Chain",
-    "Alternating Inference Chain",
-    "Grouped Alternating Inference Chain",
-    "Sue-de-Coq",
+    "AIC",
+    "Grouped AIC",
     "ALS-XZ",
     "ALS-XY",
+    "ALS Chain",
+    "Sue de Coq",
     "Death Blossom",
   ];
 
@@ -415,12 +422,18 @@ var business_logic = (() => {
   //   0..8   rows
   //   9..17  cols
   //   18..26 boxes
+  // Special case when bits[5..13] are all zero: empty cell-set.
+  // If the associated source digit-mask is also zero, the source is treated as a delimiter.
   // Output:
-  //   { unitId, kind (row|col|box), mask9, idxs }
+  //   { unitId, kind (row|col|box|empty), mask9, idxs }
   function decodeSourceCellCode(code) {
     const unitId = (code & 0x1F) >>> 0;
     const mask9 = (code >>> 5) & 0x1FF;
     const idxs = [];
+
+    if (mask9 == 0) {
+      return { unitId, kind: "empty", mask9, idxs };
+    }
 
     if (unitId <= 8) {
       const r = unitId;
@@ -460,6 +473,10 @@ var business_logic = (() => {
   }
 
   function formatEurekaCellCode(source) {
+    if (!source || !source.idxs || source.idxs.length === 0) {
+      return "";
+    }
+
     if (source.kind === "row") {
       const r = source.unitId + 1;
       const cols = [];
@@ -489,51 +506,126 @@ var business_logic = (() => {
     return source.idxs.map(idx => idxToRef(idx)).join(",");
   }
 
-  /* =========================================================
-   * Event highlight persistence (candidates)
-   * ========================================================= */
-  const candFlashSourceMask = new Uint16Array(81);
-  const candFlashSetMask = new Uint16Array(81);
-  const candFlashRemoveMask = new Uint16Array(81);
-  const candFlashHoldMask = new Uint16Array(81);
-
-  function clearCandidateFlashMasks() {
-    candFlashSourceMask.fill(0);
-    candFlashSetMask.fill(0);
-    candFlashRemoveMask.fill(0);
-    candFlashHoldMask.fill(0);
+  function sourceIsDelimiter(source) {
+    if (!source || !source.cells) {
+      return false;
+    }
+    return source.cells.idxs.length === 0 && ((source.mask >>> 0) & 0x1FF) === 0;
   }
 
-  function addCandidateFlashMask(idx, kind, mask, hold) {
+  function splitSourceGroups(sources) {
+    const groups = [];
+    let current = [];
+    for (const src of (sources || [])) {
+      if (sourceIsDelimiter(src)) {
+        if (current.length > 0) {
+          groups.push(current);
+          current = [];
+        }
+        continue;
+      }
+      current.push(src);
+    }
+    if (current.length > 0) {
+      groups.push(current);
+    }
+    return groups;
+  }
+
+  function normalizeSourceCategory(category) {
+    const n = Number(category) | 0;
+    if (n < 1) {
+      return 1;
+    }
+    if (n > 12) {
+      return ((n - 1) % 12) + 1;
+    }
+    return n;
+  }
+
+  function categoryClassName(category) {
+    return `flashCategory${normalizeSourceCategory(category)}`;
+  }
+
+  function removeSourceCategoryClasses(el) {
+    if (!el) {
+      return;
+    }
+    for (let i = 1; i <= 12; i++) {
+      el.classList.remove(`flashCategory${i}`);
+    }
+  }
+
+  function resolveSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
+    if (typeof getSourceCategoryByReason === "function") {
+      const custom = getSourceCategoryByReason(ev, source, sourceIndex, groupIndex, sourceIndexInGroup);
+      if (custom) {
+        return normalizeSourceCategory(custom);
+      }
+    }
+    return normalizeSourceCategory(groupIndex + 1);
+  }
+
+  /* =========================================================
+   * Event highlight persistence (sources + candidates)
+   * ========================================================= */
+  const candFlashSourceCategory = Array.from({ length: 81 }, () => new Uint8Array(9));
+  const candFlashSetMask = new Uint16Array(81);
+  const candFlashRemoveMask = new Uint16Array(81);
+  const cellFlashSourceCategory = new Uint8Array(81);
+
+  function clearCandidateFlashMasks() {
+    for (let i = 0; i < 81; i++) {
+      candFlashSourceCategory[i].fill(0);
+    }
+    candFlashSetMask.fill(0);
+    candFlashRemoveMask.fill(0);
+    cellFlashSourceCategory.fill(0);
+  }
+
+  function addCandidateFlashMask(idx, kind, mask, sourceCategory) {
     const m = (mask & 0x1FF);
     if (!m) {
       return;
     }
     if (kind === "source") {
-      candFlashSourceMask[idx] |= m;
+      const category = normalizeSourceCategory(sourceCategory || 1);
+      for (let d = 1; d <= 9; d++) {
+        if (m & digitToBit(d)) {
+          candFlashSourceCategory[idx][d - 1] = category;
+        }
+      }
     } else if (kind === "set") {
       candFlashSetMask[idx] |= m;
     } else if (kind === "remove") {
       candFlashRemoveMask[idx] |= m;
     }
-    if (hold) {
-      candFlashHoldMask[idx] |= m;
+  }
+
+  function setCellSourceFlash(idx, category) {
+    cellFlashSourceCategory[idx] = normalizeSourceCategory(category || 1);
+  }
+
+  function applyCellFlashClasses(cellEl, idx) {
+    removeSourceCategoryClasses(cellEl);
+    const category = cellFlashSourceCategory[idx] | 0;
+    if (category > 0) {
+      cellEl.classList.add(categoryClassName(category));
     }
   }
 
   function applyCandidateFlashClasses(spanEl, idx, digit) {
     const bit = digitToBit(digit);
-    if (candFlashSourceMask[idx] & bit) {
-      spanEl.classList.add("flashSource");
+    removeSourceCategoryClasses(spanEl);
+    const category = candFlashSourceCategory[idx][digit - 1] | 0;
+    if (category > 0) {
+      spanEl.classList.add(categoryClassName(category));
     }
     if (candFlashSetMask[idx] & bit) {
       spanEl.classList.add("flashSetCand");
     }
     if (candFlashRemoveMask[idx] & bit) {
       spanEl.classList.add("flashRemoveCand");
-    }
-    if (candFlashHoldMask[idx] & bit) {
-      spanEl.classList.add("holdFlash");
     }
   }
 
@@ -546,6 +638,7 @@ var business_logic = (() => {
       }
       cellEl.classList.remove("flashSet");
       cellEl.classList.remove("flashRemove");
+      removeSourceCategoryClasses(cellEl);
       const candsEl = cellEl.querySelector(".cands");
       if (!candsEl) {
         continue;
@@ -554,33 +647,47 @@ var business_logic = (() => {
         candEl.classList.remove("flashSource");
         candEl.classList.remove("flashSetCand");
         candEl.classList.remove("flashRemoveCand");
-        candEl.classList.remove("holdFlash");
+        removeSourceCategoryClasses(candEl);
       }
     }
   }
 
-  function highlightSourcesAndOps(ev, hold) {
+  function highlightSourcesAndOps(ev) {
     if (!ev) {
       return;
     }
 
-    const isHold = !!hold;
+    const groups = splitSourceGroups(ev.sources || []);
+    let sourceIndex = 0;
 
-    // Sources: green
-    if (ev.sources) {
-      for (const s of ev.sources) {
-        const idxList = s.cells.idxs;
-        const digits = maskToDigits(s.mask);
+    // Sources
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+      const group = groups[groupIndex];
+      for (let groupPos = 0; groupPos < group.length; groupPos++) {
+        const s = group[groupPos];
+        const category = resolveSourceCategory(ev, s, sourceIndex, groupIndex, groupPos);
+        sourceIndex++;
 
-        for (const idx of idxList) {
-          addCandidateFlashMask(idx, "source", s.mask, isHold);
-          for (const d of digits) {
-            const el = getCandidateElement(idx, d);
-            if (el) {
-              applyCandidateFlashClasses(el, idx, d);
+        if (s.cells && s.cells.idxs && s.cells.idxs.length > 0) {
+          for (const idx of s.cells.idxs) {
+            setCellSourceFlash(idx, category);
+            addCandidateFlashMask(idx, "source", s.mask, category);
+            const digits = maskToDigits(s.mask);
+            for (const d of digits) {
+              const el = getCandidateElement(idx, d);
+              if (el) {
+                applyCandidateFlashClasses(el, idx, d);
+              }
             }
           }
         }
+      }
+    }
+
+    for (let idx = 0; idx < 81; idx++) {
+      const cellEl = gridEl.children[idx];
+      if (cellEl) {
+        applyCellFlashClasses(cellEl, idx);
       }
     }
 
@@ -590,7 +697,7 @@ var business_logic = (() => {
         const idx = op.idx;
 
         if (ev.type === "setValue") {
-          addCandidateFlashMask(idx, "set", op.mask, isHold);
+          addCandidateFlashMask(idx, "set", op.mask);
 
           const d = maskToSingleDigit(op.mask);
           if (d) {
@@ -600,7 +707,7 @@ var business_logic = (() => {
             }
           }
         } else if (ev.type === "removeCandidate") {
-          addCandidateFlashMask(idx, "remove", op.mask, isHold);
+          addCandidateFlashMask(idx, "remove", op.mask);
 
           const digits = maskToDigits(op.mask);
           for (const d of digits) {
@@ -1394,7 +1501,7 @@ var business_logic = (() => {
 
     clearAllEventHighlights();
     if (entry.ev) {
-      highlightSourcesAndOps(entry.ev, true);
+      highlightSourcesAndOps(entry.ev);
     }
 
     // Mark active
@@ -1428,74 +1535,23 @@ var business_logic = (() => {
 
   function formatEventLog(ev) {
     // Returns { title, bodyHtml } for appendLogEntry.
-    const reasonName = ev.reason || `Reason ${ev.reason}`;
-    const typeName = (ev.type == "setValue") ? "Set" : (ev.type == "removeCandidate") ? "Remove" : "Event";
+    // Different implementation for each technique, found in formatter.js
+    return formatEventLogByReason(ev);
+  }
 
-    // Dispatcher hook: allow per-technique formatting later.
-    if (typeof formatEventLogByReason === "function") {
-      const custom = formatEventLogByReason(ev);
-      if (custom) {
-        return custom;
-      }
-    }
-
-    let title = `${reasonName}`;
-    if (!title || title === "undefined") {
-      title = `${typeName}`;
-    }
-
-    const parts = [];
-
-    // Sources (optional)
-    if (ev.sources && ev.sources.length > 0) {
-      parts.push(`<div><span class="logCellRef">Sources</span></div>`);
-      for (const s of ev.sources) {
-        const ref = formatEurekaCellCode(s.cells);
-        const digs = maskToDigits(s.mask);
-        if (digs.length == 0) {
-          continue;
-        }
-        parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> : {${escapeHtml(digs.join(","))}}</div>`);
-      }
-      parts.push(`<div style="margin-top:6px;"><span class="logCellRef">Ops</span></div>`);
-    }
-
-    // Operations
-    if (!ev.ops || ev.ops.length === 0) {
-      parts.push(`<div>Neniu operacio.</div>`);
-      return { title, bodyHtml: parts.join("") };
-    }
-
-    if (ev.type === "setValue") {
-      for (const op of ev.ops) {
-        const d = maskToSingleDigit(op.mask);
-        const ref = idxToRef(op.idx);
-        if (!d) {
-          const digs = maskToDigits(op.mask);
-          parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> <span class="logOpSet">=</span> <span class="logOpSet">${escapeHtml(digs.join(","))}</span></div>`);
-        } else {
-          parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> <span class="logOpSet">=</span> <span class="logOpSet">${d}</span></div>`);
-        }
-      }
-    } else if (ev.type === "removeCandidate") {
-      for (const op of ev.ops) {
-        const ref = idxToRef(op.idx);
-        const digs = maskToDigits(op.mask);
-        if (digs.length > 1) {
-          parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> <span class="logOpRemove">&lt;&gt;</span> <span class="logOpRemove">{${escapeHtml(digs.join(","))}}</span></div>`);
-        } else {
-          parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> <span class="logOpRemove">&lt;&gt;</span> <span class="logOpRemove">${digs[0]}</span></div>`);
-        }
-      }
-    } else {
-      for (const op of ev.ops) {
-        const ref = idxToRef(op.idx);
-        const digs = maskToDigits(op.mask);
-        parts.push(`<div><span class="logCellRef">${escapeHtml(ref)}</span> ${escapeHtml(digs.join(","))}</div>`);
-      }
-    }
-
-    return { title, bodyHtml: parts.join("") };
+  // Functions visible to formatter.js
+  if (typeof window !== "undefined") {
+    window.SudorixFormatterContext = {
+      escapeHtml,
+      idxToRef,
+      maskToDigits,
+      maskToSingleDigit,
+      formatEurekaCellCode,
+      splitSourceGroups,
+      normalizeSourceCategory,
+      resolveSourceCategory,
+      sourceIsDelimiter
+    };
   }
 
   function setSolverStatus(ok, text) {
@@ -1751,6 +1807,7 @@ var business_logic = (() => {
 
     el.classList.toggle("selected", idx === selectedIdx);
     el.classList.toggle("given", board.isGiven(idx));
+    applyCellFlashClasses(el, idx);
 
     applyCellBaseBackground(el, idx);
     // Clear existing content
@@ -1901,6 +1958,7 @@ var business_logic = (() => {
 
     el.classList.toggle("selected", idx === selectedIdx);
     el.classList.toggle("given", board.isGiven(idx));
+    applyCellFlashClasses(el, idx);
 
     applyCellBaseBackground(el, idx);
 
@@ -2217,7 +2275,7 @@ var business_logic = (() => {
     // Phase 1: highlight sources + operations BEFORE applying.
     renderAll();
     clearAllEventHighlights();
-    highlightSourcesAndOps(ev, false);
+    highlightSourcesAndOps(ev);
 
     setTimeout(() => {
       // Phase 2: apply, then highlight again on the updated grid.
@@ -2226,7 +2284,7 @@ var business_logic = (() => {
       const did = applyEvent(ev);
       renderAll();
       clearAllEventHighlights();
-      highlightSourcesAndOps(ev, false);
+      highlightSourcesAndOps(ev);
 
       setTimeout(() => {
         clearAllEventHighlights();
@@ -2320,7 +2378,7 @@ var business_logic = (() => {
 
       renderAll();
       clearAllEventHighlights();
-      highlightSourcesAndOps(ev, true);
+      highlightSourcesAndOps(ev);
       logEventOnce(ev);
       return;
     }
@@ -2334,7 +2392,7 @@ var business_logic = (() => {
     const did = applyEvent(ev);
     renderAll();
     clearAllEventHighlights();
-    highlightSourcesAndOps(ev, false);
+    highlightSourcesAndOps(ev);
 
     setTimeout(() => {
       clearAllEventHighlights();

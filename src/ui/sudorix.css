@@ -57,6 +57,31 @@
       --flashSourceGlow: rgba(124, 255, 0, 0.35);
       --flashRemoveOutline2: rgba(255, 77, 77, 0.95);
       --flashRemoveGlow2: rgba(255, 77, 77, 0.35);
+
+      --cat1Outline: rgba(124, 255, 0, 0.95);
+      --cat1Glow: rgba(124, 255, 0, 0.35);
+      --cat2Outline: rgba(76, 176, 255, 0.95);
+      --cat2Glow: rgba(76, 176, 255, 0.30);
+      --cat3Outline: rgba(180, 132, 255, 0.95);
+      --cat3Glow: rgba(180, 132, 255, 0.30);
+      --cat4Outline: rgba(255, 225, 80, 0.95);
+      --cat4Glow: rgba(255, 225, 80, 0.32);
+      --cat5Outline: rgba(0, 232, 255, 0.95);
+      --cat5Glow: rgba(0, 232, 255, 0.30);
+      --cat6Outline: rgba(255, 163, 72, 0.95);
+      --cat6Glow: rgba(255, 163, 72, 0.30);
+      --cat7Outline: rgba(162, 110, 76, 0.95);
+      --cat7Glow: rgba(162, 110, 76, 0.30);
+      --cat8Outline: rgba(255, 120, 190, 0.95);
+      --cat8Glow: rgba(255, 120, 190, 0.30);
+      --cat9Outline: rgba(155, 255, 158, 0.95);
+      --cat9Glow: rgba(155, 255, 158, 0.30);
+      --cat10Outline: rgba(160, 255, 255, 0.95);
+      --cat10Glow: rgba(160, 255, 255, 0.30);
+      --cat11Outline: rgba(255, 196, 138, 0.95);
+      --cat11Glow: rgba(255, 196, 138, 0.30);
+      --cat12Outline: rgba(214, 214, 214, 0.95);
+      --cat12Glow: rgba(214, 214, 214, 0.30);
     }
 
     * { box-sizing: border-box; }
@@ -391,9 +416,31 @@
       box-shadow: 0 0 0 2px var(--flashRemoveGlow2);
     }
 
-    .cand.holdFlash {
-      /* keep highlight visible in step-preview mode */
-    }
+    .cand.flashCategory1 { outline: 2px solid var(--cat1Outline); box-shadow: 0 0 0 2px var(--cat1Glow); }
+    .cand.flashCategory2 { outline: 2px solid var(--cat2Outline); box-shadow: 0 0 0 2px var(--cat2Glow); }
+    .cand.flashCategory3 { outline: 2px solid var(--cat3Outline); box-shadow: 0 0 0 2px var(--cat3Glow); }
+    .cand.flashCategory4 { outline: 2px solid var(--cat4Outline); box-shadow: 0 0 0 2px var(--cat4Glow); }
+    .cand.flashCategory5 { outline: 2px solid var(--cat5Outline); box-shadow: 0 0 0 2px var(--cat5Glow); }
+    .cand.flashCategory6 { outline: 2px solid var(--cat6Outline); box-shadow: 0 0 0 2px var(--cat6Glow); }
+    .cand.flashCategory7 { outline: 2px solid var(--cat7Outline); box-shadow: 0 0 0 2px var(--cat7Glow); }
+    .cand.flashCategory8 { outline: 2px solid var(--cat8Outline); box-shadow: 0 0 0 2px var(--cat8Glow); }
+    .cand.flashCategory9 { outline: 2px solid var(--cat9Outline); box-shadow: 0 0 0 2px var(--cat9Glow); }
+    .cand.flashCategory10 { outline: 2px solid var(--cat10Outline); box-shadow: 0 0 0 2px var(--cat10Glow); }
+    .cand.flashCategory11 { outline: 2px solid var(--cat11Outline); box-shadow: 0 0 0 2px var(--cat11Glow); }
+    .cand.flashCategory12 { outline: 2px solid var(--cat12Outline); box-shadow: 0 0 0 2px var(--cat12Glow); }
+
+    .logSourceCategory1 { color: var(--cat1Outline); }
+    .logSourceCategory2 { color: var(--cat2Outline); }
+    .logSourceCategory3 { color: var(--cat3Outline); }
+    .logSourceCategory4 { color: var(--cat4Outline); }
+    .logSourceCategory5 { color: var(--cat5Outline); }
+    .logSourceCategory6 { color: var(--cat6Outline); }
+    .logSourceCategory7 { color: var(--cat7Outline); }
+    .logSourceCategory8 { color: var(--cat8Outline); }
+    .logSourceCategory9 { color: var(--cat9Outline); }
+    .logSourceCategory10 { color: var(--cat10Outline); }
+    .logSourceCategory11 { color: var(--cat11Outline); }
+    .logSourceCategory12 { color: var(--cat12Outline); }
 
     /* Candidates clickable only in Kolorigado (visual cue) */
     .sudoku.candClickable .cand {
