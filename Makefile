@@ -26,7 +26,7 @@ PYTHON          ?= python3
 # Debug toggle:
 #   make DEBUG=1
 ifeq ($(DEBUG),1)
-  DEBUG_FLAG := -DDEBUG
+  DEBUG_FLAG := -DDEBUG -g
 else
   DEBUG_FLAG :=
 endif

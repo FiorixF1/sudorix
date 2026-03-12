@@ -6,6 +6,7 @@
 #include <initializer_list>
 #include <ostream>
 #include <vector>
+#include "debug.hpp"
 
 #if __has_include(<bit>)
   #include <bit>
@@ -42,6 +43,7 @@ private:
 
   static constexpr void check_range(int x) {
     if (x < MinValue || x > MaxValue) {
+      console_log("MinValue = %d, MaxValue = %d, input = %d", MinValue, MaxValue, x);
       throw std::out_of_range("BitmaskSet: value out of configured range");
     }
   }

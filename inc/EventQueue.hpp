@@ -10,7 +10,7 @@ class EventQueue
 public:
   EventQueue();
 
-  void enqueue(SudokuBoard &board, Event &event);
+  bool enqueue(SudokuBoard &board, Event &event);
 
   bool dequeue(Event &ev);
 

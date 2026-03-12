@@ -234,7 +234,7 @@ static void techHiddenPairsRowColumn(SudokuBoard &board) {
   for (const Unit &row : board.getRows()) {
     techHiddenPairs(board, row);
   }
-  for (const Unit &column: board.getColumns()) {
+  for (const Unit &column : board.getColumns()) {
     techHiddenPairs(board, column);
   }
 }
@@ -277,7 +277,7 @@ static void techHiddenTriples(SudokuBoard &board) {
   for (const Unit &row : board.getRows()) {
     scanUnit(row);
   }
-  for (const Unit &column: board.getColumns()) {
+  for (const Unit &column : board.getColumns()) {
     scanUnit(column);
   }
   for (const Unit &box : board.getBoxes()) {
@@ -403,6 +403,324 @@ static void techBoxLineReduction(SudokuBoard &board) {
   }
 }
 
+static void techXWing(SudokuBoard &board) {
+  auto scanDigit = [&](Digit digit) -> void
+  {
+    // rows
+    const std::vector<Unit> &rows = board.getRows();
+    for (Location a = 0; a < 8; ++a) {
+      // get cells where the digit is present in the row
+      const Unit &row = rows[a];
+      CellSet positions = board.getPositionsOfDigit(row, digit);
+
+      int posCount = positions.size();
+      if (posCount != 2) {
+        continue; // X-Wing requires exactly two positions
+      }
+
+      // get the columns corresponding to the positions of the digit
+      std::vector<int> positionsList = positions.to_vector();
+      Location ca0 = SudokuBoard::getColumnLocation(positionsList[0]);
+      Location ca1 = SudokuBoard::getColumnLocation(positionsList[1]);
+
+      for (Location b = a+1; b < 9; ++b) {
+        const Unit &row = rows[b];
+        CellSet positionsInner = board.getPositionsOfDigit(row, digit);
+
+        int posCount = positionsInner.size();
+        if (posCount != 2) {
+          continue;
+        }
+      
+        std::vector<int> positionsInnerList = positionsInner.to_vector();
+        Location cb0 = SudokuBoard::getColumnLocation(positionsInnerList[0]);
+        Location cb1 = SudokuBoard::getColumnLocation(positionsInnerList[1]);
+        if (ca0 == cb0 && ca1 == cb1) {
+          // X-Wing spotted
+          Event event(EventType::RemoveCandidate, ReasonId::XWing);
+          // the source is the four cells forming the X-Wing, unit by unit
+          event.addSource(positions, digit);
+          event.addSource(positionsInner, digit);
+          // remove instances of the digit from the two columns, excluding the two rows
+          CellSet set = (SudokuBoard::getColumnByLocation(ca0) | SudokuBoard::getColumnByLocation(ca1)) - 
+                        (rows[a] | rows[b]);
+          for (Cell idx : set) {
+            event.addOperation(idx, digit);
+          }
+          if (g_eventQueue.enqueue(board, event)) return;
+        }
+
+        // look for skyscrapers, A and D are the ends of the chain
+        Cell A = -1;
+        Cell B = -1;
+        Cell C = -1;
+        Cell D = -1;
+        if (ca0 == cb0 && ca1 != cb1) {
+          A = positionsList[1];
+          B = positionsList[0];
+          C = positionsInnerList[0];
+          D = positionsInnerList[1];
+        } else if (ca0 != cb0 && ca1 == cb1) {
+          A = positionsList[0];
+          B = positionsList[1];
+          C = positionsInnerList[1];
+          D = positionsInnerList[0];
+        }
+
+        if (A != -1 && D != -1) {
+          // Skyscraper spotted
+          Event event(EventType::RemoveCandidate, ReasonId::Skyscraper);
+          // the source is the four cells forming the skyscraper, following the chain
+          event.addSource(A, digit);
+          event.addSource(B, digit);
+          event.addSource(C, digit);
+          event.addSource(D, digit);
+          // remove instances of the digit from peers of the ends
+          CellSet set = board.getPeersContaining(CellSet({A, D}), digit);
+          for (Cell idx : set) {
+            event.addOperation(idx, digit);
+          }
+          if (g_eventQueue.enqueue(board, event)) return;
+        }
+      }
+    }
+
+    // columns
+    const std::vector<Unit> &columns = board.getColumns();
+    for (Location a = 0; a < 8; ++a) {
+      // get cells where the digit is present in the column
+      const Unit &column = columns[a];
+      CellSet positions = board.getPositionsOfDigit(column, digit);
+
+      int posCount = positions.size();
+      if (posCount != 2) {
+        continue; // X-Wing requires exactly two positions
+      }
+
+      // get the rows corresponding to the positions of the digit
+      std::vector<int> positionsList = positions.to_vector();
+      Location ra0 = SudokuBoard::getRowLocation(positionsList[0]);
+      Location ra1 = SudokuBoard::getRowLocation(positionsList[1]);
+
+      for (Location b = a+1; b < 9; ++b) {
+        const Unit &column = columns[b];
+        CellSet positionsInner = board.getPositionsOfDigit(column, digit);
+
+        int posCount = positionsInner.size();
+        if (posCount != 2) {
+          continue;
+        }
+      
+        std::vector<int> positionsInnerList = positionsInner.to_vector();
+        Location rb0 = SudokuBoard::getRowLocation(positionsInnerList[0]);
+        Location rb1 = SudokuBoard::getRowLocation(positionsInnerList[1]);
+        if (ra0 == rb0 && ra1 == rb1) {
+          // X-Wing spotted
+          Event event(EventType::RemoveCandidate, ReasonId::XWing);
+          // the source is the four cells forming the X-Wing, unit by unit
+          event.addSource(positions, digit);
+          event.addSource(positionsInner, digit);
+          // remove instances of the digit from the two rows, excluding the two columns
+          CellSet set = (SudokuBoard::getRowByLocation(ra0) | SudokuBoard::getRowByLocation(ra1)) - 
+                        (columns[a] | columns[b]);
+          for (Cell idx : set) {
+            event.addOperation(idx, digit);
+          }
+          if (g_eventQueue.enqueue(board, event)) return;
+        }
+
+        // look for skyscrapers, A and D are the ends of the chain
+        Cell A = -1;
+        Cell B = -1;
+        Cell C = -1;
+        Cell D = -1;
+        if (ra0 == rb0 && ra1 != rb1) {
+          A = positionsList[1];
+          B = positionsList[0];
+          C = positionsInnerList[0];
+          D = positionsInnerList[1];
+        } else if (ra0 != rb0 && ra1 == rb1) {
+          A = positionsList[0];
+          B = positionsList[1];
+          C = positionsInnerList[1];
+          D = positionsInnerList[0];
+        }
+
+        if (A != -1 && D != -1) {
+          // Skyscraper spotted
+          Event event(EventType::RemoveCandidate, ReasonId::Skyscraper);
+          // the source is the four cells forming the skyscraper, following the chain
+          event.addSource(A, digit);
+          event.addSource(B, digit);
+          event.addSource(C, digit);
+          event.addSource(D, digit);
+          // remove instances of the digit from peers of the ends
+          CellSet set = board.getPeersContaining(CellSet({A, D}), digit);
+          for (Cell idx : set) {
+            event.addOperation(idx, digit);
+          }
+          if (g_eventQueue.enqueue(board, event)) return;
+        }
+      }
+    }
+  };
+
+  for (Digit digit : board.getUnsolvedDigits()) {
+    scanDigit(digit);
+  }
+}
+
+static void techSwordfish(SudokuBoard &board) {
+  auto scanDigit = [&](Digit digit) -> void
+  {
+    // rows
+    const std::vector<Unit> &rows = board.getRows();
+    for (Location a = 0; a < 7; ++a) {
+      // get cells where the digit is present in the row
+      const Unit &row = rows[a];
+      CellSet positions = board.getPositionsOfDigit(row, digit);
+
+      int posCount = positions.size();
+      if (posCount < 2 || posCount > 3) {
+        continue; // Swordfish requires up to three positions
+      }
+
+      // get the columns corresponding to the positions of the digit
+      LocationSet locationSet;
+      for (Cell idx : positions) {
+        locationSet.insert(SudokuBoard::getColumnLocation(idx));
+      }
+
+      for (Location b = a+1; b < 8; ++b) {
+        const Unit &row = rows[b];
+        CellSet positionsInner = board.getPositionsOfDigit(row, digit);
+
+        int posCount = positionsInner.size();
+        if (posCount < 2 || posCount > 3) {
+          continue;
+        }
+
+        LocationSet locationInnerSet;
+        for (Cell idx : positionsInner) {
+          locationInnerSet.insert(SudokuBoard::getColumnLocation(idx));
+        }
+
+        if ((locationSet | locationInnerSet).size() == 3) {
+          for (Location c = b+1; c < 9; ++c) {
+            const Unit &row = rows[c];
+            CellSet positionsInner2 = board.getPositionsOfDigit(row, digit);
+
+            int posCount = positionsInner2.size();
+            if (posCount < 2 || posCount > 3) {
+              continue;
+            }
+
+            LocationSet locationInner2Set;
+            for (Cell idx : positionsInner2) {
+              locationInner2Set.insert(SudokuBoard::getColumnLocation(idx));
+            }
+
+            if ((locationSet | locationInnerSet | locationInner2Set).size() == 3) {
+              // Swordfish spotted
+              Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
+              // the source is the cells forming the Swordfish, unit by unit
+              CellSet sourceSet = positions | positionsInner | positionsInner2;
+              event.addSource(positions, digit);
+              event.addSource(positionsInner, digit);
+              event.addSource(positionsInner2, digit);
+              // remove instances of the digit from the three columns, excluding the three rows
+              CellSet set;
+              for (Cell idx : sourceSet) {
+                set |= board.getColumnByCell(idx);
+              }
+              set -= sourceSet;
+              for (Cell idx : set) {
+                event.addOperation(idx, digit);
+              }
+              if (g_eventQueue.enqueue(board, event)) return;
+            }
+          }
+        }
+      }
+    }
+
+    // columns
+    const std::vector<Unit> &columns = board.getColumns();
+    for (Location a = 0; a < 7; ++a) {
+      // get cells where the digit is present in the column
+      const Unit &column = columns[a];
+      CellSet positions = board.getPositionsOfDigit(column, digit);
+
+      int posCount = positions.size();
+      if (posCount < 2 || posCount > 3) {
+        continue; // Swordfish requires up to three positions
+      }
+
+      // get the rows corresponding to the positions of the digit
+      LocationSet locationSet;
+      for (Cell idx : positions) {
+        locationSet.insert(SudokuBoard::getRowLocation(idx));
+      }
+
+      for (Location b = a+1; b < 8; ++b) {
+        const Unit &column = columns[b];
+        CellSet positionsInner = board.getPositionsOfDigit(column, digit);
+
+        int posCount = positionsInner.size();
+        if (posCount < 2 || posCount > 3) {
+          continue;
+        }
+
+        LocationSet locationInnerSet;
+        for (Cell idx : positionsInner) {
+          locationInnerSet.insert(SudokuBoard::getRowLocation(idx));
+        }
+
+        if ((locationSet | locationInnerSet).size() == 3) {
+          for (Location c = b+1; c < 9; ++c) {
+            const Unit &column = columns[c];
+            CellSet positionsInner2 = board.getPositionsOfDigit(column, digit);
+
+            int posCount = positionsInner2.size();
+            if (posCount < 2 || posCount > 3) {
+              continue;
+            }
+
+            LocationSet locationInner2Set;
+            for (Cell idx : positionsInner2) {
+              locationInner2Set.insert(SudokuBoard::getRowLocation(idx));
+            }
+
+            if ((locationSet | locationInnerSet | locationInner2Set).size() == 3) {
+              // Swordfish spotted
+              Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
+              // the source is the cells forming the Swordfish, unit by unit
+              CellSet sourceSet = positions | positionsInner | positionsInner2;
+              event.addSource(positions, digit);
+              event.addSource(positionsInner, digit);
+              event.addSource(positionsInner2, digit);
+              // remove instances of the digit from the three rows, excluding the three columns
+              CellSet set;
+              for (Cell idx : sourceSet) {
+                set |= board.getRowByCell(idx);
+              }
+              set -= sourceSet;
+              for (Cell idx : set) {
+                event.addOperation(idx, digit);
+              }
+              if (g_eventQueue.enqueue(board, event)) return;
+            }
+          }
+        }
+      }
+    }
+  };
+
+  for (Digit digit : board.getUnsolvedDigits()) {
+    scanDigit(digit);
+  }
+}
+
 static void techBUGPlusOne(SudokuBoard &board) {
   // Condition 1: only bivalue cells except for one trivalue cell
   Cell trivalueCell = -1;
@@ -487,173 +805,6 @@ static void techBUGPlusOne(SudokuBoard &board) {
   }
 }
 
-static void techXWing(SudokuBoard &board) {
-  auto scanDigit = [&](Digit digit) -> void
-  {
-    // rows
-    const std::vector<Unit> &rows = board.getRows();
-    for (Location a = 0; a < 8; ++a) {
-      // get cells where the digit is present in the row
-      const Unit &row = rows[a];
-      CellSet positions = board.getPositionsOfDigit(row, digit);
-
-      int posCount = positions.size();
-      if (posCount != 2) {
-        continue; // X-Wing requires exactly two positions
-      }
-
-      // get the columns corresponding to the positions of the digit
-      std::vector<int> positionsList = positions.to_vector();
-      Location ca0 = SudokuBoard::getColumnLocation(positionsList[0]);
-      Location ca1 = SudokuBoard::getColumnLocation(positionsList[1]);
-
-      for (Location b = a+1; b < 9; ++b) {
-        const Unit &row = rows[b];
-        CellSet positionsInner = board.getPositionsOfDigit(row, digit);
-
-        int posCount = positionsInner.size();
-        if (posCount != 2) {
-          continue;
-        }
-      
-        std::vector<int> positionsInnerList = positionsInner.to_vector();
-        Location cb0 = SudokuBoard::getColumnLocation(positionsInnerList[0]);
-        Location cb1 = SudokuBoard::getColumnLocation(positionsInnerList[1]);
-        if (ca0 == cb0 && ca1 == cb1) {
-          // X-Wing spotted
-          Event event(EventType::RemoveCandidate, ReasonId::XWing);
-          // the source is the four cells forming the X-Wing, unit by unit
-          event.addSource(positions, digit);
-          event.addSource(positionsInner, digit);
-          // remove instances of the digit from the two columns, excluding the two rows
-          CellSet set = (SudokuBoard::getColumnByLocation(ca0) | SudokuBoard::getColumnByLocation(ca1)) - 
-                        (rows[a] | rows[b]);
-          for (Cell idx : set) {
-            event.addOperation(idx, digit);
-          }
-          g_eventQueue.enqueue(board, event);
-        }
-
-        // look for skyscrapers, A and D are the ends of the chain
-        Cell A = -1;
-        Cell B = -1;
-        Cell C = -1;
-        Cell D = -1;
-        if (ca0 == cb0 && ca1 != cb1) {
-          A = positionsList[1];
-          B = positionsList[0];
-          C = positionsInnerList[0];
-          D = positionsInnerList[1];
-        } else if (ca0 != cb0 && ca1 == cb1) {
-          A = positionsList[0];
-          B = positionsList[1];
-          C = positionsInnerList[1];
-          D = positionsInnerList[0];
-        }
-
-        if (A != -1 && D != -1) {
-          // Skyscraper spotted
-          Event event(EventType::RemoveCandidate, ReasonId::Skyscraper);
-          // the source is the four cells forming the skyscraper, following the chain
-          event.addSource(A, digit);
-          event.addSource(B, digit);
-          event.addSource(C, digit);
-          event.addSource(D, digit);
-          // remove instances of the digit from peers of the ends
-          CellSet set = board.getPeersContaining(CellSet({A, D}), digit);
-          for (Cell idx : set) {
-            event.addOperation(idx, digit);
-          }
-          g_eventQueue.enqueue(board, event);
-        }
-      }
-    }
-
-    // columns
-    const std::vector<Unit> &columns = board.getColumns();
-    for (Location a = 0; a < 8; ++a) {
-      // get cells where the digit is present in the column
-      const Unit &column = columns[a];
-      CellSet positions = board.getPositionsOfDigit(column, digit);
-
-      int posCount = positions.size();
-      if (posCount != 2) {
-        continue; // X-Wing requires exactly two positions
-      }
-
-      // get the rows corresponding to the positions of the digit
-      std::vector<int> positionsList = positions.to_vector();
-      Location ra0 = SudokuBoard::getRowLocation(positionsList[0]);
-      Location ra1 = SudokuBoard::getRowLocation(positionsList[1]);
-
-      for (Location b = a+1; b < 9; ++b) {
-        const Unit &column = columns[b];
-        CellSet positionsInner = board.getPositionsOfDigit(column, digit);
-
-        int posCount = positionsInner.size();
-        if (posCount != 2) {
-          continue;
-        }
-      
-        std::vector<int> positionsInnerList = positionsInner.to_vector();
-        Location rb0 = SudokuBoard::getRowLocation(positionsInnerList[0]);
-        Location rb1 = SudokuBoard::getRowLocation(positionsInnerList[1]);
-        if (ra0 == rb0 && ra1 == rb1) {
-          // X-Wing spotted
-          Event event(EventType::RemoveCandidate, ReasonId::XWing);
-          // the source is the four cells forming the X-Wing, unit by unit
-          event.addSource(positions, digit);
-          event.addSource(positionsInner, digit);
-          // remove instances of the digit from the two rows, excluding the two columns
-          CellSet set = (SudokuBoard::getRowByLocation(ra0) | SudokuBoard::getRowByLocation(ra1)) - 
-                        (columns[a] | columns[b]);
-          for (Cell idx : set) {
-            event.addOperation(idx, digit);
-          }
-          g_eventQueue.enqueue(board, event);
-        }
-
-        // look for skyscrapers, A and D are the ends of the chain
-        Cell A = -1;
-        Cell B = -1;
-        Cell C = -1;
-        Cell D = -1;
-        if (ra0 == rb0 && ra1 != rb1) {
-          A = positionsList[1];
-          B = positionsList[0];
-          C = positionsInnerList[0];
-          D = positionsInnerList[1];
-        } else if (ra0 != rb0 && ra1 == rb1) {
-          A = positionsList[0];
-          B = positionsList[1];
-          C = positionsInnerList[1];
-          D = positionsInnerList[0];
-        }
-
-        if (A != -1 && D != -1) {
-          // Skyscraper spotted
-          Event event(EventType::RemoveCandidate, ReasonId::Skyscraper);
-          // the source is the four cells forming the skyscraper, following the chain
-          event.addSource(A, digit);
-          event.addSource(B, digit);
-          event.addSource(C, digit);
-          event.addSource(D, digit);
-          // remove instances of the digit from peers of the ends
-          CellSet set = board.getPeersContaining(CellSet({A, D}), digit);
-          for (Cell idx : set) {
-            event.addOperation(idx, digit);
-          }
-          g_eventQueue.enqueue(board, event);
-        }
-      }
-    }
-  };
-
-  for (Digit digit : board.getUnsolvedDigits()) {
-    scanDigit(digit);
-  }
-}
-
 static void techXYWing(SudokuBoard &board) {
   CellSet bivalues = board.getBivalues();
   for (Cell a : bivalues) {
@@ -684,7 +835,7 @@ static void techXYWing(SudokuBoard &board) {
             for (Cell idx : set) {
               event.addOperation(idx, z);
             }
-            g_eventQueue.enqueue(board, event);
+            if (g_eventQueue.enqueue(board, event)) return;
           }
         }
       }
@@ -723,162 +874,11 @@ static void techXYZWing(SudokuBoard &board) {
             for (Cell idx : set) {
               event.addOperation(idx, z);
             }
-            g_eventQueue.enqueue(board, event);
+            if (g_eventQueue.enqueue(board, event)) return;
           }
         }
       }
     }
-  }
-}
-
-static void techSwordfish(SudokuBoard &board) {
-  auto scanDigit = [&](Digit digit) -> void
-  {
-    // rows
-    const std::vector<Unit> &rows = board.getRows();
-    for (Location a = 0; a < 7; ++a) {
-      // get cells where the digit is present in the row
-      const Unit &row = rows[a];
-      CellSet positions = board.getPositionsOfDigit(row, digit);
-
-      int posCount = positions.size();
-      if (posCount < 2 || posCount > 3) {
-        continue; // Swordfish requires up to three positions
-      }
-
-      // get the columns corresponding to the positions of the digit
-      LocationSet locationSet;
-      for (Cell idx : positions) {
-        locationSet.insert(SudokuBoard::getColumnLocation(idx));
-      }
-
-      for (Location b = a+1; b < 8; ++b) {
-        const Unit &row = rows[b];
-        CellSet positionsInner = board.getPositionsOfDigit(row, digit);
-
-        int posCount = positionsInner.size();
-        if (posCount < 2 || posCount > 3) {
-          continue;
-        }
-
-        LocationSet locationInnerSet;
-        for (Cell idx : positionsInner) {
-          locationInnerSet.insert(SudokuBoard::getColumnLocation(idx));
-        }
-
-        if ((locationSet | locationInnerSet).size() == 3) {
-          for (Location c = b+1; c < 9; ++c) {
-            const Unit &row = rows[c];
-            CellSet positionsInner2 = board.getPositionsOfDigit(row, digit);
-
-            int posCount = positionsInner2.size();
-            if (posCount < 2 || posCount > 3) {
-              continue;
-            }
-
-            LocationSet locationInner2Set;
-            for (Cell idx : positionsInner2) {
-              locationInner2Set.insert(SudokuBoard::getColumnLocation(idx));
-            }
-
-            if ((locationSet | locationInnerSet | locationInner2Set).size() == 3) {
-              // Swordfish spotted
-              Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
-              // the source is the cells forming the Swordfish, unit by unit
-              CellSet sourceSet = positions | positionsInner | positionsInner2;
-              event.addSource(positions, digit);
-              event.addSource(positionsInner, digit);
-              event.addSource(positionsInner2, digit);
-              // remove instances of the digit from the three columns, excluding the three rows
-              CellSet set;
-              for (Cell idx : sourceSet) {
-                set |= board.getColumnByCell(idx);
-              }
-              set -= sourceSet;
-              for (Cell idx : set) {
-                event.addOperation(idx, digit);
-              }
-              g_eventQueue.enqueue(board, event);
-            }
-          }
-        }
-      }
-    }
-
-    // columns
-    const std::vector<Unit> &columns = board.getColumns();
-    for (Location a = 0; a < 7; ++a) {
-      // get cells where the digit is present in the column
-      const Unit &column = columns[a];
-      CellSet positions = board.getPositionsOfDigit(column, digit);
-
-      int posCount = positions.size();
-      if (posCount < 2 || posCount > 3) {
-        continue; // Swordfish requires up to three positions
-      }
-
-      // get the rows corresponding to the positions of the digit
-      LocationSet locationSet;
-      for (Cell idx : positions) {
-        locationSet.insert(SudokuBoard::getRowLocation(idx));
-      }
-
-      for (Location b = a+1; b < 8; ++b) {
-        const Unit &column = columns[b];
-        CellSet positionsInner = board.getPositionsOfDigit(column, digit);
-
-        int posCount = positionsInner.size();
-        if (posCount < 2 || posCount > 3) {
-          continue;
-        }
-
-        LocationSet locationInnerSet;
-        for (Cell idx : positionsInner) {
-          locationInnerSet.insert(SudokuBoard::getRowLocation(idx));
-        }
-
-        if ((locationSet | locationInnerSet).size() == 3) {
-          for (Location c = b+1; c < 9; ++c) {
-            const Unit &column = columns[c];
-            CellSet positionsInner2 = board.getPositionsOfDigit(column, digit);
-
-            int posCount = positionsInner2.size();
-            if (posCount < 2 || posCount > 3) {
-              continue;
-            }
-
-            LocationSet locationInner2Set;
-            for (Cell idx : positionsInner2) {
-              locationInner2Set.insert(SudokuBoard::getRowLocation(idx));
-            }
-
-            if ((locationSet | locationInnerSet | locationInner2Set).size() == 3) {
-              // Swordfish spotted
-              Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
-              // the source is the cells forming the Swordfish, unit by unit
-              CellSet sourceSet = positions | positionsInner | positionsInner2;
-              event.addSource(positions, digit);
-              event.addSource(positionsInner, digit);
-              event.addSource(positionsInner2, digit);
-              // remove instances of the digit from the three rows, excluding the three columns
-              CellSet set;
-              for (Cell idx : sourceSet) {
-                set |= board.getRowByCell(idx);
-              }
-              set -= sourceSet;
-              for (Cell idx : set) {
-                event.addOperation(idx, digit);
-              }
-              g_eventQueue.enqueue(board, event);
-            }
-          }
-        }
-      }
-    }
-  };
-
-  for (Digit digit : board.getUnsolvedDigits()) {
-    scanDigit(digit);
   }
 }
 

@@ -123,7 +123,7 @@ La **indekso** estas nombro inter 0 kaj 80 por indiki unu ĉelon el la krado, ek
 
 La **ĉelaro** estas kunmetita dateno por prezenti unu aŭ plurajn ĉelojn el unuo. La lastaj kvin bitoj kodas nombron, kiu indikas unuon laŭ tiu ĉi dispartigo:
 
-- `0..8` = Linio
+- `0..8` = Vico
 - `9..17` = Kolumno
 - `18..26` = Bloko
 

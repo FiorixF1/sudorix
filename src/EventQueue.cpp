@@ -6,7 +6,7 @@
 
 EventQueue::EventQueue() = default;
 
-void EventQueue::enqueue(SudokuBoard &board, Event &event) {
+bool EventQueue::enqueue(SudokuBoard &board, Event &event) {
   // filter empty events and operations that would stop the solver loop
   if (event.getNumberOfOperations() > 0) {
     event.ops.erase(
@@ -30,8 +30,10 @@ void EventQueue::enqueue(SudokuBoard &board, Event &event) {
     // check again if the event is valid
     if (event.getNumberOfOperations() > 0) {
       q.push(event);
+      return true;
     }
   }
+  return false;
 }
 
 bool EventQueue::dequeue(Event &ev) {
