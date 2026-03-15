@@ -88,15 +88,15 @@ make run PUZZLES=/path/to/file.txt MODE=full|step
 
 Nuntempe Sudorix povas solvi:
 
-* **30742** enigmojn el **31512** el `Just17.txt`
+* **31268** enigmojn el **31512** el `Just17.txt`
 
-* **168** enigmojn el **50000** el `top50000.txt`
+* **3667** enigmojn el **50000** el `top50000.txt`
 
 ## Etendado de teknikoj
 
 Aldonu novajn teknikojn en `solver.cpp` per realigo de funkcio kun la sekva signaturo:
 
-- `typedef void (*TechniqueFn)(SudokuBoard &);`
+- `typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);`
 
 Ĉiu funkcio povas:
 

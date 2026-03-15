@@ -61,6 +61,8 @@ public:
 
   bool sees(Cell a, Cell b) const;
 
+  bool sees(CellSet a, CellSet b) const;
+
   // --- positions API ---
 
   // given a unit and a digit, tell me which cells contain the digit

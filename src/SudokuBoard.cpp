@@ -1,5 +1,5 @@
 #include "SudokuBoard.hpp"
-#include "utils.hpp"
+#include "types.hpp"
 
 // =========================================================
 // Precomputed indices
@@ -315,6 +315,24 @@ CellSet SudokuBoard::getPeersContaining(const CellSet &idxSet, Digit digit) cons
 
 bool SudokuBoard::sees(Cell a, Cell b) const {
   return PEERS[a].contains(b);
+}
+
+bool SudokuBoard::sees(CellSet a, CellSet b) const {
+  for (auto it = a.begin(); it != a.end(); ++it) {
+    CellSet tmp = this->getPeers(*it);
+    if (!tmp.is_superset_of(b)) {
+      return false;
+    }
+  }
+
+  for (auto it = b.begin(); it != b.end(); ++it) {
+    CellSet tmp = this->getPeers(*it);
+    if (!tmp.is_superset_of(a)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 // --- positions API ---

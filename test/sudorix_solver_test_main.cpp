@@ -1,3 +1,4 @@
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -7,6 +8,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "solver.hpp"
@@ -233,8 +235,36 @@ static int runStepSolveOne(const std::string &in81, std::string *out81, std::str
 
 static void usage(const char *argv0) {
   std::cerr
-      << "Usage: " << argv0 << " <sudoku_file.txt> [--mode=full|step]\n"
+      << "Usage: " << argv0 << " <sudoku_file.txt> [--mode=full|step] [--threads=N]\n"
       << "  Each non-empty, non-comment line must contain 81 chars: digits 0-9 or '.' for empty.\n";
+}
+
+struct TestCase {
+  size_t caseNo;
+  size_t lineNo;
+  std::string input81;
+};
+
+struct TestResult {
+  bool passed = false;
+  size_t caseNo = 0;
+  size_t lineNo = 0;
+  std::string input;
+  std::string output;
+  std::string why;
+};
+
+static std::string formatResult(const TestResult &r) {
+  std::ostringstream oss;
+  oss << "[#" << r.caseNo << " line " << r.lineNo << "] \n"
+      << "INPUT:  " << r.input << "\n"
+      << "OUTPUT: " << r.output << "\n"
+      << "RESULT: " << (r.passed ? "PASSED" : "FAILED");
+  if (!r.passed && !r.why.empty()) {
+    oss << " (" << r.why << ")";
+  }
+  oss << "\n\n";
+  return oss.str();
 }
 
 int main(int argc, char **argv) {
@@ -245,10 +275,20 @@ int main(int argc, char **argv) {
 
   std::string path = argv[1];
   std::string mode = "full";
+  unsigned int threads = std::thread::hardware_concurrency();
+  if (threads == 0) {
+    threads = 1;
+  }
+
   for (int i = 2; i < argc; i++) {
     std::string a = argv[i];
     if (a.rfind("--mode=", 0) == 0) {
       mode = a.substr(std::strlen("--mode="));
+    } else if (a.rfind("--threads=", 0) == 0) {
+      threads = static_cast<unsigned int>(std::strtoul(a.substr(std::strlen("--threads=")).c_str(), nullptr, 10));
+      if (threads == 0) {
+        threads = 1;
+      }
     }
   }
 
@@ -264,12 +304,12 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  size_t total = 0;
-  size_t passed = 0;
-  size_t failed = 0;
+  std::vector<TestCase> cases;
+  std::vector<TestResult> invalidResults;
 
   std::string line;
   size_t lineNo = 0;
+  size_t caseNo = 0;
 
   while (std::getline(fin, line)) {
     lineNo++;
@@ -280,44 +320,99 @@ int main(int argc, char **argv) {
       // Either blank/comment, or invalid. Distinguish:
       std::string t = trim(line);
       if (!t.empty() && t[0] != '#') {
-        total++;
-        failed++;
-        std::cout << "[#" << total << " line " << lineNo << "] "
-                  << "INPUT: " << t << "\n"
-                  << "OUTPUT: " << "(n/a)\n"
-                  << "RESULT: FAILED (" << err << ")\n\n";
+        caseNo++;
+        TestResult r;
+        r.passed = false;
+        r.caseNo = caseNo;
+        r.lineNo = lineNo;
+        r.input = t;
+        r.output = "(n/a)";
+        r.why = err;
+        invalidResults.push_back(std::move(r));
       }
       continue;
     }
 
-    total++;
+    caseNo++;
+    TestCase tc;
+    tc.caseNo = caseNo;
+    tc.lineNo = lineNo;
+    tc.input81 = std::move(in81);
+    cases.push_back(std::move(tc));
+  }
 
-    std::string out81;
-    std::string why;
+  if (!cases.empty() && threads > cases.size()) {
+    threads = static_cast<unsigned int>(cases.size());
+  }
+  if (threads == 0) {
+    threads = 1;
+  }
 
-    int ok = 0;
-    if (mode == "full") {
-      ok = runFullSolveOne(in81, &out81, &why);
-    } else {
-      ok = runStepSolveOne(in81, &out81, &why);
+  std::cerr << "Loaded " << caseNo << " test lines, running " << cases.size()
+            << " valid puzzles on " << threads << " thread(s)...\n";
+
+  std::vector<TestResult> results(cases.size());
+  std::atomic<size_t> nextIndex{0};
+
+  auto worker = [&]() {
+    while (true) {
+      size_t i = nextIndex.fetch_add(1);
+      if (i >= cases.size()) {
+        break;
+      }
+
+      const TestCase &tc = cases[i];
+      TestResult r;
+      r.caseNo = tc.caseNo;
+      r.lineNo = tc.lineNo;
+      r.input = tc.input81;
+
+      std::string out81;
+      std::string why;
+      int ok = 0;
+
+      if (mode == "full") {
+        ok = runFullSolveOne(tc.input81, &out81, &why);
+      } else {
+        ok = runStepSolveOne(tc.input81, &out81, &why);
+      }
+
+      r.passed = (ok != 0);
+      r.output = out81;
+      r.why = why;
+      results[i] = std::move(r);
     }
+  };
 
-    if (ok) {
+  std::vector<std::thread> pool;
+  pool.reserve(threads);
+  for (unsigned int t = 0; t < threads; t++) {
+    pool.emplace_back(worker);
+  }
+  for (auto &th : pool) {
+    th.join();
+  }
+
+  size_t total = 0;
+  size_t passed = 0;
+  size_t failed = 0;
+
+  for (const auto &r : invalidResults) {
+    total++;
+    failed++;
+    std::cout << formatResult(r);
+  }
+
+  for (const auto &r : results) {
+    total++;
+    if (r.passed) {
       passed++;
-      std::cout << "[#" << total << " line " << lineNo << "] " << "\n"
-                << "INPUT:  " << in81 << "\n"
-                << "OUTPUT: " << out81 << "\n"
-                << "RESULT: PASSED\n\n";
     } else {
       failed++;
-      std::cout << "[#" << total << " line " << lineNo << "] " << "\n"
-                << "INPUT:  " << in81 << "\n"
-                << "OUTPUT: " << out81 << "\n"
-                << "RESULT: FAILED (" << why << ")\n\n";
     }
+    std::cout << formatResult(r);
   }
 
   std::cout << "SUMMARY: total=" << total << " passed=" << passed << " failed=" << failed << "\n";
-
   return 0;
 }

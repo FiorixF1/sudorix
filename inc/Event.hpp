@@ -3,7 +3,7 @@
 
 #include <cstdint>
 #include <vector>
-#include "utils.hpp"
+#include "types.hpp"
 
 enum class EventType : uint8_t {
   None = 0,
@@ -43,10 +43,16 @@ enum class ReasonId : uint8_t {
   // advanced fish
   FrankenXWing,
   FrankenSwordfish,
+  FrankenJellyfish,
   FinnedFrankenXWing,
   FinnedFrankenSwordfish,
-  MutantFish,
-  FinnedMutantFish,
+  FinnedFrankenJellyfish,
+  MutantXWing,
+  MutantSwordfish,
+  MutantJellyfish,
+  FinnedMutantXWing,
+  FinnedMutantSwordfish,
+  FinnedMutantJellyfish,
   SiameseFish,
   KrakenFish,
   // single digit patterns

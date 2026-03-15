@@ -96,10 +96,16 @@ enum class ReasonId : uint8_t {
     // advanced fish
     FrankenXWing,
     FrankenSwordfish,
+    FrankenJellyfish,
     FinnedFrankenXWing,
     FinnedFrankenSwordfish,
-    MutantFish,
-    FinnedMutantFish,
+    FinnedFrankenJellyfish,
+    MutantXWing,
+    MutantSwordfish,
+    MutantJellyfish,
+    FinnedMutantXWing,
+    FinnedMutantSwordfish,
+    FinnedMutantJellyfish,
     SiameseFish,
     KrakenFish,
     // single digit patterns
@@ -202,7 +208,7 @@ Ricevas Sudokuon kiel tabelojn enhavantajn kaj la jam solvitajn ĉelojn kaj la k
 
 # Specifo de fontoj por teknikoj
 
-Ĉi tiu sekcio difinas la enteno de la fontoj por ĉiu Sudoku-tekniko.
+Ĉi tiu sekcio difinas la entenon de la fontoj por ĉiu Sudoku-tekniko.
 
 ## Naked / Hidden Single
 
@@ -216,7 +222,7 @@ La plej simplaj teknikoj necesas nur unu fonton:
 
 * Ĉeloj kiuj konsistigas la aron + Ciferoj de la aro
 
-Tio aplikiĝas al: **Naked Set**, **Hidden Set**, **Intersection Removal**.
+Tio aplikiĝas al: **Naked Subset**, **Hidden Subset**, **Intersection Removal**.
 
 ---
 
@@ -224,13 +230,13 @@ Tio aplikiĝas al: **Naked Set**, **Hidden Set**, **Intersection Removal**.
 
 Kaze de fiŝoj, estas tiom da fontoj, kiom estas la bazaj aroj de la fiŝo:
 
-* Ĉeloj de la unua bazan aron + Cifero
-* Ĉeloj de la dua bazan aron + Cifero
+* Ĉeloj de la unua baza aro + Cifero
+* Ĉeloj de la dua baza aro + Cifero
 * ...
 
 Tio aplikiĝas al: **X-Wing** (du aroj), **Swordfish** (tri aroj), **Jellyfish** (kvar aroj).
 
-Se la fiŝo enhavas naĝilojn, necesas aldoni plurajn fontojn:
+Se la fiŝo enhavas naĝilojn, necesas aldoni pluajn fontojn:
 
 * Disigilo
 * Ĉeloj entenantaj la naĝilon + Cifero
@@ -283,5 +289,4 @@ En BUG+1, la fontoj estas la sekvaj:
 
 La solvilo liveras nur **strukturitajn datumojn**.
 
-La reta interfaco interpretas la fontojn por produkti
-legeblajn klarigojn kaj kolorigojn en la krado.
+La reta interfaco interpretas la fontojn por produkti legeblajn klarigojn kaj kolorigojn en la krado.

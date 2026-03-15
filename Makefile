@@ -103,7 +103,7 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 test: $(TEST_BIN)
 
 $(TEST_BIN): $(TEST_MAIN_CPP) $(OBJS) | $(BIN_DIR)
-	$(CXX) $(COMMON_FLAGS) -O2 $^ -o $@
+	$(CXX) $(COMMON_FLAGS) -O2 -pthread $^ -o $@
 	@echo "Built: $@"
 
 run: test

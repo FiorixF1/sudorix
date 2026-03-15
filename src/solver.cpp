@@ -8,7 +8,8 @@
 #include "solver.hpp"
 #include "SudokuBoard.hpp"
 #include "EventQueue.hpp"
-#include "utils.hpp"
+#include "AIC.hpp"
+#include "types.hpp"
 
 static SudokuBoard g_sudokuBoard;
 static EventQueue g_eventQueue;
@@ -17,7 +18,7 @@ static EventQueue g_eventQueue;
 // Techniques
 // =========================================================
 
-static void techFullHouse(SudokuBoard &board) {
+static void techFullHouse(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanUnit = [&](const Unit &unit) -> void
   {
     Cell emptyIdx = -1;
@@ -43,7 +44,7 @@ static void techFullHouse(SudokuBoard &board) {
         missingDigit = *missingDigits.begin();
         Event event(EventType::SetValue, ReasonId::FullHouse);
         event.addOperation(emptyIdx, missingDigit);
-        g_eventQueue.enqueue(board, event);
+        eventQueue.enqueue(board, event);
       }
     }
   };
@@ -59,7 +60,7 @@ static void techFullHouse(SudokuBoard &board) {
   }
 }
 
-static void techNakedSingles(SudokuBoard &board) {
+static void techNakedSingles(SudokuBoard &board, EventQueue &eventQueue) {
   for (Cell i = 0; i < 81; i++) {
     if (board.isSolved(i)) {
       continue;
@@ -68,12 +69,12 @@ static void techNakedSingles(SudokuBoard &board) {
     if (d != 0) {
       Event event(EventType::SetValue, ReasonId::NakedSingle);
       event.addOperation(i, d);
-      g_eventQueue.enqueue(board, event);
+      eventQueue.enqueue(board, event);
     }
   }
 }
 
-static void techNakedPairs(SudokuBoard &board) {
+static void techNakedPairs(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanUnit = [&](const Unit &unit) -> void
   {
     // map each location to its digits in this unit
@@ -97,7 +98,7 @@ static void techNakedPairs(SudokuBoard &board) {
               // remove digits present in a and b from other cells they can see
               event.addOperation(idx, digitsOfLocation[a]);
             }
-            g_eventQueue.enqueue(board, event);
+            eventQueue.enqueue(board, event);
           }
         }
       }
@@ -115,7 +116,7 @@ static void techNakedPairs(SudokuBoard &board) {
   }
 }
 
-static void techNakedTriples(SudokuBoard &board) {
+static void techNakedTriples(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanUnit = [&](const Unit &unit) -> void
   {
     // map each location to its digits in this unit
@@ -142,7 +143,7 @@ static void techNakedTriples(SudokuBoard &board) {
                   // remove digits present in a, b, c from other cells they can see
                   event.addOperation(idx, lockedSet);
                 }
-                g_eventQueue.enqueue(board, event);
+                eventQueue.enqueue(board, event);
               }
             }
           }
@@ -162,7 +163,7 @@ static void techNakedTriples(SudokuBoard &board) {
   }
 }
 
-static void techHiddenSingles(SudokuBoard &board, const Unit &unit) {
+static void techHiddenSingles(SudokuBoard &board, EventQueue &eventQueue, const Unit &unit) {
   // map each digit to its positions in this unit
   CellSet positionsOfDigit[10];
   for (Digit d : board.getUnsolvedDigits()) {
@@ -175,27 +176,27 @@ static void techHiddenSingles(SudokuBoard &board, const Unit &unit) {
       // hidden single spotted
       Event event(EventType::SetValue, ReasonId::HiddenSingle);
       event.addOperation(*positionsOfDigit[a].begin(), a);
-      g_eventQueue.enqueue(board, event);
+      eventQueue.enqueue(board, event);
     }
   }
 }
 
-static void techHiddenSinglesBox(SudokuBoard &board) {
+static void techHiddenSinglesBox(SudokuBoard &board, EventQueue &eventQueue) {
   for (const Unit &box : board.getBoxes()) {
-    techHiddenSingles(board, box);
+    techHiddenSingles(board, eventQueue, box);
   }
 }
 
-static void techHiddenSinglesRowColumn(SudokuBoard &board) {
+static void techHiddenSinglesRowColumn(SudokuBoard &board, EventQueue &eventQueue) {
   for (const Unit &row : board.getRows()) {
-    techHiddenSingles(board, row);
+    techHiddenSingles(board, eventQueue, row);
   }
   for (const Unit &column: board.getColumns()) {
-    techHiddenSingles(board, column);
+    techHiddenSingles(board, eventQueue, column);
   }
 }
 
-static void techHiddenPairs(SudokuBoard &board, const Unit &unit) {
+static void techHiddenPairs(SudokuBoard &board, EventQueue &eventQueue, const Unit &unit) {
   // map each digit to its positions in this unit
   CellSet positionsOfDigit[10];
   for (Digit d : board.getUnsolvedDigits()) {
@@ -217,29 +218,29 @@ static void techHiddenPairs(SudokuBoard &board, const Unit &unit) {
             // remove digits different from a and b from the cells of the pair
             event.addOperation(idx, board.getUnsolvedDigits() - DigitSet({a, b}));
           }
-          g_eventQueue.enqueue(board, event);
+          eventQueue.enqueue(board, event);
         }
       }
     }
   }
 }
 
-static void techHiddenPairsBox(SudokuBoard &board) {
+static void techHiddenPairsBox(SudokuBoard &board, EventQueue &eventQueue) {
   for (const Unit &box : board.getBoxes()) {
-    techHiddenPairs(board, box);
+    techHiddenPairs(board, eventQueue, box);
   }
 }
 
-static void techHiddenPairsRowColumn(SudokuBoard &board) {
+static void techHiddenPairsRowColumn(SudokuBoard &board, EventQueue &eventQueue) {
   for (const Unit &row : board.getRows()) {
-    techHiddenPairs(board, row);
+    techHiddenPairs(board, eventQueue, row);
   }
   for (const Unit &column : board.getColumns()) {
-    techHiddenPairs(board, column);
+    techHiddenPairs(board, eventQueue, column);
   }
 }
 
-static void techHiddenTriples(SudokuBoard &board) {
+static void techHiddenTriples(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanUnit = [&](const Unit &unit) -> void
   {
     // map each digit to its positions in this unit
@@ -265,7 +266,7 @@ static void techHiddenTriples(SudokuBoard &board) {
                   // remove digits different from a, b, c from the cells of the triple
                   event.addOperation(idx, board.getCandidates(idx) - DigitSet({a, b, c}));
                 }
-                g_eventQueue.enqueue(board, event);
+                eventQueue.enqueue(board, event);
               }
             }
           }
@@ -285,7 +286,7 @@ static void techHiddenTriples(SudokuBoard &board) {
   }
 }
 
-static void techPointingSet(SudokuBoard &board) {
+static void techPointingSet(SudokuBoard &board, EventQueue &eventQueue) {
   // For each box and digit:
   //  - if all candidates are confined to a single row within the box,
   //    remove the digit from that row outside the box
@@ -326,7 +327,7 @@ static void techPointingSet(SudokuBoard &board) {
         for (Cell idx : set) {
           event.addOperation(idx, digit);
         }
-        g_eventQueue.enqueue(board, event);
+        eventQueue.enqueue(board, event);
       }
 
       const Location c0 = SudokuBoard::getColumnLocation(*positions.begin());
@@ -348,13 +349,13 @@ static void techPointingSet(SudokuBoard &board) {
         for (Cell idx : set) {
           event.addOperation(idx, digit);
         }
-        g_eventQueue.enqueue(board, event);
+        eventQueue.enqueue(board, event);
       }
     }
   }
 }
 
-static void techBoxLineReduction(SudokuBoard &board) {
+static void techBoxLineReduction(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanUnit = [&](const Unit &unit) -> void
   {
     for (Digit digit : board.getUnsolvedDigits()) {
@@ -390,7 +391,7 @@ static void techBoxLineReduction(SudokuBoard &board) {
         for (Cell idx : set) {
           event.addOperation(idx, digit);
         }
-        g_eventQueue.enqueue(board, event);
+        eventQueue.enqueue(board, event);
       }
     }
   };
@@ -403,7 +404,7 @@ static void techBoxLineReduction(SudokuBoard &board) {
   }
 }
 
-static void techXWing(SudokuBoard &board) {
+static void techXWing(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanDigit = [&](Digit digit) -> void
   {
     // rows
@@ -447,7 +448,7 @@ static void techXWing(SudokuBoard &board) {
           for (Cell idx : set) {
             event.addOperation(idx, digit);
           }
-          if (g_eventQueue.enqueue(board, event)) return;
+          if (eventQueue.enqueue(board, event)) return;
         }
 
         // look for skyscrapers, A and D are the ends of the chain
@@ -480,7 +481,7 @@ static void techXWing(SudokuBoard &board) {
           for (Cell idx : set) {
             event.addOperation(idx, digit);
           }
-          if (g_eventQueue.enqueue(board, event)) return;
+          if (eventQueue.enqueue(board, event)) return;
         }
       }
     }
@@ -526,7 +527,7 @@ static void techXWing(SudokuBoard &board) {
           for (Cell idx : set) {
             event.addOperation(idx, digit);
           }
-          if (g_eventQueue.enqueue(board, event)) return;
+          if (eventQueue.enqueue(board, event)) return;
         }
 
         // look for skyscrapers, A and D are the ends of the chain
@@ -559,7 +560,7 @@ static void techXWing(SudokuBoard &board) {
           for (Cell idx : set) {
             event.addOperation(idx, digit);
           }
-          if (g_eventQueue.enqueue(board, event)) return;
+          if (eventQueue.enqueue(board, event)) return;
         }
       }
     }
@@ -570,7 +571,7 @@ static void techXWing(SudokuBoard &board) {
   }
 }
 
-static void techSwordfish(SudokuBoard &board) {
+static void techSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanDigit = [&](Digit digit) -> void
   {
     // rows
@@ -637,7 +638,7 @@ static void techSwordfish(SudokuBoard &board) {
               for (Cell idx : set) {
                 event.addOperation(idx, digit);
               }
-              if (g_eventQueue.enqueue(board, event)) return;
+              if (eventQueue.enqueue(board, event)) return;
             }
           }
         }
@@ -708,7 +709,7 @@ static void techSwordfish(SudokuBoard &board) {
               for (Cell idx : set) {
                 event.addOperation(idx, digit);
               }
-              if (g_eventQueue.enqueue(board, event)) return;
+              if (eventQueue.enqueue(board, event)) return;
             }
           }
         }
@@ -721,7 +722,7 @@ static void techSwordfish(SudokuBoard &board) {
   }
 }
 
-static void techBUGPlusOne(SudokuBoard &board) {
+static void techBUGPlusOne(SudokuBoard &board, EventQueue &eventQueue) {
   // Condition 1: only bivalue cells except for one trivalue cell
   Cell trivalueCell = -1;
   for (Cell i = 0; i < 81; i++) {
@@ -800,12 +801,12 @@ static void techBUGPlusOne(SudokuBoard &board) {
       event.addSource(sourceSet, solution);
       // set the BUG value in the trivalue cell
       event.addOperation(trivalueCell, solution);
-      g_eventQueue.enqueue(board, event);
+      eventQueue.enqueue(board, event);
     }
   }
 }
 
-static void techXYWing(SudokuBoard &board) {
+static void techXYWing(SudokuBoard &board, EventQueue &eventQueue) {
   CellSet bivalues = board.getBivalues();
   for (Cell a : bivalues) {
     // extreme a has XZ
@@ -835,7 +836,7 @@ static void techXYWing(SudokuBoard &board) {
             for (Cell idx : set) {
               event.addOperation(idx, z);
             }
-            if (g_eventQueue.enqueue(board, event)) return;
+            if (eventQueue.enqueue(board, event)) return;
           }
         }
       }
@@ -843,7 +844,7 @@ static void techXYWing(SudokuBoard &board) {
   }
 }
 
-static void techXYZWing(SudokuBoard &board) {
+static void techXYZWing(SudokuBoard &board, EventQueue &eventQueue) {
   CellSet bivalues = board.getBivalues();
   for (Cell a : bivalues) {
     // extreme a has XZ
@@ -874,7 +875,7 @@ static void techXYZWing(SudokuBoard &board) {
             for (Cell idx : set) {
               event.addOperation(idx, z);
             }
-            if (g_eventQueue.enqueue(board, event)) return;
+            if (eventQueue.enqueue(board, event)) return;
           }
         }
       }
@@ -882,7 +883,31 @@ static void techXYZWing(SudokuBoard &board) {
   }
 }
 
-typedef void (*TechniqueFn)(SudokuBoard &);
+static void techXChain(SudokuBoard &board, EventQueue &eventQueue) {
+  AicGraphBuilder graphBuilder(board);
+  AicGraph graph = graphBuilder.build();
+  AicSearcher searcher(board, graph);
+
+  auto out = searcher.find_aic_eliminations(5);
+
+  Event event(EventType::RemoveCandidate, ReasonId::XChain);
+  for (auto &elim : out) {
+    for (int i = 0; i < elim.reason.nodes.size(); ++i) {
+      AicNode node = elim.reason.nodes[i];
+      CellSet cellSet;
+      DigitSet digitSet;
+      bool isGrouped;
+      deserialize_unitcode(node, cellSet, digitSet, isGrouped);
+      Cell cell = *cellSet.begin();
+      Digit digit = *digitSet.begin();
+      event.addSource(cell, digit);
+    }
+    event.addOperation(elim.cell, elim.digit);
+    if (eventQueue.enqueue(board, event)) return;
+  }
+}
+
+typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);
 
 // nCr(9, 2) = 36
 // nCr(9, 3) = 84
@@ -922,6 +947,7 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techXYWing,
   techXYZWing,
   techSwordfish,
+  techXChain,
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Operation &op) {
@@ -937,108 +963,12 @@ static bool is_operation_applicable(SudokuBoard &board, EventType type, Operatio
   return false;
 }
 
-// ---- Source CellSet serialization (CellSet -> uint32_t) ----
-// Encoding (uint32):
-//   bits[0..4]   : unitId (0..26)
-//   bits[5..13]  : 9-bit mask of cells inside the unit
-// unitId mapping:
-//   0..8   rows
-//   9..17  cols
-//   18..26 boxes
-// Special case when bits[5..13] are all zero: delimiter of group of sources or digit-only source
-static inline uint32_t encode_unit_cells(uint32_t unitId, uint32_t mask9) {
-  return ((mask9 & 0x1FFu) << 5) | (unitId & 0x1Fu);
-}
-
-static bool cellset_common_row(const std::vector<int> &cells, int &rowOut, uint32_t &mask9Out) {
-  if (cells.empty()) return false;
-  int r = SudokuBoard::getRowLocation(cells[0]);
-  uint32_t m = 0;
-  for (int idx : cells) {
-    if (SudokuBoard::getRowLocation(idx) != r) return false;
-    m |= (1u << (uint32_t)SudokuBoard::getColumnLocation(idx));
-  }
-  rowOut = r;
-  mask9Out = m;
-  return true;
-}
-
-static bool cellset_common_col(const std::vector<int> &cells, int &colOut, uint32_t &mask9Out) {
-  if (cells.empty()) return false;
-  int c = SudokuBoard::getColumnLocation(cells[0]);
-  uint32_t m = 0;
-  for (int idx : cells) {
-    if (SudokuBoard::getColumnLocation(idx) != c) return false;
-    m |= (1u << (uint32_t)SudokuBoard::getRowLocation(idx));
-  }
-  colOut = c;
-  mask9Out = m;
-  return true;
-}
-
-static bool cellset_common_box(const std::vector<int> &cells, int &boxOut, uint32_t &mask9Out) {
-  if (cells.empty()) return false;
-  int b = SudokuBoard::getBoxLocation(cells[0]);
-  uint32_t m = 0;
-  for (int idx : cells) {
-    if (SudokuBoard::getBoxLocation(idx) != b) return false;
-    int r = SudokuBoard::getRowLocation(idx) % 3;
-    int c = SudokuBoard::getColumnLocation(idx) % 3;
-    int pos = r * 3 + c;
-    m |= (1u << (uint32_t)pos);
-  }
-  boxOut = b;
-  mask9Out = m;
-  return true;
-}
-
-static std::vector<uint32_t> serialize_cellset_to_unitcodes(const CellSet &cells) {
-  std::vector<uint32_t> out;
-  const std::vector<int> v = cells.to_vector();
-  if (v.empty()) {
-    // special case: encode the empty set as a string of zeroes
-    out.push_back(encode_unit_cells(0, 0));
-    return out;
-  }
-
-  int r = -1, c = -1, b = -1;
-  uint32_t mask9 = 0;
-
-  if (cellset_common_row(v, r, mask9)) {
-    out.push_back(encode_unit_cells((uint32_t)r, mask9));
-    return out;
-  }
-  if (cellset_common_col(v, c, mask9)) {
-    out.push_back(encode_unit_cells((uint32_t)(9 + c), mask9));
-    return out;
-  }
-  if (cellset_common_box(v, b, mask9)) {
-    out.push_back(encode_unit_cells((uint32_t)(18 + b), mask9));
-    return out;
-  }
-
-  // No single common unit: split by box (always possible).
-  uint32_t boxMasks[9] = {0};
-  for (int idx : v) {
-    int bb = SudokuBoard::getBoxLocation(idx);
-    int rr = SudokuBoard::getRowLocation(idx) % 3;
-    int cc = SudokuBoard::getColumnLocation(idx) % 3;
-    int pos = rr * 3 + cc;
-    boxMasks[bb] |= (1u << (uint32_t)pos);
-  }
-  for (int bb = 0; bb < 9; bb++) {
-    if (boxMasks[bb]) {
-      out.push_back(encode_unit_cells((uint32_t)(18 + bb), boxMasks[bb]));
-    }
-  }
-  return out;
-}
-
 // Drain the next event and serialize the operations into out[] as described by API.
 // The function returns only events and operations that are applicable to the current 
 // state of the board. This implies that some events in queue could be discarded.
 // The function will continue the search until the queue is empty.
 static int drain_event(SudokuBoard &board,
+                       EventQueue &eventQueue,
                        uint32_t *out,
                        uint32_t out_words,
                        uint32_t fromPrev) {
@@ -1047,7 +977,7 @@ static int drain_event(SudokuBoard &board,
   }
 
   Event first;
-  if (!g_eventQueue.peek(first)) {
+  if (!eventQueue.peek(first)) {
     out[0] = 0;
     out[1] = 0;
     out[2] = 0;
@@ -1074,7 +1004,7 @@ static int drain_event(SudokuBoard &board,
     return 0;
   }
 
-  g_eventQueue.dequeue(first);
+  eventQueue.dequeue(first);
 
   out[0] = (uint32_t)type;
   out[1] = (uint32_t)reason;
@@ -1112,7 +1042,7 @@ static int drain_event(SudokuBoard &board,
           if (only) {
             Event event(EventType::SetValue, ReasonId::NakedSingle);
             event.addOperation(op.idx, only);
-            g_eventQueue.enqueue(board, event);
+            eventQueue.enqueue(board, event);
           }
         }
       } else if (type == EventType::RemoveCandidate) {
@@ -1123,7 +1053,7 @@ static int drain_event(SudokuBoard &board,
           if (only) {
             Event event(EventType::SetValue, ReasonId::NakedSingle);
             event.addOperation(op.idx, only);
-            g_eventQueue.enqueue(board, event);
+            eventQueue.enqueue(board, event);
           }
         }
       }
@@ -1132,16 +1062,17 @@ static int drain_event(SudokuBoard &board,
   out[3] = opCount;
 
   // If opCount == 0, discard and continue draining.
-  return (opCount > 0) ? 1 : drain_event(board, out, out_words, fromPrev);
+  return (opCount > 0) ? 1 : drain_event(board, eventQueue, out, out_words, fromPrev);
 }
 
 // Run techniques to fill the queue if needed, then return a single event.
 // The drained operations are applied to 'board'.
 static int compute_next_event(SudokuBoard &board,
+                              EventQueue &eventQueue,
                               uint32_t *out,
                               uint32_t out_words) {
   // If we already have pending events, return them immediately.
-  if (drain_event(board, out, out_words, 1u)) {
+  if (drain_event(board, eventQueue, out, out_words, 1u)) {
     return 1;
   }
 
@@ -1150,25 +1081,25 @@ static int compute_next_event(SudokuBoard &board,
   if (board.getNumberOfSolvedCells() < 36) {
     // Cross-hatching order when the grid is mostly empty.
     for (TechniqueFn tech : EASY_TECHNIQUES_SPARSE) {
-      tech(board);
+      tech(board, eventQueue);
       // If something has been generated, drain as "fromPrev=0".
-      if (drain_event(board, out, out_words, 0u)) {
+      if (drain_event(board, eventQueue, out, out_words, 0u)) {
         return 1;
       }
     }
   } else {
     // Classic order when the grid is typically filled with candidates.
     for (TechniqueFn tech : EASY_TECHNIQUES_DENSE) {
-      tech(board);
-      if (drain_event(board, out, out_words, 0u)) {
+      tech(board, eventQueue);
+      if (drain_event(board, eventQueue, out, out_words, 0u)) {
         return 1;
       }
     }
   }
   // Advanced techniques.
   for (TechniqueFn tech : TECHNIQUES) {
-    tech(board);
-    if (drain_event(board, out, out_words, 0u)) {
+    tech(board, eventQueue);
+    if (drain_event(board, eventQueue, out, out_words, 0u)) {
       return 1;
     }
   }
@@ -1308,8 +1239,8 @@ extern "C"
       return 0;
     }
 
-    // Reset queue
-    g_eventQueue = EventQueue();
+    // Instantiate queue
+    EventQueue queue;
 
     // Solve loop using existing stepper:
     // repeatedly compute one event, apply it locally, and continue until stuck.
@@ -1318,7 +1249,7 @@ extern "C"
     const int guardMax = 200000;
 
     while (guard++ < guardMax) {
-      const int ok = compute_next_event(board, tmp, 1024);
+      const int ok = compute_next_event(board, queue, tmp, 1024);
       if (!ok) {
         break;
       }
@@ -1362,7 +1293,7 @@ extern "C"
     }
 
     // Compute one event, apply it locally and return it to the caller.
-    const int ok = compute_next_event(g_sudokuBoard, out, out_words);
+    const int ok = compute_next_event(g_sudokuBoard, g_eventQueue, out, out_words);
     return ok ? 1 : 0;
   }
 
@@ -1384,10 +1315,10 @@ extern "C"
       return 0;
     }
 
-    // Clear internal queue state for this hint computation.
-    g_eventQueue = EventQueue();
+    // Instantiate a new queue for this hint computation.
+    EventQueue queue;
 
-    const int ok = compute_next_event(board, out, out_words);
+    const int ok = compute_next_event(board, queue, out, out_words);
     return ok ? 1 : 0;
   }
 } // extern "C"

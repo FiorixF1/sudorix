@@ -25,6 +25,7 @@
   };
   REGISTRY["X-Wing"] = fishFormatter;
   REGISTRY["Swordfish"] = fishFormatter;
+  REGISTRY["Jellyfish"] = fishFormatter;
 
   const noSourcesFormatter = {
     formatLog(ev, ctx) {
@@ -105,6 +106,7 @@
     }
   };
   REGISTRY["Skyscraper"] = chainFormatter;
+  REGISTRY["X-Chain"] = chainFormatter;
 
   REGISTRY["Simple Coloring"] = {
     formatLog(ev, ctx) {

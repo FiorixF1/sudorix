@@ -1,5 +1,5 @@
 #include "SudokuCell.hpp"
-#include "utils.hpp"
+#include "types.hpp"
 
 // =========================================================
 // SudokuCell
