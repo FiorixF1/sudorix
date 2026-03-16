@@ -45,6 +45,18 @@ struct AicGraph {
   // weak non lo materializziamo tutto: lo calcoliamo on-demand
 };
 
+struct AicConfig {
+  bool useWeakLinks;
+  bool multiDigit;
+  bool useGroupedCells;
+  bool useStrongBivalues;
+  bool useStrongBilocations;
+  bool useWeakInCell;
+  bool useWeakInUnit;
+  int max_depth;
+  std::string pattern;
+};
+
 /* ---------------------------------------------------------------------- */
 
 class AicGraphBuilder {
@@ -52,6 +64,8 @@ public:
   explicit AicGraphBuilder(const SudokuBoard &board);
 
   AicGraph build();
+
+  AicGraph prune(const AicGraph &graph, const AicConfig &config);
 
 private:
   const SudokuBoard &board;
@@ -120,15 +134,16 @@ struct AicParent {
 
 class AicSearcher {
 public:
-  AicSearcher(const SudokuBoard &board, AicGraph &graph);
+  AicSearcher(const SudokuBoard &board, AicGraph &graph, const AicConfig &config);
 
-  std::vector<AicElimination> find_aic_eliminations(int max_depth = 8) const;
+  std::vector<AicElimination> find_aic_eliminations() const;
 
 private:
   const SudokuBoard &board;
   AicGraph &graph; // non const due to []
+  const AicConfig &config;
 
-  std::vector<AicElimination> search_from(AicNode start, int max_depth) const;
+  std::vector<AicElimination> search_from(AicNode start) const;
 
   bool path_contains_node(int state_idx,
                           AicNode node,

@@ -107,6 +107,8 @@
   };
   REGISTRY["Skyscraper"] = chainFormatter;
   REGISTRY["X-Chain"] = chainFormatter;
+  REGISTRY["XY-Chain"] = chainFormatter;
+  REGISTRY["Alternating Inference Chain"] = chainFormatter;
 
   REGISTRY["Simple Coloring"] = {
     formatLog(ev, ctx) {

@@ -883,15 +883,23 @@ static void techXYZWing(SudokuBoard &board, EventQueue &eventQueue) {
   }
 }
 
-static void techXChain(SudokuBoard &board, EventQueue &eventQueue) {
+static void techGenericAIC(SudokuBoard &board,
+                           EventQueue &eventQueue,
+                           const AicConfig &config,
+                           ReasonId reasonId) {
   AicGraphBuilder graphBuilder(board);
   AicGraph graph = graphBuilder.build();
-  AicSearcher searcher(board, graph);
+  // TODO: cache graph instead of rebuilding it each time
+  AicGraph prunedGraph = graphBuilder.prune(graph, config);
+  AicSearcher searcher(board, prunedGraph, config);
 
-  auto out = searcher.find_aic_eliminations(5);
+  auto out = searcher.find_aic_eliminations();
 
-  Event event(EventType::RemoveCandidate, ReasonId::XChain);
+  Event event(EventType::RemoveCandidate, reasonId);
   for (auto &elim : out) {
+    // TODO: se un'eliminazione avviene su più celle find_aic_eliminations ritorna più valori
+    // ma non è un caso gestito bene perché invece qui me le aspetto tutte in un CellSet
+    // Poi devo gestire il caso di eliminazione su cella con strong link -> SetValue
     for (int i = 0; i < elim.reason.nodes.size(); ++i) {
       AicNode node = elim.reason.nodes[i];
       CellSet cellSet;
@@ -905,6 +913,51 @@ static void techXChain(SudokuBoard &board, EventQueue &eventQueue) {
     event.addOperation(elim.cell, elim.digit);
     if (eventQueue.enqueue(board, event)) return;
   }
+}
+
+static void techXChain(SudokuBoard &board, EventQueue &eventQueue) {
+  struct AicConfig config = {
+    .useWeakLinks = true,
+    .multiDigit = false,
+    .useGroupedCells = false,
+    .useStrongBivalues = false,
+    .useStrongBilocations = true,
+    .useWeakInCell = false,
+    .useWeakInUnit = true,
+    .max_depth = 5,
+  };
+
+  techGenericAIC(board, eventQueue, config, ReasonId::XChain);
+}
+
+static void techXYChain(SudokuBoard &board, EventQueue &eventQueue) {
+  struct AicConfig config = {
+    .useWeakLinks = true,
+    .multiDigit = true,
+    .useGroupedCells = false,
+    .useStrongBivalues = true,
+    .useStrongBilocations = false,
+    .useWeakInCell = false,
+    .useWeakInUnit = true,
+    .max_depth = 6,
+  };
+
+  techGenericAIC(board, eventQueue, config, ReasonId::XYChain);
+}
+
+static void techAIC(SudokuBoard &board, EventQueue &eventQueue) {
+  struct AicConfig config = {
+    .useWeakLinks = true,
+    .multiDigit = true,
+    .useGroupedCells = false,
+    .useStrongBivalues = true,
+    .useStrongBilocations = true,
+    .useWeakInCell = true,
+    .useWeakInUnit = true,
+    .max_depth = 8,
+  };
+
+  techGenericAIC(board, eventQueue, config, ReasonId::AIC);
 }
 
 typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);
@@ -948,6 +1001,8 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techXYZWing,
   techSwordfish,
   techXChain,
+  techXYChain,
+  techAIC
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Operation &op) {

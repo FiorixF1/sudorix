@@ -122,6 +122,7 @@ private:
   // Keep track of how many times a digit is solved, speeds up advanced techniques
   std::map<Digit, int> counter;
 
+  // How many cells are solved
   int solvedCells = 0;
 
   bool _recalcAllCandidatesFromValues();

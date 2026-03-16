@@ -319,16 +319,10 @@ bool SudokuBoard::sees(Cell a, Cell b) const {
 
 bool SudokuBoard::sees(CellSet a, CellSet b) const {
   for (auto it = a.begin(); it != a.end(); ++it) {
-    CellSet tmp = this->getPeers(*it);
-    if (!tmp.is_superset_of(b)) {
-      return false;
-    }
-  }
-
-  for (auto it = b.begin(); it != b.end(); ++it) {
-    CellSet tmp = this->getPeers(*it);
-    if (!tmp.is_superset_of(a)) {
-      return false;
+    for (auto ot = b.begin(); ot != b.end(); ++ot) {
+      if (!this->sees(*it, *ot)) {
+        return false;
+      }
     }
   }
 

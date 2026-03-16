@@ -42,6 +42,48 @@ AicGraph AicGraphBuilder::build() {
   return g;
 }
 
+AicGraph AicGraphBuilder::prune(const AicGraph &graph, const AicConfig &config) {
+  AicGraph prunedGraph;
+
+  // build edges
+  for (auto it = graph.strong_links.begin(); it != graph.strong_links.end(); ++it) {
+    AicNode source = it->first;
+
+    bool isGrouped;
+    CellSet cellSet;
+    DigitSet digitSet;
+    deserialize_unitcode(source, cellSet, digitSet, isGrouped);
+    if (isGrouped && !config.useGroupedCells) {
+      continue;
+    }
+
+    auto &edges = it->second;
+    for (AicNode target : edges) {
+      bool targetIsGrouped;
+      CellSet targetCellSet;
+      DigitSet targetDigitSet;
+      deserialize_unitcode(target, targetCellSet, targetDigitSet, targetIsGrouped);
+      if (targetIsGrouped && !config.useGroupedCells) {
+        continue;
+      }
+      if (targetDigitSet != digitSet && (!config.multiDigit || !config.useStrongBivalues)) {
+        continue;
+      }
+      if (targetCellSet != cellSet && !config.useStrongBilocations) {
+        continue;
+      }
+      add_strong_edge(prunedGraph.strong_links, source, target);
+    }
+  }
+
+  // build nodes from filtered edges
+  for (auto it = prunedGraph.strong_links.begin(); it != prunedGraph.strong_links.end(); ++it) {
+    prunedGraph.nodes.push_back(it->first);
+  }
+
+  return prunedGraph;
+}
+
 void AicGraphBuilder::build_singleton_nodes(std::vector<AicNode> &nodes) {
   for (Cell cell = 0; cell < 81; ++cell) {
     for (Digit d = 1; d <= 9; ++d) {
@@ -343,16 +385,19 @@ void AicGraphBuilder::build_grouped_strong_eri(const std::vector<AicNode> &nodes
 /* ---------------------------------------------------------------------- */
 
 AicSearcher::AicSearcher(const SudokuBoard &board,
-                         AicGraph &graph)
-  : board(board), graph(graph) { }
+                         AicGraph &graph,
+                         const AicConfig &config)
+  : board(board), graph(graph), config(config) {
 
-std::vector<AicElimination> AicSearcher::find_aic_eliminations(int max_depth) const {
+}
+
+std::vector<AicElimination> AicSearcher::find_aic_eliminations() const {
   std::vector<AicElimination> out;
 
   for (auto it = graph.strong_links.begin(); it != graph.strong_links.end(); ++it) {
     AicNode start = it->first;
 
-    auto found = search_from(start, max_depth);
+    auto found = search_from(start);
     if (!found.empty()) {
       // found a chain that causes eliminations
       out.insert(out.end(), found.begin(), found.end());
@@ -363,7 +408,7 @@ std::vector<AicElimination> AicSearcher::find_aic_eliminations(int max_depth) co
   return out;
 }
 
-std::vector<AicElimination> AicSearcher::search_from(AicNode start, int max_depth) const {
+std::vector<AicElimination> AicSearcher::search_from(AicNode start) const {
   std::vector<AicElimination> found;
 
   struct QueueItem {
@@ -393,15 +438,15 @@ std::vector<AicElimination> AicSearcher::search_from(AicNode start, int max_dept
     QueueItem cur = q.front();
     q.pop_front();
 
-    if (cur.depth >= max_depth) {
+    if (cur.depth >= config.max_depth) {
       continue;
     }
 
-    bool placeholder;
+    bool isGrouped;
     CellSet cellSet;
     DigitSet digitSet;
-    deserialize_unitcode(cur.node, cellSet, digitSet, placeholder);
-    if (cellSet.size() == 1) {
+    deserialize_unitcode(cur.node, cellSet, digitSet, isGrouped);
+    if (!isGrouped) {
       Cell cell = *cellSet.begin();
       Digit digit = *digitSet.begin();
       console_log("CURRENT STATE: r%dc%d (%d) - %s LINK - Length %d", SudokuBoard::getRowLocation(cell)+1,
@@ -412,6 +457,21 @@ std::vector<AicElimination> AicSearcher::search_from(AicNode start, int max_dept
     }
     if (cur.next_type == EdgeType::STRONG) {
       for (AicNode nb : graph.strong_links[cur.node]) {
+        // config check (TODO: sicuro che serve? c'è già nel pruning)
+        bool targetIsGrouped;
+        CellSet targetCellSet;
+        DigitSet targetDigitSet;
+        deserialize_unitcode(nb, targetCellSet, targetDigitSet, targetIsGrouped);
+        if (targetIsGrouped && !config.useGroupedCells) {
+          continue;
+        }
+        if (targetDigitSet != digitSet && (!config.multiDigit || !config.useStrongBivalues)) {
+          continue;
+        }
+        if (targetCellSet != cellSet && !config.useStrongBilocations) {
+          continue;
+        }
+        // ---
         if (path_contains_node(cur.state_index, nb, states, parents)) {
           continue;
         }
@@ -507,13 +567,8 @@ std::vector<AicElimination> AicSearcher::common_peer_eliminations(
   Digit digitA = *digitSetA.begin();
   Digit digitB = *digitSetB.begin();
 
-  // Regola semplice e sicura per partire:
-  // consideriamo solo endpoint singleton sullo stesso digit.
-  // Al momento quindi implementiamo le X-Chain.
+  // Per adesso non facciamo chain con gruppi.
   if (AisGrouped || BisGrouped) {
-    return out;
-  }
-  if (digitA != digitB) {
     return out;
   }
 
@@ -523,49 +578,85 @@ std::vector<AicElimination> AicSearcher::common_peer_eliminations(
     return out;
   }
 
-  CellSet common = board.getPeers({cell_a, cell_b});
-  AicPath reason = reconstruct_path(end_state_idx, states, parents);
+  // Eliminazione AIC Type 1
+  if (digitA == digitB) {
+    CellSet common = board.getPeers({cell_a, cell_b});
+    AicPath reason = reconstruct_path(end_state_idx, states, parents);
 
-  for (Cell cell : common) {
-    if (!board.hasCandidate(cell, digitA)) {
-      continue;
+    for (Cell cell : common) {
+      if (!board.hasCandidate(cell, digitA)) {
+        continue;
+      }
+
+      AicElimination e;
+      e.cell = cell;
+      e.digit = digitA;
+      e.reason = reason;
+      out.push_back(e);
     }
 
-    AicElimination e;
-    e.cell = cell;
-    e.digit = digitA;
-    e.reason = reason;
-    out.push_back(e);
+    return out;
+  }
+
+  // Eliminazione AIC Type 2
+  if (board.sees(cell_a, cell_b)) {
+    if (board.hasCandidate(cell_a, digitB)) {
+      AicPath reason = reconstruct_path(end_state_idx, states, parents);
+      AicElimination e;
+      e.cell = cell_a;
+      e.digit = digitB;
+      e.reason = reason;
+      out.push_back(e);
+    }
+
+    if (board.hasCandidate(cell_b, digitA)) {
+      AicPath reason = reconstruct_path(end_state_idx, states, parents);
+      AicElimination e;
+      e.cell = cell_b;
+      e.digit = digitA;
+      e.reason = reason;
+      out.push_back(e);
+    }
+
+    return out;
   }
 
   return out;
 }
 
 bool AicSearcher::are_weakly_linked(AicNode a, AicNode b) const {
-  bool placeholder;
-
+  bool AisGrouped;
   CellSet cellSetA;
   DigitSet digitSetA;
-  deserialize_unitcode(a, cellSetA, digitSetA, placeholder);
+  deserialize_unitcode(a, cellSetA, digitSetA, AisGrouped);
 
+  bool BisGrouped;
   CellSet cellSetB;
   DigitSet digitSetB;
-  deserialize_unitcode(b, cellSetB, digitSetB, placeholder);
+  deserialize_unitcode(b, cellSetB, digitSetB, BisGrouped);
 
   Digit digitA = *digitSetA.begin();
   Digit digitB = *digitSetB.begin();
 
-  // TODO: per adesso lo disattivo perché faccio solo chain a un digit
-  // poi bisognerà trovare un modo per filtrare i vari tipi di chain
-  // candidates inside a cell
-  //if (cellSetA.size() == 1 && cellSetB.size() == 1 && cellSetA == cellSetB && digitA != digitB) {
-  //  return true;
-  //}
-
-  // cells (or group of) that can see eath other
-  if (digitA == digitB && board.sees(cellSetA, cellSetB)) {
-    return true;
+  if ((AisGrouped || BisGrouped) && !config.useGroupedCells) {
+    return false;
   }
+
+  // candidates inside a cell
+  if (!AisGrouped && !BisGrouped && cellSetA == cellSetB && digitA != digitB) {
+    if (config.multiDigit && config.useWeakInCell) {
+      return true;
+    }
+  }
+
+  // cells (or group of) that can see each other
+  if (digitA == digitB && board.sees(cellSetA, cellSetB)) {
+    if (config.useWeakInUnit) {
+      return true;
+    }
+  }
+
+  // TODO. casistica useWeakLinks disattivata (per Coloring e Medusa)
 
   return false;
 }
