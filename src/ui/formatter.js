@@ -35,6 +35,9 @@
       defaultOperationsFormatter(ctx, ev, parts);
 
       return { title: ev.reason, bodyHtml: parts.join("") };
+    },
+    getSourceCategory(ev, source, sourceIndex, groupIndex) {
+      return (groupIndex % 2) + 1;
     }
   };
   REGISTRY["BUG+1"] = noSourcesFormatter;
@@ -61,6 +64,33 @@
   };
   REGISTRY["XY-Wing"] = wingFormatter;
   REGISTRY["XYZ-Wing"] = wingFormatter;
+
+  const colorFormatter = {
+    formatLog(ev, ctx) {
+      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const parts = [];
+
+      defaultOperationsFormatter(ctx, ev, parts);
+
+      return { title: ev.reason, bodyHtml: parts.join("") };
+    },
+    getSourceCategory(ev, source, sourceIndex, groupIndex) {
+      if (groupIndex == 0) {
+        // green for first color
+        return 1;
+      } else {
+        if (ev.type === "removeCandidate") {
+          // blue for second color
+          return 2;
+        } else {
+          // red for second color if it is eliminated
+          return 13;
+        }
+      }
+    }
+  };
+  REGISTRY["Simple Coloring"] = colorFormatter;
+  REGISTRY["3D Medusa"] = colorFormatter;
 
   const chainFormatter = {
     formatLog(ev, ctx) {
@@ -109,43 +139,6 @@
   REGISTRY["X-Chain"] = chainFormatter;
   REGISTRY["XY-Chain"] = chainFormatter;
   REGISTRY["Alternating Inference Chain"] = chainFormatter;
-
-  REGISTRY["Simple Coloring"] = {
-    formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
-      const parts = [];
-      parts.push(`<div><span class="logCellRef">Color groups</span></div>`);
-      let sourceIndex = 0;
-      for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
-        const group = groups[groupIndex];
-        const category = ctx.normalizeSourceCategory(groupIndex + 1);
-        parts.push(`<div class="logSourceCategory${category}"><b>Koloro ${groupIndex + 1}</b></div>`);
-        for (let groupPos = 0; groupPos < group.length; groupPos++) {
-          sourceIndex++;
-        }
-      }
-      parts.push(`<div style="margin-top:6px;"><span class="logCellRef">Ops</span></div>`);
-      for (const op of (ev.ops || [])) {
-        const ref = ctx.idxToRef(op.idx);
-        const digs = ctx.maskToDigits(op.mask);
-        if (ev.type === "setValue") {
-          parts.push(`<div><span class="logCellRef">${ctx.escapeHtml(ref)}</span> <span class="logOpSet">=</span> <span class="logOpSet">${ctx.escapeHtml(digs.join(","))}</span></div>`);
-        } else {
-          parts.push(`<div><span class="logCellRef">${ctx.escapeHtml(ref)}</span> <span class="logOpRemove">&lt;&gt;</span> <span class="logOpRemove">${ctx.escapeHtml(digs.join(","))}</span></div>`);
-        }
-      }
-      return { title: ev.reason || "Simple Coloring", bodyHtml: parts.join("") };
-    },
-    getSourceCategory(ev, source, sourceIndex, groupIndex) {
-      return (groupIndex % 2) + 1;
-    }
-  };
-
-  REGISTRY["3D Medusa"] = {
-    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
-      return (groupIndex % 6) + 1;
-    }
-  };
 
   window.SudorixFormatterRegistry = REGISTRY;
 

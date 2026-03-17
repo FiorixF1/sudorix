@@ -885,79 +885,42 @@ static void techXYZWing(SudokuBoard &board, EventQueue &eventQueue) {
 
 static void techGenericAIC(SudokuBoard &board,
                            EventQueue &eventQueue,
-                           const AicConfig &config,
-                           ReasonId reasonId) {
+                           ReasonId reason) {
   AicGraphBuilder graphBuilder(board);
   AicGraph graph = graphBuilder.build();
   // TODO: cache graph instead of rebuilding it each time
+
+  AicSearcher searcher(board);
+  const AicConfig &config = searcher.setConfigAndReturn(reason);
   AicGraph prunedGraph = graphBuilder.prune(graph, config);
-  AicSearcher searcher(board, prunedGraph, config);
+  std::optional<Event> event = searcher.run_search(prunedGraph);
 
-  auto out = searcher.find_aic_eliminations();
-
-  Event event(EventType::RemoveCandidate, reasonId);
-  for (auto &elim : out) {
-    // TODO: se un'eliminazione avviene su più celle find_aic_eliminations ritorna più valori
-    // ma non è un caso gestito bene perché invece qui me le aspetto tutte in un CellSet
-    // Poi devo gestire il caso di eliminazione su cella con strong link -> SetValue
-    for (int i = 0; i < elim.reason.nodes.size(); ++i) {
-      AicNode node = elim.reason.nodes[i];
-      CellSet cellSet;
-      DigitSet digitSet;
-      bool isGrouped;
-      deserialize_unitcode(node, cellSet, digitSet, isGrouped);
-      Cell cell = *cellSet.begin();
-      Digit digit = *digitSet.begin();
-      event.addSource(cell, digit);
-    }
-    event.addOperation(elim.cell, elim.digit);
-    if (eventQueue.enqueue(board, event)) return;
+  // TODO: se un'eliminazione avviene su più celle run_search ritorna più valori
+  // ma non è un caso gestito bene perché invece qui me le aspetto tutte in un CellSet
+  // Poi devo gestire il caso di eliminazione su cella con strong link -> SetValue
+  if (event) {
+    eventQueue.enqueue(board, *event);
   }
 }
 
-static void techXChain(SudokuBoard &board, EventQueue &eventQueue) {
-  struct AicConfig config = {
-    .useWeakLinks = true,
-    .multiDigit = false,
-    .useGroupedCells = false,
-    .useStrongBivalues = false,
-    .useStrongBilocations = true,
-    .useWeakInCell = false,
-    .useWeakInUnit = true,
-    .max_depth = 5,
-  };
+static void techSimpleColoring(SudokuBoard &board, EventQueue &eventQueue) {
+  techGenericAIC(board, eventQueue, ReasonId::SimpleColoring);
+}
 
-  techGenericAIC(board, eventQueue, config, ReasonId::XChain);
+static void tech3DMedusa(SudokuBoard &board, EventQueue &eventQueue) {
+  techGenericAIC(board, eventQueue, ReasonId::_3DMedusa);
+}
+
+static void techXChain(SudokuBoard &board, EventQueue &eventQueue) {
+  techGenericAIC(board, eventQueue, ReasonId::XChain);
 }
 
 static void techXYChain(SudokuBoard &board, EventQueue &eventQueue) {
-  struct AicConfig config = {
-    .useWeakLinks = true,
-    .multiDigit = true,
-    .useGroupedCells = false,
-    .useStrongBivalues = true,
-    .useStrongBilocations = false,
-    .useWeakInCell = false,
-    .useWeakInUnit = true,
-    .max_depth = 6,
-  };
-
-  techGenericAIC(board, eventQueue, config, ReasonId::XYChain);
+  techGenericAIC(board, eventQueue, ReasonId::XYChain);
 }
 
 static void techAIC(SudokuBoard &board, EventQueue &eventQueue) {
-  struct AicConfig config = {
-    .useWeakLinks = true,
-    .multiDigit = true,
-    .useGroupedCells = false,
-    .useStrongBivalues = true,
-    .useStrongBilocations = true,
-    .useWeakInCell = true,
-    .useWeakInUnit = true,
-    .max_depth = 8,
-  };
-
-  techGenericAIC(board, eventQueue, config, ReasonId::AIC);
+  techGenericAIC(board, eventQueue, ReasonId::AIC);
 }
 
 typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);
@@ -1000,6 +963,8 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techXYWing,
   techXYZWing,
   techSwordfish,
+  techSimpleColoring,
+  tech3DMedusa,
   techXChain,
   techXYChain,
   techAIC

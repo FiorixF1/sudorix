@@ -1,11 +1,13 @@
 #ifndef AIC_HPP
 #define AIC_HPP
 
+#include <set>
 #include <map>
 #include <vector>
 #include <deque>
 #include <cstdint>
 #include <algorithm>
+#include <optional>
 #include "encoder.hpp"
 
 // Unique ID for nodes.
@@ -23,6 +25,11 @@
 // because all its data can be univocally extracted.
 using AicNode = uint32_t;
 
+enum class ColorType : uint8_t {
+  FIRST,
+  SECOND
+};
+
 enum class EdgeType : uint8_t {
   STRONG,
   WEAK
@@ -31,12 +38,6 @@ enum class EdgeType : uint8_t {
 struct AicPath {
   std::vector<AicNode> nodes;
   std::vector<EdgeType> edges;  // edges[i] connects nodes[i] -> nodes[i+1]
-};
-
-struct AicElimination {
-  Cell cell;   // 0..80
-  Digit digit;  // 0..8
-  AicPath reason;
 };
 
 struct AicGraph {
@@ -123,27 +124,37 @@ private:
 
 struct AicSearchState {
   AicNode node;
-  EdgeType next_type;
+  union {
+    EdgeType next_type;
+    ColorType next_color;
+  };
 };
 
 struct AicParent {
   int prev_state_index = -1;
   AicNode prev_node = 0;
-  EdgeType edge_used = EdgeType::STRONG;
+  union {
+    EdgeType edge_used;
+    ColorType color_used;
+  };
 };
 
 class AicSearcher {
 public:
-  AicSearcher(const SudokuBoard &board, AicGraph &graph, const AicConfig &config);
+  AicSearcher(const SudokuBoard &board);
 
-  std::vector<AicElimination> find_aic_eliminations() const;
+  const AicConfig &setConfigAndReturn(ReasonId reason);
+
+  std::optional<Event> run_search(AicGraph &graph);
 
 private:
   const SudokuBoard &board;
-  AicGraph &graph; // non const due to []
-  const AicConfig &config;
+  ReasonId reason;
+  AicConfig config;
+  std::set<AicNode> visited;
 
-  std::vector<AicElimination> search_from(AicNode start) const;
+  std::optional<Event> aic_search_from(AicNode start, AicGraph &graph);
+  std::optional<Event> coloring_search_from(AicNode start, AicGraph &graph);
 
   bool path_contains_node(int state_idx,
                           AicNode node,
@@ -154,12 +165,15 @@ private:
                            const std::vector<AicSearchState> &states,
                            const std::vector<AicParent> &parents) const;
 
-  std::vector<AicElimination> common_peer_eliminations(
+  std::optional<Event> execute_aic_rules(
     AicNode start,
     AicNode end,
     int end_state_idx,
     const std::vector<AicSearchState> &states,
     const std::vector<AicParent> &parents) const;
+  std::optional<Event> execute_coloring_rules(
+    AicNode start,
+    const std::vector<AicSearchState> &states) const;
 
   bool are_weakly_linked(AicNode a, AicNode b) const;
 };

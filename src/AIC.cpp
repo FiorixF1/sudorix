@@ -16,17 +16,21 @@ AicGraph AicGraphBuilder::build() {
     AicNode fromID = it.first;
     auto &edges = it.second;
 
-    CellSet fromSet;
+    CellSet fromCellSet;
     DigitSet fromDigitSet;
     bool isGrouped;
-    deserialize_unitcode(fromID, fromSet, fromDigitSet, isGrouped);
+    deserialize_unitcode(fromID, fromCellSet, fromDigitSet, isGrouped);
+    Cell fromCell = *fromCellSet.begin();
+    Digit fromDigit = *fromDigitSet.begin();
     if (isGrouped) continue;  // debug only singletons
 
     for (auto &toID : edges) {
-      CellSet toSet;
+      CellSet toCellSet;
       DigitSet toDigitSet;
       bool isGrouped;
-      deserialize_unitcode(toID, toSet, toDigitSet, isGrouped);
+      deserialize_unitcode(toID, toCellSet, toDigitSet, isGrouped);
+      Cell toCell = *toCellSet.begin();
+      Digit toDigit = *toDigitSet.begin();
       if (isGrouped) continue;  // debug only singletons
     
       console_log("Edge from r%dc%d (%d) to r%dc%d (%d)", SudokuBoard::getRowLocation(fromCell)+1,
@@ -45,7 +49,7 @@ AicGraph AicGraphBuilder::build() {
 AicGraph AicGraphBuilder::prune(const AicGraph &graph, const AicConfig &config) {
   AicGraph prunedGraph;
 
-  // build edges
+  // build edges according to config
   for (auto it = graph.strong_links.begin(); it != graph.strong_links.end(); ++it) {
     AicNode source = it->first;
 
@@ -384,33 +388,104 @@ void AicGraphBuilder::build_grouped_strong_eri(const std::vector<AicNode> &nodes
 
 /* ---------------------------------------------------------------------- */
 
-AicSearcher::AicSearcher(const SudokuBoard &board,
-                         AicGraph &graph,
-                         const AicConfig &config)
-  : board(board), graph(graph), config(config) {
+AicSearcher::AicSearcher(const SudokuBoard &board)
+  : board(board) {
 
 }
 
-std::vector<AicElimination> AicSearcher::find_aic_eliminations() const {
-  std::vector<AicElimination> out;
+const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
+  switch(reason) {
+    case ReasonId::SimpleColoring:
+      config = {
+        .useWeakLinks = false,
+        .multiDigit = false,
+        .useGroupedCells = false,
+        .useStrongBivalues = false,
+        .useStrongBilocations = true,
+        .useWeakInCell = false,
+        .useWeakInUnit = false,
+      };
+      break;
+    case ReasonId::_3DMedusa:
+      config = {
+        .useWeakLinks = false,
+        .multiDigit = true,
+        .useGroupedCells = false,
+        .useStrongBivalues = true,
+        .useStrongBilocations = true,
+        .useWeakInCell = false,
+        .useWeakInUnit = false,
+      };
+      break;
+    case ReasonId::XChain:
+      config = {
+        .useWeakLinks = true,
+        .multiDigit = false,
+        .useGroupedCells = false,
+        .useStrongBivalues = false,
+        .useStrongBilocations = true,
+        .useWeakInCell = false,
+        .useWeakInUnit = true,
+        .max_depth = 5,
+      };
+      break;
+    case ReasonId::XYChain:
+      config = {
+        .useWeakLinks = true,
+        .multiDigit = true,
+        .useGroupedCells = false,
+        .useStrongBivalues = true,
+        .useStrongBilocations = false,
+        .useWeakInCell = false,
+        .useWeakInUnit = true,
+        .max_depth = 6,
+      };
+      break;
+    case ReasonId::AIC:
+      config = {
+        .useWeakLinks = true,
+        .multiDigit = true,
+        .useGroupedCells = false,
+        .useStrongBivalues = true,
+        .useStrongBilocations = true,
+        .useWeakInCell = true,
+        .useWeakInUnit = true,
+        .max_depth = 8,
+      };
+      break;
+    default:
+      break;
+  }
+
+  this->reason = reason;
+
+  return config;
+}
+
+std::optional<Event> AicSearcher::run_search(AicGraph &graph) {
+  visited.clear();
 
   for (auto it = graph.strong_links.begin(); it != graph.strong_links.end(); ++it) {
     AicNode start = it->first;
 
-    auto found = search_from(start);
-    if (!found.empty()) {
-      // found a chain that causes eliminations
-      out.insert(out.end(), found.begin(), found.end());
-      break;
+    std::optional<Event> event;
+    if (config.useWeakLinks) {
+      // generic AIC search
+      event = aic_search_from(start, graph);
+    } else {
+      // color-based search, only strong links
+      event = coloring_search_from(start, graph);
+    }
+
+    if (event) {
+      return event;
     }
   }
 
-  return out;
+  return {};
 }
 
-std::vector<AicElimination> AicSearcher::search_from(AicNode start) const {
-  std::vector<AicElimination> found;
-
+std::optional<Event> AicSearcher::aic_search_from(AicNode start, AicGraph &graph) {
   struct QueueItem {
     AicNode node;
     EdgeType next_type;
@@ -423,7 +498,7 @@ std::vector<AicElimination> AicSearcher::search_from(AicNode start) const {
   std::deque<QueueItem> q;
 
   auto push_state = [&](AicNode node, EdgeType next_type, int depth, int prev_idx, AicNode prev_node, EdgeType edge_used) {
-    AicSearchState st{node, next_type};
+    AicSearchState st{node, .next_type = next_type};
     states.push_back(st);
     parents.push_back({prev_idx, prev_node, edge_used});
     int idx = static_cast<int>(states.size()) - 1;
@@ -446,6 +521,10 @@ std::vector<AicElimination> AicSearcher::search_from(AicNode start) const {
     CellSet cellSet;
     DigitSet digitSet;
     deserialize_unitcode(cur.node, cellSet, digitSet, isGrouped);
+    if (isGrouped && !config.useGroupedCells) {
+      continue;
+    }
+#ifdef DEBUG
     if (!isGrouped) {
       Cell cell = *cellSet.begin();
       Digit digit = *digitSet.begin();
@@ -455,6 +534,7 @@ std::vector<AicElimination> AicSearcher::search_from(AicNode start) const {
                                                                       cur.next_type == EdgeType::STRONG ? "STRONG" : "WEAK",
                                                                       cur.depth);
     }
+#endif
     if (cur.next_type == EdgeType::STRONG) {
       for (AicNode nb : graph.strong_links[cur.node]) {
         // config check (TODO: sicuro che serve? c'è già nel pruning)
@@ -479,13 +559,10 @@ std::vector<AicElimination> AicSearcher::search_from(AicNode start) const {
         int next_idx = push_state(nb, EdgeType::WEAK, cur.depth + 1,
                                   cur.state_index, cur.node, EdgeType::STRONG);
 
-        // Eliminazioni: chain che inizia e finisce con strong
-        // quindi quando arrivi qui hai appena raggiunto uno strong.
-        auto elim = common_peer_eliminations(start, nb, next_idx, states, parents);
-        if (!elim.empty()) {
-          // Eliminazioni type 1
-          found.insert(found.end(), elim.begin(), elim.end());
-          return found;
+        // Look for eliminations according to AIC rules
+        std::optional<Event> event = execute_aic_rules(start, nb, next_idx, states, parents);
+        if (event) {
+          return event;
         }
       }
     } else {
@@ -507,7 +584,92 @@ std::vector<AicElimination> AicSearcher::search_from(AicNode start) const {
     }
   }
 
-  return found;
+  return {};
+}
+
+std::optional<Event> AicSearcher::coloring_search_from(AicNode start, AicGraph &graph) {
+  struct QueueItem {
+    AicNode node;
+    ColorType next_color;
+    int depth;
+    int state_index;
+  };
+
+  std::vector<AicSearchState> states;
+  std::deque<QueueItem> q;
+
+  auto push_state = [&](AicNode node, ColorType next_color, int depth, int prev_idx, AicNode prev_node, ColorType color_used) {
+    AicSearchState st{node, .next_color = next_color};
+    states.push_back(st);
+    int idx = static_cast<int>(states.size()) - 1;
+    q.push_back({node, next_color, depth, idx});
+    return idx;
+  };
+
+  // Partiamo dal nodo iniziale e imponiamo il primo colore.
+  push_state(start, ColorType::SECOND, 0, -1, start, ColorType::FIRST);
+
+  while (!q.empty()) {
+    QueueItem cur = q.front();
+    q.pop_front();
+
+    if (visited.find(cur.node) != visited.end()) {
+      continue;
+    }
+    visited.insert(cur.node);
+
+    bool isGrouped;
+    CellSet cellSet;
+    DigitSet digitSet;
+    deserialize_unitcode(cur.node, cellSet, digitSet, isGrouped);
+    if (isGrouped) {
+      // groups are not allowed in coloring techniques
+      continue;
+    }
+
+    Cell cell = *cellSet.begin();
+    Digit digit = *digitSet.begin();
+
+#ifdef DEBUG
+    if (!isGrouped) {
+      console_log("CURRENT STATE: r%dc%d (%d) - %s COLOR - Length %d", SudokuBoard::getRowLocation(cell)+1,
+                                                                       SudokuBoard::getColumnLocation(cell)+1,
+                                                                       digit,
+                                                                       cur.next_color == ColorType::FIRST ? "FIRST" : "SECOND",
+                                                                       cur.depth);
+    }
+#endif
+    for (AicNode nb : graph.strong_links[cur.node]) {
+      // config check (TODO: sicuro che serve? c'è già nel pruning)
+      bool targetIsGrouped;
+      CellSet targetCellSet;
+      DigitSet targetDigitSet;
+      deserialize_unitcode(nb, targetCellSet, targetDigitSet, targetIsGrouped);
+      Cell targetCell = *targetCellSet.begin();
+      Digit targetDigit = *targetDigitSet.begin();
+      if (targetIsGrouped) {
+        continue;
+      }
+      if (targetDigit != digit && (!config.multiDigit || !config.useStrongBivalues)) {
+        continue;
+      }
+      if (targetCell != cell && !config.useStrongBilocations) {
+        continue;
+      }
+      // ---
+
+      ColorType color_used = cur.next_color;
+      ColorType next_color = color_used == ColorType::FIRST ? ColorType::SECOND : ColorType::FIRST;
+
+      int next_idx = push_state(nb, next_color, cur.depth + 1,
+                                cur.state_index, cur.node, color_used);
+    }
+  }
+
+  // Look for contradictions among colors
+  std::optional<Event> event = execute_coloring_rules(start, states);
+
+  return event;
 }
 
 bool AicSearcher::path_contains_node(int state_idx,
@@ -545,83 +707,250 @@ AicPath AicSearcher::reconstruct_path(int end_state_idx,
   return p;
 }
 
-std::vector<AicElimination> AicSearcher::common_peer_eliminations(
+std::optional<Event> AicSearcher::execute_aic_rules(
   AicNode start,
   AicNode end,
   int end_state_idx,
   const std::vector<AicSearchState> &states,
   const std::vector<AicParent> &parents) const
 {
-  std::vector<AicElimination> out;
+  CellSet startCellSet;
+  DigitSet startDigitSet;
+  bool startIsGrouped;
+  deserialize_unitcode(start, startCellSet, startDigitSet, startIsGrouped);
 
-  CellSet cellSetA;
-  DigitSet digitSetA;
-  bool AisGrouped;
-  deserialize_unitcode(start, cellSetA, digitSetA, AisGrouped);
+  CellSet endCellSet;
+  DigitSet endDigitSet;
+  bool endIsGrouped;
+  deserialize_unitcode(end, endCellSet, endDigitSet, endIsGrouped);
 
-  CellSet cellSetB;
-  DigitSet digitSetB;
-  bool BisGrouped;
-  deserialize_unitcode(end, cellSetB, digitSetB, BisGrouped);
-
-  Digit digitA = *digitSetA.begin();
-  Digit digitB = *digitSetB.begin();
+  Digit start_digit = *startDigitSet.begin();
+  Digit end_digit = *endDigitSet.begin();
 
   // Per adesso non facciamo chain con gruppi.
-  if (AisGrouped || BisGrouped) {
-    return out;
+  if (startIsGrouped || endIsGrouped) {
+    return {};
   }
 
-  Cell cell_a = *cellSetA.begin();
-  Cell cell_b = *cellSetB.begin();
-  if (cell_a < 0 || cell_b < 0 || cell_a == cell_b) {
-    return out;
-  }
+  Cell start_cell = *startCellSet.begin();
+  Cell end_cell = *endCellSet.begin();
 
-  // Eliminazione AIC Type 1
-  if (digitA == digitB) {
-    CellSet common = board.getPeers({cell_a, cell_b});
-    AicPath reason = reconstruct_path(end_state_idx, states, parents);
+  // AIC Type 1
+  if (start_digit == end_digit) {
+    CellSet peers = board.getPeers({start_cell, end_cell});
+    AicPath path = reconstruct_path(end_state_idx, states, parents);
 
-    for (Cell cell : common) {
-      if (!board.hasCandidate(cell, digitA)) {
+    Event event(EventType::RemoveCandidate, reason);
+    for (int i = 0; i < path.nodes.size(); ++i) {
+      AicNode node = path.nodes[i];
+      CellSet cellSet;
+      DigitSet digitSet;
+      bool isGrouped;
+      deserialize_unitcode(node, cellSet, digitSet, isGrouped);
+      event.addSource(cellSet, digitSet);
+    }
+
+    for (Cell idx : peers) {
+      if (!board.hasCandidate(idx, start_digit)) {
         continue;
       }
 
-      AicElimination e;
-      e.cell = cell;
-      e.digit = digitA;
-      e.reason = reason;
-      out.push_back(e);
+      event.addOperation(idx, start_digit);
     }
 
-    return out;
+    if (event.getNumberOfOperations() > 0) {
+      return event;
+    }
   }
 
-  // Eliminazione AIC Type 2
-  if (board.sees(cell_a, cell_b)) {
-    if (board.hasCandidate(cell_a, digitB)) {
-      AicPath reason = reconstruct_path(end_state_idx, states, parents);
-      AicElimination e;
-      e.cell = cell_a;
-      e.digit = digitB;
-      e.reason = reason;
-      out.push_back(e);
-    }
+  // AIC Type 2
+  if (start_digit != end_digit && board.sees(start_cell, end_cell)) {
+    AicPath path = reconstruct_path(end_state_idx, states, parents);
 
-    if (board.hasCandidate(cell_b, digitA)) {
-      AicPath reason = reconstruct_path(end_state_idx, states, parents);
-      AicElimination e;
-      e.cell = cell_b;
-      e.digit = digitA;
-      e.reason = reason;
-      out.push_back(e);
+    if (board.hasCandidate(start_cell, end_digit) || board.hasCandidate(end_cell, start_digit)) {
+      Event event(EventType::RemoveCandidate, reason);
+      for (int i = 0; i < path.nodes.size(); ++i) {
+        AicNode node = path.nodes[i];
+        CellSet cellSet;
+        DigitSet digitSet;
+        bool isGrouped;
+        deserialize_unitcode(node, cellSet, digitSet, isGrouped);
+        event.addSource(cellSet, digitSet);
+      }
+      if (board.hasCandidate(start_cell, end_digit)) {
+        event.addOperation(start_cell, end_digit);
+      }
+      if (board.hasCandidate(end_cell, start_digit)) {
+        event.addOperation(end_cell, start_digit);
+      }
+      return event;
     }
-
-    return out;
   }
 
-  return out;
+  return {};
+}
+
+std::optional<Event> AicSearcher::execute_coloring_rules(
+  AicNode start,
+  const std::vector<AicSearchState> &states) const
+{
+  struct ColorNode {
+    Cell cell;
+    Digit digit;
+    AicPath reason;
+  };
+  std::vector<ColorNode> firstColorNodes;
+  std::vector<ColorNode> secondColorNodes;
+
+  // the state contains the next color, so the current color is the other one
+  for (auto &state : states) {
+    bool isGrouped;
+    CellSet cellSet;
+    DigitSet digitSet;
+    deserialize_unitcode(state.node, cellSet, digitSet, isGrouped);
+
+    ColorNode node{
+      .cell = static_cast<Cell>(*cellSet.begin()),
+      .digit = static_cast<Digit>(*digitSet.begin())
+    };
+
+    if (state.next_color == ColorType::SECOND) {
+      firstColorNodes.push_back(node);
+    }
+    if (state.next_color == ColorType::FIRST) {
+      secondColorNodes.push_back(node);
+    }
+  }
+
+  // Color Trap test
+  auto scanColor = [&](const std::vector<ColorNode> &nodes) -> bool
+  {
+    for (int i = 0; i < nodes.size(); ++i) {
+      for (int j = i+1; j < nodes.size(); ++j) {
+        const ColorNode &a = nodes[i];
+        const ColorNode &b = nodes[j];
+        if (a.digit != b.digit && a.cell == b.cell) {
+          // 3D Medusa Rule 1 : Twice in a Cell
+          return true;
+        }
+        if (a.digit == b.digit && board.sees(a.cell, b.cell)) {
+          // 3D Medusa Rule 2 : Twice in a Unit (Color Trap)
+          // Simple Coloring : Color Trap
+          return true;
+        }
+        if (a.digit != b.digit && a.cell != b.cell) {
+          DigitSet abDigits = DigitSet({a.digit, b.digit});
+          CellSet abCells = CellSet({a.cell, b.cell});
+
+          CellSet peers = board.getPeers(abCells);
+          CellSet bivalues = board.getBivalues();
+          for (Cell idx : peers & bivalues) {
+            if (board.getCandidates(idx) == abDigits) {
+              // 3D Medusa Rule 6 : Cell emptied by colour
+              return true;
+            }
+          }
+          for (int k = j+1; k < nodes.size(); ++k) {
+            const ColorNode &c = nodes[k];
+            if (!abDigits.contains(c.digit) && !abCells.contains(c.cell)) {
+              CellSet peers = board.getPeers({a.cell, b.cell, c.cell});
+              for (Cell idx : peers) {
+                if (board.getCandidates(idx) == DigitSet({a.digit, b.digit, c.digit})) {
+                  // 3D Medusa Rule 6 : Cell emptied by colour
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    return false;
+  };
+  if (scanColor(firstColorNodes)) {
+    // second color is the solution
+    // source is: second || first
+    // operation is: set value to second
+    Event event(EventType::SetValue, reason);
+    for (int i = 0; i < secondColorNodes.size(); ++i) {
+      ColorNode node = secondColorNodes[i];
+      event.addSource(node.cell, node.digit);
+      event.addOperation(node.cell, node.digit);
+    }
+    event.addDelimiter();
+    for (int i = 0; i < firstColorNodes.size(); ++i) {
+      ColorNode node = firstColorNodes[i];
+      event.addSource(node.cell, node.digit);
+    }
+    return event;
+  }
+  if (scanColor(secondColorNodes)) {
+    // first color is the solution
+    // source is: first || second
+    // operation is: set value to first
+    Event event(EventType::SetValue, reason);
+    for (int i = 0; i < firstColorNodes.size(); ++i) {
+      ColorNode node = firstColorNodes[i];
+      event.addSource(node.cell, node.digit);
+      event.addOperation(node.cell, node.digit);
+    }
+    event.addDelimiter();
+    for (int i = 0; i < secondColorNodes.size(); ++i) {
+      ColorNode node = secondColorNodes[i];
+      event.addSource(node.cell, node.digit);
+    }
+    return event;
+  }
+
+  // Color Wrap test
+  Event event(EventType::RemoveCandidate, reason);
+  for (int i = 0; i < firstColorNodes.size(); ++i) {
+    for (int j = 0; j < secondColorNodes.size(); ++j) {
+      ColorNode &a = firstColorNodes[i];
+      ColorNode &b = secondColorNodes[j];
+      if (a.digit != b.digit && a.cell == b.cell) {
+        // 3D Medusa Rule 3 : Two colours in a Cell
+        DigitSet toRemove = board.getCandidates(a.cell) - DigitSet({a.digit, b.digit});
+        if (!toRemove.empty()) {
+          event.addOperation(a.cell, toRemove);
+        }
+      }
+      if (a.digit == b.digit) {
+        // 3D Medusa Rule 4 : Two colours elsewhere (Color Wrap)
+        // Simple Coloring : Color Wrap
+        CellSet toRemove = board.getPeersContaining({a.cell, b.cell}, a.digit);
+        if (!toRemove.empty()) {
+          for (Cell idx : toRemove) {
+            event.addOperation(idx, a.digit);
+          }
+        }
+      }
+      if (a.digit != b.digit && board.sees(a.cell, b.cell)) {
+        // 3D Medusa Rule 5 : Two colours Unit + Cell
+        if (board.hasCandidate(a.cell, b.digit)) {
+          event.addOperation(a.cell, b.digit);
+        }
+        if (board.hasCandidate(b.cell, a.digit)) {
+          event.addOperation(b.cell, a.digit);
+        }
+      }
+    }
+  }
+  if (event.getNumberOfOperations() > 0) {
+    // add sources first || second and return event
+    for (int i = 0; i < firstColorNodes.size(); ++i) {
+      ColorNode node = firstColorNodes[i];
+      event.addSource(node.cell, node.digit);
+    }
+    event.addDelimiter();
+    for (int i = 0; i < secondColorNodes.size(); ++i) {
+      ColorNode node = secondColorNodes[i];
+      event.addSource(node.cell, node.digit);
+    }
+    return event;
+  }
+
+  return {};
 }
 
 bool AicSearcher::are_weakly_linked(AicNode a, AicNode b) const {
@@ -655,8 +984,6 @@ bool AicSearcher::are_weakly_linked(AicNode a, AicNode b) const {
       return true;
     }
   }
-
-  // TODO. casistica useWeakLinks disattivata (per Coloring e Medusa)
 
   return false;
 }

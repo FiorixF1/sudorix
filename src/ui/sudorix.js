@@ -543,8 +543,8 @@ var business_logic = (() => {
     if (n < 1) {
       return 1;
     }
-    if (n > 12) {
-      return ((n - 1) % 12) + 1;
+    if (n > 13) {
+      return ((n - 1) % 13) + 1;
     }
     return n;
   }

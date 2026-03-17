@@ -428,6 +428,7 @@
     .cand.flashCategory10 { outline: 2px solid var(--cat10Outline); box-shadow: 0 0 0 2px var(--cat10Glow); }
     .cand.flashCategory11 { outline: 2px solid var(--cat11Outline); box-shadow: 0 0 0 2px var(--cat11Glow); }
     .cand.flashCategory12 { outline: 2px solid var(--cat12Outline); box-shadow: 0 0 0 2px var(--cat12Glow); }
+    .cand.flashCategory13 { outline: 2px solid var(--flashRemoveOutline2); box-shadow: 0 0 0 2px var(--cat12Glow); }
 
     .logSourceCategory1 { color: var(--cat1Outline); }
     .logSourceCategory2 { color: var(--cat2Outline); }
@@ -441,6 +442,7 @@
     .logSourceCategory10 { color: var(--cat10Outline); }
     .logSourceCategory11 { color: var(--cat11Outline); }
     .logSourceCategory12 { color: var(--cat12Outline); }
+    .logSourceCategory13 { color: var(--flashRemoveOutline2); }
 
     /* Candidates clickable only in Kolorigado (visual cue) */
     .sudoku.candClickable .cand {
