@@ -74,6 +74,7 @@ var business_logic = (() => {
     "Finned Mutant Jellyfish",
     "Siamese Fish",
     "Kraken Fish",
+    "Single Digit Pattern",
     "Skyscraper",
     "Two-String Kite",
     "Crane",

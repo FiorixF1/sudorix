@@ -143,7 +143,11 @@
       return (sourceIndex % 2) + 1;
     }
   };
+  REGISTRY["Single Digit Pattern"] = chainFormatter;
   REGISTRY["Skyscraper"] = chainFormatter;
+  REGISTRY["Two-String Kite"] = chainFormatter;
+  REGISTRY["Crane"] = chainFormatter;
+  REGISTRY["Empty Rectangle"] = chainFormatter;
   REGISTRY["X-Chain"] = chainFormatter;
   REGISTRY["XY-Chain"] = chainFormatter;
   REGISTRY["Alternating Inference Chain"] = chainFormatter;

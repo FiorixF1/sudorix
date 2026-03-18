@@ -395,6 +395,18 @@ AicSearcher::AicSearcher(const SudokuBoard &board)
 
 const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
   switch(reason) {
+    case ReasonId::SingleDigitPattern:
+      config = {
+        .useWeakLinks = true,
+        .multiDigit = false,
+        .useGroupedCells = false,
+        .useStrongBivalues = false,
+        .useStrongBilocations = true,
+        .useWeakInCell = false,
+        .useWeakInUnit = true,
+        .max_depth = 3,
+      };
+      break;
     case ReasonId::SimpleColoring:
       config = {
         .useWeakLinks = false,
@@ -426,7 +438,7 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .useStrongBilocations = true,
         .useWeakInCell = false,
         .useWeakInUnit = true,
-        .max_depth = 5,
+        .max_depth = 6,
       };
       break;
     case ReasonId::XYChain:
@@ -468,17 +480,55 @@ std::optional<Event> AicSearcher::run_search(AicGraph &graph) {
   for (auto it = graph.strong_links.begin(); it != graph.strong_links.end(); ++it) {
     AicNode start = it->first;
 
-    std::optional<Event> event;
+    std::optional<Event> maybeEvent;
     if (config.useWeakLinks) {
       // generic AIC search
-      event = aic_search_from(start, graph);
+      maybeEvent = aic_search_from(start, graph);
     } else {
       // color-based search, only strong links
-      event = coloring_search_from(start, graph);
+      maybeEvent = coloring_search_from(start, graph);
     }
 
-    if (event) {
-      return event;
+    if (maybeEvent) {
+      Event &event = *maybeEvent;
+      if (event.reason == ReasonId::SingleDigitPattern) {
+        // identify the specific type of single digit pattern
+        auto &sources = event.getSources();
+
+        Cell a = *sources[0].cells.begin();
+        Cell b = *sources[1].cells.begin();
+        Cell c = *sources[2].cells.begin();
+        Cell d = *sources[3].cells.begin();
+
+        Location aRow = board.getRowLocation(a);
+        Location bRow = board.getRowLocation(b);
+        Location cRow = board.getRowLocation(c);
+        Location dRow = board.getRowLocation(d);
+
+        Location aCol = board.getColumnLocation(a);
+        Location bCol = board.getColumnLocation(b);
+        Location cCol = board.getColumnLocation(c);
+        Location dCol = board.getColumnLocation(d);
+
+        Location aBox = board.getBoxLocation(a);
+        Location bBox = board.getBoxLocation(b);
+        Location cBox = board.getBoxLocation(c);
+        Location dBox = board.getBoxLocation(d);
+
+        if ((aRow == bRow && cRow == dRow) ||
+            (aCol == bCol && cCol == dCol)) {
+          event.reason = ReasonId::Skyscraper;
+        } else if ((aRow == bRow && cCol == dCol) ||
+                   (aCol == bCol && cRow == dRow)) {
+          event.reason = ReasonId::TwoStringKite;
+        } else if ((aRow == bRow && bCol == cCol) ||
+                   (aCol == bCol && bRow == cRow) ||
+                   (bRow == cRow && cCol == dCol) ||
+                   (bCol == cCol && cRow == dRow)) {
+          event.reason = ReasonId::Crane;
+        }
+      }
+      return maybeEvent;
     }
   }
 

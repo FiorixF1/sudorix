@@ -450,39 +450,6 @@ static void techXWing(SudokuBoard &board, EventQueue &eventQueue) {
           }
           if (eventQueue.enqueue(board, event)) return;
         }
-
-        // look for skyscrapers, A and D are the ends of the chain
-        Cell A = -1;
-        Cell B = -1;
-        Cell C = -1;
-        Cell D = -1;
-        if (ca0 == cb0 && ca1 != cb1) {
-          A = positionsList[1];
-          B = positionsList[0];
-          C = positionsInnerList[0];
-          D = positionsInnerList[1];
-        } else if (ca0 != cb0 && ca1 == cb1) {
-          A = positionsList[0];
-          B = positionsList[1];
-          C = positionsInnerList[1];
-          D = positionsInnerList[0];
-        }
-
-        if (A != -1 && D != -1) {
-          // Skyscraper spotted
-          Event event(EventType::RemoveCandidate, ReasonId::Skyscraper);
-          // the source is the four cells forming the skyscraper, following the chain
-          event.addSource(A, digit);
-          event.addSource(B, digit);
-          event.addSource(C, digit);
-          event.addSource(D, digit);
-          // remove instances of the digit from peers of the ends
-          CellSet set = board.getPeersContaining(CellSet({A, D}), digit);
-          for (Cell idx : set) {
-            event.addOperation(idx, digit);
-          }
-          if (eventQueue.enqueue(board, event)) return;
-        }
       }
     }
 
@@ -524,39 +491,6 @@ static void techXWing(SudokuBoard &board, EventQueue &eventQueue) {
           // remove instances of the digit from the two rows, excluding the two columns
           CellSet set = (SudokuBoard::getRowByLocation(ra0) | SudokuBoard::getRowByLocation(ra1)) - 
                         (columns[a] | columns[b]);
-          for (Cell idx : set) {
-            event.addOperation(idx, digit);
-          }
-          if (eventQueue.enqueue(board, event)) return;
-        }
-
-        // look for skyscrapers, A and D are the ends of the chain
-        Cell A = -1;
-        Cell B = -1;
-        Cell C = -1;
-        Cell D = -1;
-        if (ra0 == rb0 && ra1 != rb1) {
-          A = positionsList[1];
-          B = positionsList[0];
-          C = positionsInnerList[0];
-          D = positionsInnerList[1];
-        } else if (ra0 != rb0 && ra1 == rb1) {
-          A = positionsList[0];
-          B = positionsList[1];
-          C = positionsInnerList[1];
-          D = positionsInnerList[0];
-        }
-
-        if (A != -1 && D != -1) {
-          // Skyscraper spotted
-          Event event(EventType::RemoveCandidate, ReasonId::Skyscraper);
-          // the source is the four cells forming the skyscraper, following the chain
-          event.addSource(A, digit);
-          event.addSource(B, digit);
-          event.addSource(C, digit);
-          event.addSource(D, digit);
-          // remove instances of the digit from peers of the ends
-          CellSet set = board.getPeersContaining(CellSet({A, D}), digit);
           for (Cell idx : set) {
             event.addOperation(idx, digit);
           }
@@ -903,6 +837,10 @@ static void techGenericAIC(SudokuBoard &board,
   }
 }
 
+static void techSingleDigitPattern(SudokuBoard &board, EventQueue &eventQueue) {
+  techGenericAIC(board, eventQueue, ReasonId::SingleDigitPattern);
+}
+
 static void techSimpleColoring(SudokuBoard &board, EventQueue &eventQueue) {
   techGenericAIC(board, eventQueue, ReasonId::SimpleColoring);
 }
@@ -959,10 +897,11 @@ static constexpr TechniqueFn EASY_TECHNIQUES_DENSE[] = {
 
 static constexpr TechniqueFn TECHNIQUES[] = {
   techBUGPlusOne,
-  techXWing,  // includes skyscrapers
+  techXWing,
   techXYWing,
   techXYZWing,
   techSwordfish,
+  techSingleDigitPattern,
   techSimpleColoring,
   tech3DMedusa,
   techXChain,

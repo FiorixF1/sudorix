@@ -56,6 +56,7 @@ enum class ReasonId : uint8_t {
   SiameseFish,
   KrakenFish,
   // single digit patterns
+  SingleDigitPattern,
   Skyscraper,
   TwoStringKite,
   Crane,
