@@ -736,11 +736,11 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   Cell end_cell = *endCellSet.begin();
 
   // AIC Type 1
-  if (start_digit == end_digit) {
+  if (start_digit == end_digit && !board.sees(start_cell, end_cell)) {
     CellSet peers = board.getPeers({start_cell, end_cell});
     AicPath path = reconstruct_path(end_state_idx, states, parents);
 
-    Event event(EventType::RemoveCandidate, reason);
+    Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType1 : reason);
     for (int i = 0; i < path.nodes.size(); ++i) {
       AicNode node = path.nodes[i];
       CellSet cellSet;
@@ -751,11 +751,9 @@ std::optional<Event> AicSearcher::execute_aic_rules(
     }
 
     for (Cell idx : peers) {
-      if (!board.hasCandidate(idx, start_digit)) {
-        continue;
+      if (board.hasCandidate(idx, start_digit)) {
+        event.addOperation(idx, start_digit);
       }
-
-      event.addOperation(idx, start_digit);
     }
 
     if (event.getNumberOfOperations() > 0) {
@@ -768,7 +766,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
     AicPath path = reconstruct_path(end_state_idx, states, parents);
 
     if (board.hasCandidate(start_cell, end_digit) || board.hasCandidate(end_cell, start_digit)) {
-      Event event(EventType::RemoveCandidate, reason);
+      Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType2 : reason);
       for (int i = 0; i < path.nodes.size(); ++i) {
         AicNode node = path.nodes[i];
         CellSet cellSet;
@@ -783,6 +781,59 @@ std::optional<Event> AicSearcher::execute_aic_rules(
       if (board.hasCandidate(end_cell, start_digit)) {
         event.addOperation(end_cell, start_digit);
       }
+      return event;
+    }
+  }
+
+  // AIC Type 3 (Ring)
+  if (are_weakly_linked(start, end)) {
+    AicPath path = reconstruct_path(end_state_idx, states, parents);
+
+    Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType3 : reason);
+    for (int i = 0; i < path.nodes.size(); ++i) {
+      AicNode node = path.nodes[i];
+      CellSet cellSet;
+      DigitSet digitSet;
+      bool isGrouped;
+      deserialize_unitcode(node, cellSet, digitSet, isGrouped);
+      event.addSource(cellSet, digitSet);
+    }
+
+    for (int i = 0; i < path.nodes.size()-1; ++i) {
+      AicNode node = path.nodes[i];
+      CellSet cellSet;
+      DigitSet digitSet;
+      bool isGrouped;
+      deserialize_unitcode(node, cellSet, digitSet, isGrouped);
+      AicNode nextNode = path.nodes[i+1];
+      CellSet nextCellSet;
+      DigitSet nextDigitSet;
+      bool nextIsGrouped;
+      deserialize_unitcode(nextNode, nextCellSet, nextDigitSet, nextIsGrouped);
+
+      if (cellSet != nextCellSet) {
+        // different cell, same digit
+        CellSet peers = board.getPeers(cellSet | nextCellSet);
+        Digit digit = *digitSet.begin();
+        for (Cell idx : peers) {
+          if (board.hasCandidate(idx, digit)) {
+            event.addOperation(idx, digit);
+          }
+        }
+      }
+      if (cellSet == nextCellSet) {
+        // same cell, different digit
+        Cell cell = *cellSet.begin();
+        Digit digit = *digitSet.begin();
+        Digit nextDigit = *nextDigitSet.begin();
+        DigitSet toRemove = board.getCandidates(cell) - digitSet - nextDigitSet;
+        if (!toRemove.empty()) {
+          event.addOperation(cell, toRemove);
+        }
+      }
+    }
+
+    if (event.getNumberOfOperations() > 0) {
       return event;
     }
   }
@@ -802,7 +853,7 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
   std::vector<ColorNode> firstColorNodes;
   std::vector<ColorNode> secondColorNodes;
 
-  // the state contains the next color, so the current color is the other one
+  // divide nodes in two lists by color
   for (auto &state : states) {
     bool isGrouped;
     CellSet cellSet;
@@ -814,6 +865,7 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
       .digit = static_cast<Digit>(*digitSet.begin())
     };
 
+    // the state contains the next color, so the current color is the other one
     if (state.next_color == ColorType::SECOND) {
       firstColorNodes.push_back(node);
     }
@@ -823,21 +875,38 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
   }
 
   // Color Trap test
-  auto scanColor = [&](const std::vector<ColorNode> &nodes) -> bool
+  auto scanColor = [&](const std::vector<ColorNode> &nodes, const std::vector<ColorNode> &other) -> std::optional<Event>
   {
+    bool found = false;
+    ReasonId detailedReason;
+    Cell emptiedCellIdx = -1;
     for (int i = 0; i < nodes.size(); ++i) {
       for (int j = i+1; j < nodes.size(); ++j) {
         const ColorNode &a = nodes[i];
         const ColorNode &b = nodes[j];
         if (a.digit != b.digit && a.cell == b.cell) {
           // 3D Medusa Rule 1 : Twice in a Cell
-          return true;
+          found = true;
+          detailedReason = ReasonId::_3DMedusaColorTrap;
+          goto end_loop;
         }
         if (a.digit == b.digit && board.sees(a.cell, b.cell)) {
           // 3D Medusa Rule 2 : Twice in a Unit (Color Trap)
           // Simple Coloring : Color Trap
-          return true;
+          found = true;
+          if (reason == ReasonId::SimpleColoring) {
+            detailedReason = ReasonId::SimpleColoringColorTrap;
+          } else {
+            detailedReason = ReasonId::_3DMedusaColorTrap;
+          }
+          goto end_loop;
         }
+      }
+    }
+    for (int i = 0; i < nodes.size(); ++i) {
+      for (int j = i+1; j < nodes.size(); ++j) {
+        const ColorNode &a = nodes[i];
+        const ColorNode &b = nodes[j];
         if (a.digit != b.digit && a.cell != b.cell) {
           DigitSet abDigits = DigitSet({a.digit, b.digit});
           CellSet abCells = CellSet({a.cell, b.cell});
@@ -847,7 +916,10 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
           for (Cell idx : peers & bivalues) {
             if (board.getCandidates(idx) == abDigits) {
               // 3D Medusa Rule 6 : Cell emptied by colour
-              return true;
+              found = true;
+              detailedReason = ReasonId::_3DMedusaEmptiedCell;
+              emptiedCellIdx = idx;
+              goto end_loop;
             }
           }
           for (int k = j+1; k < nodes.size(); ++k) {
@@ -857,7 +929,10 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
               for (Cell idx : peers) {
                 if (board.getCandidates(idx) == DigitSet({a.digit, b.digit, c.digit})) {
                   // 3D Medusa Rule 6 : Cell emptied by colour
-                  return true;
+                  found = true;
+                  detailedReason = ReasonId::_3DMedusaEmptiedCell;
+                  emptiedCellIdx = idx;
+                  goto end_loop;
                 }
               }
             }
@@ -865,42 +940,38 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
         }
       }
     }
-    return false;
+
+end_loop:
+    if (found) {
+      // 'other' is the solution
+      // source is: other || nodes || emptied cell (if applicable)
+      // operation is: set value to 'other'
+      Event event(EventType::SetValue, detailedReason);
+      for (int i = 0; i < other.size(); ++i) {
+        ColorNode node = other[i];
+        event.addSource(node.cell, node.digit);
+        event.addOperation(node.cell, node.digit);
+      }
+      event.addDelimiter();
+      for (int i = 0; i < nodes.size(); ++i) {
+        ColorNode node = nodes[i];
+        event.addSource(node.cell, node.digit);
+      }
+      if (emptiedCellIdx != -1) {
+        event.addDelimiter();
+        event.addSource(emptiedCellIdx, board.getCandidates(emptiedCellIdx));
+      }
+      return event;
+    }
+
+    return {};
   };
-  if (scanColor(firstColorNodes)) {
-    // second color is the solution
-    // source is: second || first
-    // operation is: set value to second
-    Event event(EventType::SetValue, reason);
-    for (int i = 0; i < secondColorNodes.size(); ++i) {
-      ColorNode node = secondColorNodes[i];
-      event.addSource(node.cell, node.digit);
-      event.addOperation(node.cell, node.digit);
-    }
-    event.addDelimiter();
-    for (int i = 0; i < firstColorNodes.size(); ++i) {
-      ColorNode node = firstColorNodes[i];
-      event.addSource(node.cell, node.digit);
-    }
-    return event;
-  }
-  if (scanColor(secondColorNodes)) {
-    // first color is the solution
-    // source is: first || second
-    // operation is: set value to first
-    Event event(EventType::SetValue, reason);
-    for (int i = 0; i < firstColorNodes.size(); ++i) {
-      ColorNode node = firstColorNodes[i];
-      event.addSource(node.cell, node.digit);
-      event.addOperation(node.cell, node.digit);
-    }
-    event.addDelimiter();
-    for (int i = 0; i < secondColorNodes.size(); ++i) {
-      ColorNode node = secondColorNodes[i];
-      event.addSource(node.cell, node.digit);
-    }
-    return event;
-  }
+
+  std::optional<Event> first = scanColor(firstColorNodes, secondColorNodes);
+  if (first) return *first;
+
+  std::optional<Event> second = scanColor(secondColorNodes, firstColorNodes);
+  if (second) return *second;
 
   // Color Wrap test
   Event event(EventType::RemoveCandidate, reason);
@@ -914,6 +985,7 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
         if (!toRemove.empty()) {
           event.addOperation(a.cell, toRemove);
         }
+        event.reason = ReasonId::_3DMedusaColorWrap;
       }
       if (a.digit == b.digit) {
         // 3D Medusa Rule 4 : Two colours elsewhere (Color Wrap)
@@ -924,6 +996,11 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
             event.addOperation(idx, a.digit);
           }
         }
+        if (reason == ReasonId::SimpleColoring) {
+          event.reason = ReasonId::SimpleColoringColorWrap;
+        } else {
+          event.reason = ReasonId::_3DMedusaColorWrap;
+        }
       }
       if (a.digit != b.digit && board.sees(a.cell, b.cell)) {
         // 3D Medusa Rule 5 : Two colours Unit + Cell
@@ -933,6 +1010,7 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
         if (board.hasCandidate(b.cell, a.digit)) {
           event.addOperation(b.cell, a.digit);
         }
+        event.reason = ReasonId::_3DMedusaColorWrap;
       }
     }
   }

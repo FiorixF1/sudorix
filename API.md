@@ -126,13 +126,24 @@ enum class ReasonId : uint8_t {
     WWing,
     // coloring
     SimpleColoring,
+    SimpleColoringColorTrap,
+    SimpleColoringColorWrap,
     _3DMedusa,
+    _3DMedusaColorTrap,
+    _3DMedusaColorWrap,
+    _3DMedusaEmptiedCell,
     // chains
     RemotePair,
     XChain,
     XYChain,
     AIC,
+    AICType1,
+    AICType2,
+    AICType3,
     GroupedAIC,
+    GroupedAICType1,
+    GroupedAICType2,
+    GroupedAICType3,
     // almost locked sets
     ALSXZ,
     ALSXY,
@@ -258,6 +269,24 @@ En flugiloj, la fontoj estas la sekvaj:
 * Ĉelo de la dua flugilo + Cifero Z
 
 Tio aplikiĝas al: **XY-Wing**, **XYZ-Wing**.
+
+---
+
+## Kolorigado
+
+En kolorigaj teknikoj, la fontoj estas disigitaj en grupo laŭ koloro:
+
+* Ĉelo en unua koloro + Cifero
+* Alia ĉelo en unua koloro + Cifero
+* ...
+* Disigilo
+* Ĉelo en dua koloro + Cifero
+* Alia ĉelo en dua koloro + Cifero
+* ...
+* Disigilo
+* Malplenigita ĉelo + Ciferoj (nur en 3D Medusa, se aplikebla)
+
+Tio aplikiĝas al: **Simple Coloring**, **3D Medusa**.
 
 ---
 

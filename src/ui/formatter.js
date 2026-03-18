@@ -5,6 +5,21 @@
     return (typeof window !== "undefined" && window.SudorixFormatterContext) ? window.SudorixFormatterContext : null;
   }
 
+  const noSourcesFormatter = {
+    formatLog(ev, ctx) {
+      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const parts = [];
+
+      defaultOperationsFormatter(ctx, ev, parts);
+
+      return { title: ev.reason, bodyHtml: parts.join("") };
+    },
+    getSourceCategory(ev, source, sourceIndex, groupIndex) {
+      return (groupIndex % 2) + 1;
+    }
+  };
+  REGISTRY["BUG+1"] = noSourcesFormatter;
+
   const fishFormatter = {
     formatLog(ev, ctx) {
       const groups = ctx.splitSourceGroups(ev.sources || []);
@@ -26,21 +41,6 @@
   REGISTRY["X-Wing"] = fishFormatter;
   REGISTRY["Swordfish"] = fishFormatter;
   REGISTRY["Jellyfish"] = fishFormatter;
-
-  const noSourcesFormatter = {
-    formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
-      const parts = [];
-
-      defaultOperationsFormatter(ctx, ev, parts);
-
-      return { title: ev.reason, bodyHtml: parts.join("") };
-    },
-    getSourceCategory(ev, source, sourceIndex, groupIndex) {
-      return (groupIndex % 2) + 1;
-    }
-  };
-  REGISTRY["BUG+1"] = noSourcesFormatter;
 
   const wingFormatter = {
     formatLog(ev, ctx) {
@@ -78,6 +78,9 @@
       if (groupIndex == 0) {
         // green for first color
         return 1;
+      } else if (groupIndex == 2) {
+        // yellow for emptied cell
+        return 3;
       } else {
         if (ev.type === "removeCandidate") {
           // blue for second color
@@ -90,7 +93,12 @@
     }
   };
   REGISTRY["Simple Coloring"] = colorFormatter;
+  REGISTRY["Simple Coloring (Color Trap)"] = colorFormatter;
+  REGISTRY["Simple Coloring (Color Wrap)"] = colorFormatter;
   REGISTRY["3D Medusa"] = colorFormatter;
+  REGISTRY["3D Medusa (Color Trap)"] = colorFormatter;
+  REGISTRY["3D Medusa (Color Wrap)"] = colorFormatter;
+  REGISTRY["3D Medusa (Emptied Cell)"] = colorFormatter;
 
   const chainFormatter = {
     formatLog(ev, ctx) {
@@ -139,6 +147,13 @@
   REGISTRY["X-Chain"] = chainFormatter;
   REGISTRY["XY-Chain"] = chainFormatter;
   REGISTRY["Alternating Inference Chain"] = chainFormatter;
+  REGISTRY["Alternating Inference Chain (Type 1)"] = chainFormatter;
+  REGISTRY["Alternating Inference Chain (Type 2)"] = chainFormatter;
+  REGISTRY["Alternating Inference Chain (Type 3)"] = chainFormatter;
+  REGISTRY["Grouped Alternating Inference Chain"] = chainFormatter;
+  REGISTRY["Grouped Alternating Inference Chain (Type 1)"] = chainFormatter;
+  REGISTRY["Grouped Alternating Inference Chain (Type 2)"] = chainFormatter;
+  REGISTRY["Grouped Alternating Inference Chain (Type 3)"] = chainFormatter;
 
   window.SudorixFormatterRegistry = REGISTRY;
 

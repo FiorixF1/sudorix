@@ -62,10 +62,10 @@
       --cat1Glow: rgba(124, 255, 0, 0.35);
       --cat2Outline: rgba(76, 176, 255, 0.95);
       --cat2Glow: rgba(76, 176, 255, 0.30);
-      --cat3Outline: rgba(180, 132, 255, 0.95);
-      --cat3Glow: rgba(180, 132, 255, 0.30);
-      --cat4Outline: rgba(255, 225, 80, 0.95);
-      --cat4Glow: rgba(255, 225, 80, 0.32);
+      --cat3Outline: rgba(255, 225, 80, 0.95);
+      --cat3Glow: rgba(255, 225, 80, 0.32);
+      --cat4Outline: rgba(180, 132, 255, 0.95);
+      --cat4Glow: rgba(180, 132, 255, 0.30);
       --cat5Outline: rgba(0, 232, 255, 0.95);
       --cat5Glow: rgba(0, 232, 255, 0.30);
       --cat6Outline: rgba(255, 163, 72, 0.95);
