@@ -153,7 +153,7 @@ private:
   AicConfig config;
   std::set<AicNode> visited;
 
-  std::optional<Event> aic_search_from(AicNode start, AicGraph &graph);
+  std::optional<Event> aic_search_from(AicGraph &graph);
   std::optional<Event> coloring_search_from(AicNode start, AicGraph &graph);
 
   bool path_contains_node(int state_idx,

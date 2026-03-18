@@ -477,18 +477,10 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
 std::optional<Event> AicSearcher::run_search(AicGraph &graph) {
   visited.clear();
 
-  for (auto it = graph.strong_links.begin(); it != graph.strong_links.end(); ++it) {
-    AicNode start = it->first;
-
+  if (config.useWeakLinks) {
+    // generic AIC search
     std::optional<Event> maybeEvent;
-    if (config.useWeakLinks) {
-      // generic AIC search
-      maybeEvent = aic_search_from(start, graph);
-    } else {
-      // color-based search, only strong links
-      maybeEvent = coloring_search_from(start, graph);
-    }
-
+    maybeEvent = aic_search_from(graph);
     if (maybeEvent) {
       Event &event = *maybeEvent;
       if (event.reason == ReasonId::SingleDigitPattern) {
@@ -530,13 +522,26 @@ std::optional<Event> AicSearcher::run_search(AicGraph &graph) {
       }
       return maybeEvent;
     }
+  } else {
+    // color-based search, only strong links
+    for (auto it = graph.strong_links.begin(); it != graph.strong_links.end(); ++it) {
+      AicNode start = it->first;
+
+      std::optional<Event> maybeEvent;
+      maybeEvent = coloring_search_from(start, graph);
+
+      if (maybeEvent) {
+        return maybeEvent;
+      }
+    }
   }
 
   return {};
 }
 
-std::optional<Event> AicSearcher::aic_search_from(AicNode start, AicGraph &graph) {
+std::optional<Event> AicSearcher::aic_search_from(AicGraph &graph) {
   struct QueueItem {
+    AicNode start;
     AicNode node;
     EdgeType next_type;
     int depth;
@@ -547,17 +552,20 @@ std::optional<Event> AicSearcher::aic_search_from(AicNode start, AicGraph &graph
   std::vector<AicParent> parents;
   std::deque<QueueItem> q;
 
-  auto push_state = [&](AicNode node, EdgeType next_type, int depth, int prev_idx, AicNode prev_node, EdgeType edge_used) {
+  auto push_state = [&](AicNode start, AicNode node, EdgeType next_type, int depth, int prev_idx, AicNode prev_node, EdgeType edge_used) {
     AicSearchState st{node, .next_type = next_type};
     states.push_back(st);
     parents.push_back({prev_idx, prev_node, edge_used});
     int idx = static_cast<int>(states.size()) - 1;
-    q.push_back({node, next_type, depth, idx});
+    q.push_back({start, node, next_type, depth, idx});
     return idx;
   };
 
   // Partiamo dal nodo iniziale e imponiamo che il primo arco sia strong.
-  push_state(start, EdgeType::STRONG, 0, -1, start, EdgeType::STRONG);
+  for (auto it = graph.strong_links.begin(); it != graph.strong_links.end(); ++it) {
+    AicNode start = it->first;
+    push_state(start, start, EdgeType::STRONG, 0, -1, start, EdgeType::STRONG);
+  }
 
   while (!q.empty()) {
     QueueItem cur = q.front();
@@ -606,11 +614,11 @@ std::optional<Event> AicSearcher::aic_search_from(AicNode start, AicGraph &graph
           continue;
         }
 
-        int next_idx = push_state(nb, EdgeType::WEAK, cur.depth + 1,
+        int next_idx = push_state(cur.start, nb, EdgeType::WEAK, cur.depth + 1,
                                   cur.state_index, cur.node, EdgeType::STRONG);
 
         // Look for eliminations according to AIC rules
-        std::optional<Event> event = execute_aic_rules(start, nb, next_idx, states, parents);
+        std::optional<Event> event = execute_aic_rules(cur.start, nb, next_idx, states, parents);
         if (event) {
           return event;
         }
@@ -628,7 +636,7 @@ std::optional<Event> AicSearcher::aic_search_from(AicNode start, AicGraph &graph
           continue;
         }
 
-        push_state(nb, EdgeType::STRONG, cur.depth + 1,
+        push_state(cur.start, nb, EdgeType::STRONG, cur.depth + 1,
                    cur.state_index, cur.node, EdgeType::WEAK);
       }
     }
