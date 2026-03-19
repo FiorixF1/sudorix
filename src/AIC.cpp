@@ -60,6 +60,15 @@ AicGraph AicGraphBuilder::prune(const AicGraph &graph, const AicConfig &config) 
     if (isGrouped && !config.useGroupedCells) {
       continue;
     }
+    if (isGrouped && !config.useWeakLinks) {
+      // groups are not allowed in coloring techniques
+      continue;
+    }
+    // be careful: graph nodes have only one digit, use SudokuBoard to get the digits of the pair
+    DigitSet remotePair = board.getCandidates(*cellSet.begin());
+    if (config.useRemotePairs && (isGrouped || remotePair.size() != 2)) {
+      continue;
+    }
 
     auto &edges = it->second;
     for (AicNode target : edges) {
@@ -70,10 +79,19 @@ AicGraph AicGraphBuilder::prune(const AicGraph &graph, const AicConfig &config) 
       if (targetIsGrouped && !config.useGroupedCells) {
         continue;
       }
+      if (targetIsGrouped && !config.useWeakLinks) {
+        // groups are not allowed in coloring techniques
+        continue;
+      }
       if (targetDigitSet != digitSet && (!config.multiDigit || !config.useStrongBivalues)) {
         continue;
       }
       if (targetCellSet != cellSet && !config.useStrongBilocations) {
+        continue;
+      }
+      // be careful: graph nodes have only one digit, use SudokuBoard to get the digits of the pair
+      DigitSet targetRemotePair = board.getCandidates(*targetCellSet.begin());
+      if (config.useRemotePairs && (targetIsGrouped || targetRemotePair != remotePair)) {
         continue;
       }
       add_strong_edge(prunedGraph.strong_links, source, target);
@@ -395,6 +413,18 @@ AicSearcher::AicSearcher(const SudokuBoard &board)
 
 const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
   switch(reason) {
+    case ReasonId::RemotePair:
+      config = {
+        .useWeakLinks = false,
+        .multiDigit = false,
+        .useGroupedCells = false,
+        .useStrongBivalues = false,
+        .useStrongBilocations = true,
+        .useWeakInCell = false,
+        .useWeakInUnit = true,
+        .useRemotePairs = true,
+      };
+      break;
     case ReasonId::SingleDigitPattern:
       config = {
         .useWeakLinks = true,
@@ -404,6 +434,7 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .useStrongBilocations = true,
         .useWeakInCell = false,
         .useWeakInUnit = true,
+        .useRemotePairs = false,
         .max_depth = 3,
       };
       break;
@@ -416,6 +447,7 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .useStrongBilocations = true,
         .useWeakInCell = false,
         .useWeakInUnit = false,
+        .useRemotePairs = false,
       };
       break;
     case ReasonId::_3DMedusa:
@@ -427,6 +459,7 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .useStrongBilocations = true,
         .useWeakInCell = false,
         .useWeakInUnit = false,
+        .useRemotePairs = false,
       };
       break;
     case ReasonId::XChain:
@@ -438,7 +471,8 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .useStrongBilocations = true,
         .useWeakInCell = false,
         .useWeakInUnit = true,
-        .max_depth = 6,
+        .useRemotePairs = false,
+        .max_depth = 7,
       };
       break;
     case ReasonId::XYChain:
@@ -450,7 +484,8 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .useStrongBilocations = false,
         .useWeakInCell = false,
         .useWeakInUnit = true,
-        .max_depth = 6,
+        .useRemotePairs = false,
+        .max_depth = 7,
       };
       break;
     case ReasonId::AIC:
@@ -462,7 +497,8 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .useStrongBilocations = true,
         .useWeakInCell = true,
         .useWeakInUnit = true,
-        .max_depth = 8,
+        .useRemotePairs = false,
+        .max_depth = 9,
       };
       break;
     default:
@@ -575,14 +611,11 @@ std::optional<Event> AicSearcher::aic_search_from(AicGraph &graph) {
       continue;
     }
 
+#ifdef DEBUG
     bool isGrouped;
     CellSet cellSet;
     DigitSet digitSet;
     deserialize_unitcode(cur.node, cellSet, digitSet, isGrouped);
-    if (isGrouped && !config.useGroupedCells) {
-      continue;
-    }
-#ifdef DEBUG
     if (!isGrouped) {
       Cell cell = *cellSet.begin();
       Digit digit = *digitSet.begin();
@@ -595,21 +628,6 @@ std::optional<Event> AicSearcher::aic_search_from(AicGraph &graph) {
 #endif
     if (cur.next_type == EdgeType::STRONG) {
       for (AicNode nb : graph.strong_links[cur.node]) {
-        // config check (TODO: sicuro che serve? c'è già nel pruning)
-        bool targetIsGrouped;
-        CellSet targetCellSet;
-        DigitSet targetDigitSet;
-        deserialize_unitcode(nb, targetCellSet, targetDigitSet, targetIsGrouped);
-        if (targetIsGrouped && !config.useGroupedCells) {
-          continue;
-        }
-        if (targetDigitSet != digitSet && (!config.multiDigit || !config.useStrongBivalues)) {
-          continue;
-        }
-        if (targetCellSet != cellSet && !config.useStrongBilocations) {
-          continue;
-        }
-        // ---
         if (path_contains_node(cur.state_index, nb, states, parents)) {
           continue;
         }
@@ -676,19 +694,15 @@ std::optional<Event> AicSearcher::coloring_search_from(AicNode start, AicGraph &
     }
     visited.insert(cur.node);
 
+#ifdef DEBUG
     bool isGrouped;
     CellSet cellSet;
     DigitSet digitSet;
     deserialize_unitcode(cur.node, cellSet, digitSet, isGrouped);
-    if (isGrouped) {
-      // groups are not allowed in coloring techniques
-      continue;
-    }
 
     Cell cell = *cellSet.begin();
     Digit digit = *digitSet.begin();
 
-#ifdef DEBUG
     if (!isGrouped) {
       console_log("CURRENT STATE: r%dc%d (%d) - %s COLOR - Length %d", SudokuBoard::getRowLocation(cell)+1,
                                                                        SudokuBoard::getColumnLocation(cell)+1,
@@ -698,24 +712,6 @@ std::optional<Event> AicSearcher::coloring_search_from(AicNode start, AicGraph &
     }
 #endif
     for (AicNode nb : graph.strong_links[cur.node]) {
-      // config check (TODO: sicuro che serve? c'è già nel pruning)
-      bool targetIsGrouped;
-      CellSet targetCellSet;
-      DigitSet targetDigitSet;
-      deserialize_unitcode(nb, targetCellSet, targetDigitSet, targetIsGrouped);
-      Cell targetCell = *targetCellSet.begin();
-      Digit targetDigit = *targetDigitSet.begin();
-      if (targetIsGrouped) {
-        continue;
-      }
-      if (targetDigit != digit && (!config.multiDigit || !config.useStrongBivalues)) {
-        continue;
-      }
-      if (targetCell != cell && !config.useStrongBilocations) {
-        continue;
-      }
-      // ---
-
       ColorType color_used = cur.next_color;
       ColorType next_color = color_used == ColorType::FIRST ? ColorType::SECOND : ColorType::FIRST;
 
@@ -847,7 +843,8 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   if (are_weakly_linked(start, end)) {
     AicPath path = reconstruct_path(end_state_idx, states, parents);
 
-    Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType3 : reason);
+    Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType3 :
+                                            reason == ReasonId::XChain ? ReasonId::XCycle : reason);
     for (int i = 0; i < path.nodes.size(); ++i) {
       AicNode node = path.nodes[i];
       CellSet cellSet;
@@ -930,6 +927,41 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
     if (state.next_color == ColorType::FIRST) {
       secondColorNodes.push_back(node);
     }
+  }
+
+  // Special case for Remote Pair
+  if (reason == ReasonId::RemotePair) {
+    DigitSet remotePair;
+    Event event(EventType::RemoveCandidate, reason);
+    for (int i = 0; i < firstColorNodes.size(); ++i) {
+      for (int j = 0; j < secondColorNodes.size(); ++j) {
+        ColorNode &a = firstColorNodes[i];
+        ColorNode &b = secondColorNodes[j];
+        
+        // be careful: graph nodes have only one digit, use SudokuBoard to get the digits of the pair
+        remotePair = board.getCandidates(a.cell);
+        CellSet toRemove = board.getPeers({a.cell, b.cell});
+        if (!toRemove.empty()) {
+          for (Cell idx : toRemove) {
+            event.addOperation(idx, remotePair);
+          }
+        }
+      }
+    }
+    if (event.getNumberOfOperations() > 0) {
+      // add sources first || second and return event
+      for (int i = 0; i < firstColorNodes.size(); ++i) {
+        ColorNode node = firstColorNodes[i];
+        event.addSource(node.cell, remotePair);
+      }
+      event.addDelimiter();
+      for (int i = 0; i < secondColorNodes.size(); ++i) {
+        ColorNode node = secondColorNodes[i];
+        event.addSource(node.cell, remotePair);
+      }
+      return event;
+    }
+    return {};
   }
 
   // Color Trap test

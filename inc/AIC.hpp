@@ -54,7 +54,8 @@ struct AicConfig {
   bool useStrongBilocations;
   bool useWeakInCell;
   bool useWeakInUnit;
-  int max_depth;
+  bool useRemotePairs;
+  int max_depth; // max number of edges, makes sense if odd
   std::string pattern;
 };
 

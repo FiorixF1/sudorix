@@ -837,6 +837,10 @@ static void techGenericAIC(SudokuBoard &board,
   }
 }
 
+static void techRemotePair(SudokuBoard &board, EventQueue &eventQueue) {
+  techGenericAIC(board, eventQueue, ReasonId::RemotePair);
+}
+
 static void techSingleDigitPattern(SudokuBoard &board, EventQueue &eventQueue) {
   techGenericAIC(board, eventQueue, ReasonId::SingleDigitPattern);
 }
@@ -901,6 +905,7 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techXYWing,
   techXYZWing,
   techSwordfish,
+  techRemotePair,
   techSingleDigitPattern,
   techSimpleColoring,
   tech3DMedusa,

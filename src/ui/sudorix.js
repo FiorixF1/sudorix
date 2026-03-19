@@ -97,6 +97,7 @@ var business_logic = (() => {
     "3D Medusa (Emptied Cell)",
     "Remote Pair",
     "X-Chain",
+    "X-Cycle",
     "XY-Chain",
     "Alternating Inference Chain",
     "Alternating Inference Chain (Type 1)",

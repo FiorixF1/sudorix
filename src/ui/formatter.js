@@ -92,6 +92,7 @@
       }
     }
   };
+  REGISTRY["Remote Pair"] = colorFormatter;
   REGISTRY["Simple Coloring"] = colorFormatter;
   REGISTRY["Simple Coloring (Color Trap)"] = colorFormatter;
   REGISTRY["Simple Coloring (Color Wrap)"] = colorFormatter;
@@ -149,6 +150,7 @@
   REGISTRY["Crane"] = chainFormatter;
   REGISTRY["Empty Rectangle"] = chainFormatter;
   REGISTRY["X-Chain"] = chainFormatter;
+  REGISTRY["X-Cycle"] = chainFormatter;
   REGISTRY["XY-Chain"] = chainFormatter;
   REGISTRY["Alternating Inference Chain"] = chainFormatter;
   REGISTRY["Alternating Inference Chain (Type 1)"] = chainFormatter;

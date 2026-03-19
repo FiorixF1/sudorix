@@ -287,7 +287,9 @@ En kolorigaj teknikoj, la fontoj estas disigitaj en grupo laŭ koloro:
 * Disigilo
 * Malplenigita ĉelo + Ciferoj (nur en 3D Medusa, se aplikebla)
 
-Tio aplikiĝas al: **Simple Coloring**, **3D Medusa**.
+Nur en Remote Pair la fontoj havas la du ciferojn entenantajn la foran duopon.
+
+Tio aplikiĝas al: **Remote Pair**, **Simple Coloring**, **3D Medusa**.
 
 ---
 
