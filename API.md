@@ -136,7 +136,9 @@ enum class ReasonId : uint8_t {
     // chains
     RemotePair,
     XChain,
+    XCycle,
     XYChain,
+    XYCycle,
     AIC,
     AICType1,
     AICType2,

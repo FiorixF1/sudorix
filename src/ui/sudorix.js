@@ -99,6 +99,7 @@ var business_logic = (() => {
     "X-Chain",
     "X-Cycle",
     "XY-Chain",
+    "XY-Cycle",
     "Alternating Inference Chain",
     "Alternating Inference Chain (Type 1)",
     "Alternating Inference Chain (Type 2)",

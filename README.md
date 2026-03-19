@@ -88,9 +88,9 @@ make run PUZZLES=/path/to/file.txt MODE=full|step
 
 Nuntempe Sudorix povas solvi:
 
-* **31510** enigmojn el **31512** el `Just17.txt`
+* **31512** enigmojn el **31512** el `Just17.txt`
 
-* **32213** enigmojn el **50000** el `top50000.txt`
+* **36680** enigmojn el **50000** el `top50000.txt`
 
 ## Etendado de teknikoj
 
@@ -139,3 +139,11 @@ Tiu ĉi nombro prezentas la okan kaj naŭan ĉelon de la kvina kolumno, aŭ **r8
 La masko por ĉeloj povas esti malplena kaj tiukaze ĝi prezentas malplenan aron. Tiu speciala valoro estas ofte uzata por disigi logike malsamajn grupojn de fontoj.
 
 Pluraj informoj pri la interfacoj, funkcioj kaj datenspecoj estas en dediĉita [dokumento](API.md).
+
+## Interesaj fontoj
+
+Ege interesaj retejoj kaj solviloj estas enlistigitaj ĉi tie. Sur tiuj ĉi laboraĵoj multe sin bazas la evoluo de la solvilo kaj miaj konoj pri Sudokuo:
+
+* [SudokuWiki](https://www.sudokuwiki.org/) el Andrew Stewart
+* [HoDoKu](https://hodoku.sourceforge.net/)
+* [r/Sudoku Wiki](https://www.reddit.com/r/sudoku/wiki/) el strmckr

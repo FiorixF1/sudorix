@@ -10,39 +10,6 @@ AicGraph AicGraphBuilder::build() {
 
   build_strong_links(g.nodes, g.strong_links);
 
-#ifdef DEBUG
-  console_log("AIC GRAPH");
-  for (auto &it : g.strong_links) {
-    AicNode fromID = it.first;
-    auto &edges = it.second;
-
-    CellSet fromCellSet;
-    DigitSet fromDigitSet;
-    bool isGrouped;
-    deserialize_unitcode(fromID, fromCellSet, fromDigitSet, isGrouped);
-    Cell fromCell = *fromCellSet.begin();
-    Digit fromDigit = *fromDigitSet.begin();
-    if (isGrouped) continue;  // debug only singletons
-
-    for (auto &toID : edges) {
-      CellSet toCellSet;
-      DigitSet toDigitSet;
-      bool isGrouped;
-      deserialize_unitcode(toID, toCellSet, toDigitSet, isGrouped);
-      Cell toCell = *toCellSet.begin();
-      Digit toDigit = *toDigitSet.begin();
-      if (isGrouped) continue;  // debug only singletons
-    
-      console_log("Edge from r%dc%d (%d) to r%dc%d (%d)", SudokuBoard::getRowLocation(fromCell)+1,
-                                                          SudokuBoard::getColumnLocation(fromCell)+1,
-                                                          fromDigit,
-                                                          SudokuBoard::getRowLocation(toCell)+1,
-                                                          SudokuBoard::getColumnLocation(toCell)+1,
-                                                          toDigit);
-    }
-  }
-#endif
-
   return g;
 }
 
@@ -90,8 +57,9 @@ AicGraph AicGraphBuilder::prune(const AicGraph &graph, const AicConfig &config) 
         continue;
       }
       // be careful: graph nodes have only one digit, use SudokuBoard to get the digits of the pair
+      // however ensure that the single digit between two nodes is the same
       DigitSet targetRemotePair = board.getCandidates(*targetCellSet.begin());
-      if (config.useRemotePairs && (targetIsGrouped || targetRemotePair != remotePair)) {
+      if (config.useRemotePairs && (targetIsGrouped || targetRemotePair != remotePair || targetDigitSet != digitSet)) {
         continue;
       }
       add_strong_edge(prunedGraph.strong_links, source, target);
@@ -102,6 +70,39 @@ AicGraph AicGraphBuilder::prune(const AicGraph &graph, const AicConfig &config) 
   for (auto it = prunedGraph.strong_links.begin(); it != prunedGraph.strong_links.end(); ++it) {
     prunedGraph.nodes.push_back(it->first);
   }
+
+#ifdef DEBUG
+  console_log("AIC GRAPH");
+  for (auto &it : prunedGraph.strong_links) {
+    AicNode fromID = it.first;
+    auto &edges = it.second;
+
+    CellSet fromCellSet;
+    DigitSet fromDigitSet;
+    bool isGrouped;
+    deserialize_unitcode(fromID, fromCellSet, fromDigitSet, isGrouped);
+    Cell fromCell = *fromCellSet.begin();
+    Digit fromDigit = *fromDigitSet.begin();
+    if (isGrouped) continue;  // debug only singletons
+
+    for (auto &toID : edges) {
+      CellSet toCellSet;
+      DigitSet toDigitSet;
+      bool isGrouped;
+      deserialize_unitcode(toID, toCellSet, toDigitSet, isGrouped);
+      Cell toCell = *toCellSet.begin();
+      Digit toDigit = *toDigitSet.begin();
+      if (isGrouped) continue;  // debug only singletons
+
+      console_log("Edge from r%dc%d (%d) to r%dc%d (%d)", SudokuBoard::getRowLocation(fromCell)+1,
+                                                          SudokuBoard::getColumnLocation(fromCell)+1,
+                                                          fromDigit,
+                                                          SudokuBoard::getRowLocation(toCell)+1,
+                                                          SudokuBoard::getColumnLocation(toCell)+1,
+                                                          toDigit);
+    }
+  }
+#endif
 
   return prunedGraph;
 }
@@ -472,7 +473,7 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .useWeakInCell = false,
         .useWeakInUnit = true,
         .useRemotePairs = false,
-        .max_depth = 7,
+        .max_depth = 9,
       };
       break;
     case ReasonId::XYChain:
@@ -485,7 +486,7 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .useWeakInCell = false,
         .useWeakInUnit = true,
         .useRemotePairs = false,
-        .max_depth = 7,
+        .max_depth = 9,
       };
       break;
     case ReasonId::AIC:
@@ -843,8 +844,10 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   if (are_weakly_linked(start, end)) {
     AicPath path = reconstruct_path(end_state_idx, states, parents);
 
-    Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType3 :
-                                            reason == ReasonId::XChain ? ReasonId::XCycle : reason);
+    Event event(EventType::RemoveCandidate, reason == ReasonId::XChain ? ReasonId::XCycle :
+                                            reason == ReasonId::XYChain ? ReasonId::XYCycle :
+                                            reason == ReasonId::AIC ? ReasonId::AICType3 :
+                                            reason);
     for (int i = 0; i < path.nodes.size(); ++i) {
       AicNode node = path.nodes[i];
       CellSet cellSet;
@@ -940,7 +943,9 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
         
         // be careful: graph nodes have only one digit, use SudokuBoard to get the digits of the pair
         remotePair = board.getCandidates(a.cell);
-        CellSet toRemove = board.getPeers({a.cell, b.cell});
+        Digit x = remotePair.to_vector()[0];
+        Digit y = remotePair.to_vector()[1];
+        CellSet toRemove = board.getPeersContaining({a.cell, b.cell}, x) | board.getPeersContaining({a.cell, b.cell}, y);
         if (!toRemove.empty()) {
           for (Cell idx : toRemove) {
             event.addOperation(idx, remotePair);

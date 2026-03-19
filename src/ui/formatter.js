@@ -64,6 +64,7 @@
   };
   REGISTRY["XY-Wing"] = wingFormatter;
   REGISTRY["XYZ-Wing"] = wingFormatter;
+  REGISTRY["W-Wing"] = wingFormatter;
 
   const colorFormatter = {
     formatLog(ev, ctx) {
@@ -152,6 +153,7 @@
   REGISTRY["X-Chain"] = chainFormatter;
   REGISTRY["X-Cycle"] = chainFormatter;
   REGISTRY["XY-Chain"] = chainFormatter;
+  REGISTRY["XY-Cycle"] = chainFormatter;
   REGISTRY["Alternating Inference Chain"] = chainFormatter;
   REGISTRY["Alternating Inference Chain (Type 1)"] = chainFormatter;
   REGISTRY["Alternating Inference Chain (Type 2)"] = chainFormatter;

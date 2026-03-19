@@ -817,6 +817,78 @@ static void techXYZWing(SudokuBoard &board, EventQueue &eventQueue) {
   }
 }
 
+static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
+  CellSet bivalues = board.getBivalues();
+  for (Cell a : bivalues) {
+    DigitSet xy = board.getCandidates(a);
+    CellSet peers_of_a = board.getPeers(a);
+    for (Cell b : bivalues) {
+      // we are looking for a remote pair
+      if (a != b && !board.sees(a, b) && board.getCandidates(b) == xy) {
+        CellSet peers_of_b = board.getPeers(b);
+        for (Cell peer_of_a : peers_of_a) {
+          for (Cell peer_of_b : peers_of_b) {
+            // we are looking for the two cells containing the bilocation
+            if (peer_of_a != peer_of_b && board.sees(peer_of_a, peer_of_b)) {
+              CellSet bilocationCandidates = CellSet({peer_of_a, peer_of_b});
+              auto v = xy.to_vector();
+              Digit x = v[0];
+              Digit y = v[1];
+
+              // look for the common row/column of the two cells
+              const Unit *common_unit;
+              if (SudokuBoard::getRowLocation(peer_of_a) == SudokuBoard::getRowLocation(peer_of_b)) {
+                // they are in the same row
+                common_unit = &SudokuBoard::getRowByCell(peer_of_a);
+              }
+              if (SudokuBoard::getColumnLocation(peer_of_a) == SudokuBoard::getColumnLocation(peer_of_b)) {
+                // they are in the same column
+                common_unit = &SudokuBoard::getColumnByCell(peer_of_a);
+              }
+
+              if (board.getPositionsOfDigit(*common_unit, x) == bilocationCandidates) {
+                // W-Wing spotted on digit x
+                Event event(EventType::RemoveCandidate, ReasonId::WWing);
+                // the source is the four cells forming the W-Wing
+                event.addSource(a, DigitSet({x, y}));
+                event.addSource(peer_of_a, DigitSet({x}));
+                event.addSource(peer_of_b, DigitSet({x}));
+                event.addSource(b, DigitSet({x, y}));
+                event.addDelimiter();
+                event.addSource(a, DigitSet({y}));
+                event.addSource(b, DigitSet({y}));
+                // remove instances of Y from peers of extreme cells
+                CellSet set = board.getPeersContaining(CellSet({a, b}), y);
+                for (Cell idx : set) {
+                  event.addOperation(idx, y);
+                }
+                if (eventQueue.enqueue(board, event)) return;
+              } else if (board.getPositionsOfDigit(*common_unit, y) == bilocationCandidates) {
+                // W-Wing spotted on digit y
+                Event event(EventType::RemoveCandidate, ReasonId::WWing);
+                // the source is the four cells forming the W-Wing
+                event.addSource(a, DigitSet({x, y}));
+                event.addSource(peer_of_a, DigitSet({y}));
+                event.addSource(peer_of_b, DigitSet({y}));
+                event.addSource(b, DigitSet({x, y}));
+                event.addDelimiter();
+                event.addSource(a, DigitSet({x}));
+                event.addSource(b, DigitSet({x}));
+                // remove instances of X from peers of extreme cells
+                CellSet set = board.getPeersContaining(CellSet({a, b}), x);
+                for (Cell idx : set) {
+                  event.addOperation(idx, x);
+                }
+                if (eventQueue.enqueue(board, event)) return;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 static void techGenericAIC(SudokuBoard &board,
                            EventQueue &eventQueue,
                            ReasonId reason) {
@@ -829,9 +901,6 @@ static void techGenericAIC(SudokuBoard &board,
   AicGraph prunedGraph = graphBuilder.prune(graph, config);
   std::optional<Event> event = searcher.run_search(prunedGraph);
 
-  // TODO: se un'eliminazione avviene su più celle run_search ritorna più valori
-  // ma non è un caso gestito bene perché invece qui me le aspetto tutte in un CellSet
-  // Poi devo gestire il caso di eliminazione su cella con strong link -> SetValue
   if (event) {
     eventQueue.enqueue(board, *event);
   }
@@ -906,6 +975,7 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techXYZWing,
   techSwordfish,
   techRemotePair,
+  techWWing,
   techSingleDigitPattern,
   techSimpleColoring,
   tech3DMedusa,
