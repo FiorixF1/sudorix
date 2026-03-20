@@ -115,6 +115,8 @@ public:
 
   CellSet getBivalues() const;
 
+  bool areRemotePair(Cell a, Cell b) const;
+
 private:
   // We keep a local copy (owned) so that solver techniques can mutate freely
   SudokuCell cells[81];

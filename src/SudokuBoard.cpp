@@ -446,6 +446,13 @@ CellSet SudokuBoard::getBivalues() const {
   return result;
 }
 
+bool SudokuBoard::areRemotePair(Cell a, Cell b) const {
+  return a != b &&  // they are different cells
+         !sees(a, b) &&  // they don't see each other
+         countCandidates(a) == 2 &&  // they have two candidates
+         getCandidates(a) == getCandidates(b);  // they have the same candidates
+}
+
 bool SudokuBoard::_recalcAllCandidatesFromValues() {
   // Reset completo
   for (Cell i = 0; i < 81; i++) {

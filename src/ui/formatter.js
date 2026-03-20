@@ -109,32 +109,67 @@
 
       let totalMask = 0;
       let nodes = [];
+      let digits = [];
       for (let node of groups[0]) {
         totalMask |= node.mask;
         nodes.push(ctx.formatEurekaCellCode(node.cells));
+        digits.push(ctx.maskToSingleDigit(node.mask));
       }
-      let digits = ctx.maskToDigits(totalMask);
+      let digitCounter = ctx.maskToDigits(totalMask);
 
-      // stringify chain (current format rxcy=rxcy-rxcy=rxcy-...)
-      let chainString = "";
-      let WANT_STRONG = true;
-      for (let node of nodes) {
-        if (chainString != "") {
-          if (WANT_STRONG) {
-            chainString += "=";
-          } else {
-            chainString += "-";
-          }
-          WANT_STRONG = !WANT_STRONG;
-        }
-        chainString += node;
-      }
-
-      if (digits.length == 1) {
+      // stringify chain (Eureka notation)
+      if (digitCounter.length == 1) {
         // single digit chain
-        parts.push(`<div>${digits.join(",")} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(chainString)}</span> => </div>`);
+        let chainString = "";
+        let WANT_STRONG = true;
+        for (let node of nodes) {
+          if (chainString != "") {
+            if (WANT_STRONG) {
+              chainString += "=";
+            } else {
+              chainString += "-";
+            }
+            WANT_STRONG = !WANT_STRONG;
+          }
+          chainString += node;
+        }
+        parts.push(`<div>(${digits[0]}): <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(chainString)}</span> => </div>`);
       } else {
         // multi digit chain
+        let chainString = "";
+        let WANT_STRONG = true;
+        let i = 0;
+        while (i < nodes.length) {
+          let node = nodes[i];
+          let digit = digits[i];
+          let next_node = nodes[i+1];
+          let next_digit = digits[i+1];
+          let link_type = WANT_STRONG ? "=" : "-";
+
+          if (!next_digit) {
+            // last node
+            chainString += "(" + digit + ")" + node;
+            WANT_STRONG = !WANT_STRONG;
+            ++i;
+          } else if (digit == next_digit) {
+            // digit is not going to change in next node
+            chainString += "(" + digit + ")" + node + link_type;
+            WANT_STRONG = !WANT_STRONG;
+            ++i;
+          } else {
+            // a new digit is coming in the next node, include it here
+            chainString += "(" + digit + link_type + next_digit + ")" + node;
+            WANT_STRONG = !WANT_STRONG;
+            ++i;
+            chainString += WANT_STRONG ? "=" : "-";
+            WANT_STRONG = !WANT_STRONG;
+            ++i;
+          }
+        }
+        if (chainString.endsWith("=") || chainString.endsWith("-")) {
+          chainString = chainString.slice(0, -1);
+        }
+        parts.push(`<div><span class="logCellRef logSourceCategory1">${ctx.escapeHtml(chainString)}</span> => </div>`);
       }
 
       defaultOperationsFormatter(ctx, ev, parts);

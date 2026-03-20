@@ -824,7 +824,7 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
     CellSet peers_of_a = board.getPeers(a);
     for (Cell b : bivalues) {
       // we are looking for a remote pair
-      if (a != b && !board.sees(a, b) && board.getCandidates(b) == xy) {
+      if (board.areRemotePair(a, b)) {
         CellSet peers_of_b = board.getPeers(b);
         for (Cell peer_of_a : peers_of_a) {
           for (Cell peer_of_b : peers_of_b) {

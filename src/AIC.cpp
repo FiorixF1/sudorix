@@ -856,6 +856,15 @@ std::optional<Event> AicSearcher::execute_aic_rules(
       deserialize_unitcode(node, cellSet, digitSet, isGrouped);
       event.addSource(cellSet, digitSet);
     }
+    {
+      // add again the first node since this is a ring
+      AicNode node = path.nodes[0];
+      CellSet cellSet;
+      DigitSet digitSet;
+      bool isGrouped;
+      deserialize_unitcode(node, cellSet, digitSet, isGrouped);
+      event.addSource(cellSet, digitSet);
+    }
 
     for (int i = 0; i < path.nodes.size()-1; ++i) {
       AicNode node = path.nodes[i];

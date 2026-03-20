@@ -144,6 +144,6 @@ Pluraj informoj pri la interfacoj, funkcioj kaj datenspecoj estas en dediĉita [
 
 Ege interesaj retejoj kaj solviloj estas enlistigitaj ĉi tie. Sur tiuj ĉi laboraĵoj multe sin bazas la evoluo de la solvilo kaj miaj konoj pri Sudokuo:
 
-* [SudokuWiki](https://www.sudokuwiki.org/) el Andrew Stewart
+* [SudokuWiki](https://www.sudokuwiki.org/) el Andrew Stuart
 * [HoDoKu](https://hodoku.sourceforge.net/)
 * [r/Sudoku Wiki](https://www.reddit.com/r/sudoku/wiki/) el strmckr
