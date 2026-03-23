@@ -136,9 +136,9 @@ enum class ReasonId : uint8_t {
     // chains
     RemotePair,
     XChain,
-    XCycle,
+    XRing,
     XYChain,
-    XYCycle,
+    XYRing,
     AIC,
     AICType1,
     AICType2,
@@ -271,7 +271,7 @@ En flugiloj, la fontoj estas la sekvaj:
 * Ĉelo de la pivoto + Cifero Z (se aplikebla)
 * Ĉelo de la dua flugilo + Cifero Z
 
-Tio aplikiĝas al: **XY-Wing**, **XYZ-Wing**.
+Tio aplikiĝas al: **XY-Wing**, **XYZ-Wing**, **W-Wing**.
 
 ---
 

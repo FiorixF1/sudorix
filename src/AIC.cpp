@@ -844,8 +844,8 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   if (are_weakly_linked(start, end)) {
     AicPath path = reconstruct_path(end_state_idx, states, parents);
 
-    Event event(EventType::RemoveCandidate, reason == ReasonId::XChain ? ReasonId::XCycle :
-                                            reason == ReasonId::XYChain ? ReasonId::XYCycle :
+    Event event(EventType::RemoveCandidate, reason == ReasonId::XChain ? ReasonId::XRing :
+                                            reason == ReasonId::XYChain ? ReasonId::XYRing :
                                             reason == ReasonId::AIC ? ReasonId::AICType3 :
                                             reason);
     for (int i = 0; i < path.nodes.size(); ++i) {

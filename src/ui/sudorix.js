@@ -97,9 +97,9 @@ var business_logic = (() => {
     "3D Medusa (Emptied Cell)",
     "Remote Pair",
     "X-Chain",
-    "X-Cycle",
+    "X-Ring",
     "XY-Chain",
-    "XY-Cycle",
+    "XY-Ring",
     "Alternating Inference Chain",
     "Alternating Inference Chain (Type 1)",
     "Alternating Inference Chain (Type 2)",
@@ -743,6 +743,70 @@ var business_logic = (() => {
     }
   }
 
+  function getChainOverlayEl() {
+    return $("chainOverlay");
+  }
+
+  function getCandidateCenter(idx, digit) {
+    const el = getCandidateElement(idx, digit);
+    const overlay = getChainOverlayEl();
+    if (!el || !overlay) {
+      return null;
+    }
+    const er = el.getBoundingClientRect();
+    const or = overlay.getBoundingClientRect();
+    return {
+      x: (er.left + er.right) / 2 - or.left,
+      y: (er.top + er.bottom) / 2 - or.top
+    };
+  }
+
+  function renderChainLinks() {
+    const overlay = getChainOverlayEl();
+    if (!overlay) {
+      return;
+    }
+    overlay.innerHTML = "";
+
+    const gridRect = gridEl.getBoundingClientRect();
+    overlay.setAttribute("viewBox", `0 0 ${gridRect.width} ${gridRect.height}`);
+
+    for (const link of chainLinks) {
+      const a = getCandidateCenter(link.from.idx, link.from.digit);
+      const b = getCandidateCenter(link.to.idx, link.to.digit);
+      if (!a || !b) {
+        continue;
+      }
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      path.setAttribute("x1", String(a.x));
+      path.setAttribute("y1", String(a.y));
+      path.setAttribute("x2", String(b.x));
+      path.setAttribute("y2", String(b.y));
+      path.setAttribute("stroke", link.color || "var(--accent)");
+      path.setAttribute("class", `chainLink ${link.dashed ? "chainLinkDashed" : ""} ${link.bold ? "chainLinkBold" : "chainLinkNormal"}`.trim());
+      overlay.appendChild(path);
+    }
+  }
+
+  function clearCandidateLinks() {
+    chainLinks = [];
+    const overlay = getChainOverlayEl();
+    if (overlay) {
+      overlay.innerHTML = "";
+    }
+  }
+
+  function addCandidateLink(fromIdx, fromDigit, toIdx, toDigit, options = {}) {
+    chainLinks.push({
+      from: { idx: fromIdx, digit: fromDigit },
+      to: { idx: toIdx, digit: toDigit },
+      dashed: !!options.dashed,
+      bold: !!options.bold,
+      color: options.color || null
+    });
+    renderChainLinks();
+  }
+
   function getDigitFromKeyEvent(e) {
     if (e.key >= "1" && e.key <= "9") {
       return parseInt(e.key, 10);
@@ -1254,6 +1318,12 @@ var business_logic = (() => {
       this.#cellAt(idx).clearCandidateColor(digit);
     }
 
+    clearAllColors() {
+      for (let i = 0; i < 81; i++) {
+        this.#cellAt(i).clearAllColors();
+      }
+    }
+
     /* ---- check ---- */
     checkSolvedGrid() {
       // 1) Must be complete
@@ -1314,6 +1384,7 @@ var business_logic = (() => {
   const optPrefillEl = $("optPrefill");
   const optAutoClearEl = $("optAutoClear");
   const optHighlightEl = $("optHighlight");
+  const optFastSolveEl = $("optFastSolve");
 
   const digitPadEl = $("digitPad");
   const colorPadEl = $("colorPad");
@@ -1330,6 +1401,11 @@ var business_logic = (() => {
 
   const modalOverlayPause = $("modalOverlayPause");
   const btnModalOkPause = $("btnModalOkPause");
+
+  const modalOverlayExport = $("modalOverlayExport");
+  const modalExportText = $("modalExportText");
+  const btnModalCopyExport = $("btnModalCopyExport");
+  const btnModalOkExport = $("btnModalOkExport");
 
   /* =========================================================
    * App state
@@ -1360,6 +1436,9 @@ var business_logic = (() => {
   let timerInterval = null;
   let resumeTimerAfterPause = false;
 
+  /* chain overlay state */
+  let chainLinks = [];
+
   /* =========================================================
    * Rich Log (clickable) + Snapshot Preview
    * ========================================================= */
@@ -1367,6 +1446,10 @@ var business_logic = (() => {
   let previewActive = false;
   let previewSavedLiveState = null;
   let previewActiveIndex = -1;
+  let oldUndoDisabled = false;
+  let oldRedoDisabled = false;
+  let oldUndoContainsDisabled = false;
+  let oldRedoContainsDisabled = false;
 
   function escapeHtml(s) {
     return String(s)
@@ -1570,7 +1653,11 @@ var business_logic = (() => {
       splitSourceGroups,
       normalizeSourceCategory,
       resolveSourceCategory,
-      sourceIsDelimiter
+      sourceIsDelimiter,
+      addCandidateLink,
+      clearCandidateLinks,
+      renderChainLinks,
+      palette: PALETTE
     };
   }
 
@@ -1607,11 +1694,33 @@ var business_logic = (() => {
     modalOverlayPause.classList.remove("open");
   }
 
+  function openExportModal(text) {
+    modalExportText.value = text || "";
+    modalOverlayExport.classList.add("open");
+    setTimeout(() => {
+      modalExportText.focus();
+      modalExportText.select();
+    }, 0);
+  }
+
+  function closeExportModal() {
+    modalOverlayExport.classList.remove("open");
+  }
+
   function anyModalOpen() {
-    return modalOverlayCheck.classList.contains("open") || modalOverlayPause.classList.contains("open");
+    return modalOverlayCheck.classList.contains("open") || modalOverlayPause.classList.contains("open") || modalOverlayExport.classList.contains("open");
   }
 
   btnModalOkCheck.addEventListener("click", () => closeCheckModal());
+  btnModalCopyExport.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(modalExportText.value || "");
+    } catch (e) {
+      modalExportText.focus();
+      modalExportText.select();
+    }
+  });
+  btnModalOkExport.addEventListener("click", () => closeExportModal());
   btnModalOkPause.addEventListener("click", () => {
     closePauseModal();
     if (resumeTimerAfterPause) {
@@ -1630,6 +1739,15 @@ var business_logic = (() => {
       if (e.key === "Enter") {
         e.preventDefault();
         btnModalOkPause.click();
+      }
+      return;
+    }
+
+    /* In export modal: Enter/Escape chiude */
+    if (modalOverlayExport.classList.contains("open")) {
+      if (e.key === "Escape" || e.key === "Enter") {
+        e.preventDefault();
+        closeExportModal();
       }
       return;
     }
@@ -1726,15 +1844,19 @@ var business_logic = (() => {
 
     digitPadEl.classList.toggle("hidden", newMode === "color");
     colorPadEl.classList.toggle("hidden", newMode !== "color");
+    const colorActionsEl = $("colorActions");
+    if (colorActionsEl) {
+      colorActionsEl.classList.toggle("hidden", newMode !== "color");
+    }
 
-    /* candidates clickable only in Colorazione */
+    /* candidates clickable only in Kolorigado */
     gridEl.classList.toggle("candClickable", newMode === "color");
 
     /* If entering color mode, do not change highlight digit; just don't apply highlight on clicks */
   }
 
   function isModeToggleKey(e) {
-    /* '.' deve switchare SOLO fra Valore e Candidato. In Evidenzia/Colorazione: no-op */
+    /* '.' deve switchare SOLO fra Valoro e Kandidato. In Kolorigado: no-op */
     if (!(mode === "value" || mode === "cand")) {
       return false;
     }
@@ -1934,6 +2056,7 @@ var business_logic = (() => {
     for (let i = 0; i < 81; i++) {
       renderCell(i);
     }
+    renderChainLinks();
   }
 
   function buildGridUI() {
@@ -2292,6 +2415,16 @@ var business_logic = (() => {
       roundNumber++;
     }
 
+    if (optFastSolveEl && optFastSolveEl.checked) {
+      saveUndoSnapshot();
+      logEventOnce(ev);
+      const did = applyEvent(ev);
+      renderAll();
+      clearAllEventHighlights();
+      callbackDone(did);
+      return;
+    }
+
     // Phase 1: highlight sources + operations BEFORE applying.
     renderAll();
     clearAllEventHighlights();
@@ -2342,7 +2475,7 @@ var business_logic = (() => {
         }
         // schedule next
         if (solveTimer) {
-          setTimeout(loop, 10);
+          setTimeout(loop, (optFastSolveEl && optFastSolveEl.checked) ? 0 : 10);
         }
       });
     };
@@ -2471,6 +2604,16 @@ var business_logic = (() => {
     }
   }
 
+  function exportSudoku() {
+    openExportModal(board.exportToString());
+  }
+
+  function clearAllManualColors() {
+    saveUndoSnapshot();
+    board.clearAllColors();
+    renderAll();
+  }
+
   /* =========================================================
    * Import / Reset
    * ========================================================= */
@@ -2488,6 +2631,7 @@ var business_logic = (() => {
     setMode("value");
     refreshColorSelectionUI();
     clearAllEventHighlights();
+    clearCandidateLinks();
     clearHistory();
     clearLog();
 
@@ -2529,6 +2673,19 @@ var business_logic = (() => {
    * ========================================================= */
   function handleKey(e) {
     if (anyModalOpen()) {
+      return;
+    }
+
+    const isUndo = e.ctrlKey && !e.shiftKey && (e.key === "z" || e.key === "Z");
+    const isRedo = (e.ctrlKey && (e.key === "y" || e.key === "Y")) || (e.ctrlKey && e.shiftKey && (e.key === "z" || e.key === "Z"));
+    if (isUndo) {
+      e.preventDefault();
+      doUndo();
+      return;
+    }
+    if (isRedo) {
+      e.preventDefault();
+      doRedo();
       return;
     }
 
@@ -2582,6 +2739,7 @@ var business_logic = (() => {
   $("btnClear").addEventListener("click", () => resetGrid());
   $("btnRecalc").addEventListener("click", () => recalcCandidates());
 
+  $("btnExport").addEventListener("click", () => exportSudoku());
   $("btnCheck").addEventListener("click", () => {
     const res = board.checkSolvedGrid();
     openCheckModal(res.msg);
@@ -2617,6 +2775,7 @@ var business_logic = (() => {
 
   $("btnUndo").addEventListener("click", () => doUndo());
   $("btnRedo").addEventListener("click", () => doRedo());
+  $("btnClearColors").addEventListener("click", () => clearAllManualColors());
 
   // Wire up right mode buttons
   $("modeValue").addEventListener("click", () => setMode("value"));
@@ -2640,6 +2799,7 @@ var business_logic = (() => {
     setMode("value");
 
     appendInfo("La solvilo skribos ĉi tie la paŝojn.");
+    window.addEventListener("resize", () => renderChainLinks());
     renderTimer();
     updatePauseButtonState();
   }
