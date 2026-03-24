@@ -9,6 +9,7 @@
 #include "SudokuBoard.hpp"
 #include "EventQueue.hpp"
 #include "AIC.hpp"
+#include "encoder.hpp"
 #include "types.hpp"
 
 static SudokuBoard g_sudokuBoard;
@@ -1000,17 +1001,19 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
   }
 }
 
+/* -------------------- AIC WORLD -------------------- */
+
+static void buildGraph(SudokuBoard &board, EventQueue &eventQueue) {
+  board.buildGraph();
+}
+
 static void techGenericAIC(SudokuBoard &board,
                            EventQueue &eventQueue,
                            ReasonId reason) {
-  AicGraphBuilder graphBuilder(board);
-  AicGraph graph = graphBuilder.build();
-  // TODO: cache graph instead of rebuilding it each time
-
   AicSearcher searcher(board);
   const AicConfig &config = searcher.setConfigAndReturn(reason);
-  AicGraph prunedGraph = graphBuilder.prune(graph, config);
-  std::optional<Event> event = searcher.run_search(prunedGraph);
+  AicGraph prunedGraph = board.getPrunedGraph(config);
+  std::optional<Event> event = searcher.runSearch(prunedGraph);
 
   if (event) {
     eventQueue.enqueue(board, *event);
@@ -1044,6 +1047,7 @@ static void techXYChain(SudokuBoard &board, EventQueue &eventQueue) {
 static void techAIC(SudokuBoard &board, EventQueue &eventQueue) {
   techGenericAIC(board, eventQueue, ReasonId::AIC);
 }
+/* ------------------ END AIC WORLD ------------------ */
 
 typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);
 
@@ -1085,6 +1089,7 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techXYWing,
   techXYZWing,
   techSwordfish,
+  buildGraph, // dummy technique to build the graph for chaining techniques
   techRemotePair,
   techUniqueRectangle,
   techWWing,

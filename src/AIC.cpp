@@ -1,4 +1,5 @@
 #include "AIC.hpp"
+#include "encoder.hpp"
 
 AicGraphBuilder::AicGraphBuilder(const SudokuBoard &board) : board(board) { }
 
@@ -511,7 +512,7 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
   return config;
 }
 
-std::optional<Event> AicSearcher::run_search(AicGraph &graph) {
+std::optional<Event> AicSearcher::runSearch(AicGraph &graph) {
   visited.clear();
 
   if (config.useWeakLinks) {

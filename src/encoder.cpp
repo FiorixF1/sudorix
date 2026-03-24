@@ -1,6 +1,5 @@
-
-#include "SudokuBoard.hpp"
 #include "encoder.hpp"
+#include "SudokuBoard.hpp"
 
 static uint32_t encode_unit_cells(uint32_t unitId, uint32_t mask9);
 

@@ -6,6 +6,7 @@
 #include <map>
 #include <algorithm>
 #include "SudokuCell.hpp"
+#include "AIC.hpp"
 
 enum PeerType : uint8_t {
   ROWS = 1,
@@ -103,6 +104,12 @@ public:
 
   static Location getBoxLocation(Cell idx);
 
+  // --- AIC ---
+
+  void buildGraph();
+
+  AicGraph getPrunedGraph(const AicConfig &config);
+
   // --- other ---
 
   void autoClearPeersAfterPlacement(Cell idx, Digit digit);
@@ -126,6 +133,10 @@ private:
 
   // How many cells are solved
   int solvedCells = 0;
+
+  // Graph for AIC
+  AicGraphBuilder graphBuilder;
+  AicGraph graph;
 
   bool _recalcAllCandidatesFromValues();
 };

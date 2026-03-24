@@ -169,7 +169,7 @@ static const std::vector<CellSet> PEERS = {
 // =========================================================
 
 // empty board
-SudokuBoard::SudokuBoard() = default;
+SudokuBoard::SudokuBoard() : graphBuilder(*this) {};
 
 // only values, candidates are calculated automatically
 int SudokuBoard::importFromString(const char *values) {
@@ -330,6 +330,39 @@ bool SudokuBoard::sees(CellSet a, CellSet b) const {
 }
 
 // --- positions API ---
+CellSet SudokuBoard::getPositionsOfDigit(Unit unit, Digit d) const {
+  CellSet positions;
+  for (Cell idx : unit) {
+    if (this->isSolved(idx)) {
+      continue;
+    }
+    if (this->hasCandidate(idx, d)) {
+      positions.insert(idx);
+    }
+  }
+  return positions;
+}
+
+DigitSet SudokuBoard::getDigitsInLocation(Unit unit, Location i) const {
+  std::vector<int> unitList = unit.to_vector();
+  Cell idx = unitList[i];
+  if (this->isSolved(idx)) {
+    return DigitSet(0);
+  }
+  return this->getCandidates(idx);
+}
+
+// --- events API ---
+void SudokuBoard::applySetValue(Cell idx, Digit digit) {
+  setValue(idx, digit);
+  autoClearPeersAfterPlacement(idx, digit);
+}
+
+void SudokuBoard::applyRemoveCandidate(Cell idx, Digit digit) {
+  disableCandidate(idx, digit);
+}
+
+// --- utility API ---
 const std::vector<Unit> &SudokuBoard::getRows() {
   return ROW_UNITS;
 } 
@@ -380,38 +413,16 @@ Location SudokuBoard::getBoxLocation(Cell idx) {
   return (Location)((r / 3) * 3 + (c / 3));
 }
 
-CellSet SudokuBoard::getPositionsOfDigit(Unit unit, Digit d) const {
-  CellSet positions;
-  for (Cell idx : unit) {
-    if (this->isSolved(idx)) {
-      continue;
-    }
-    if (this->hasCandidate(idx, d)) {
-      positions.insert(idx);
-    }
-  }
-  return positions;
-}
-  
-DigitSet SudokuBoard::getDigitsInLocation(Unit unit, Location i) const {
-  std::vector<int> unitList = unit.to_vector();
-  Cell idx = unitList[i];
-  if (this->isSolved(idx)) {
-    return DigitSet(0);
-  }
-  return this->getCandidates(idx);
+// --- AIC ---
+void SudokuBoard::buildGraph() {
+  graph = graphBuilder.build();
 }
 
-// --- events API ---
-void SudokuBoard::applySetValue(Cell idx, Digit digit) {
-  setValue(idx, digit);
-  autoClearPeersAfterPlacement(idx, digit);
+AicGraph SudokuBoard::getPrunedGraph(const AicConfig &config) {
+  return graphBuilder.prune(graph, config);
 }
 
-void SudokuBoard::applyRemoveCandidate(Cell idx, Digit digit) {
-  disableCandidate(idx, digit);
-}
-
+// --- other ---
 void SudokuBoard::autoClearPeersAfterPlacement(Cell idx, Digit digit) {
   for (Cell i : this->getPeers(idx)) {
     disableCandidate(i, digit);

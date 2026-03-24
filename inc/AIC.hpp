@@ -8,7 +8,9 @@
 #include <cstdint>
 #include <algorithm>
 #include <optional>
-#include "encoder.hpp"
+#include "SudokuCell.hpp"
+
+class SudokuBoard;
 
 // Unique ID for nodes.
 // The ID, both for singletons and groups, is built as follows:
@@ -146,7 +148,7 @@ public:
 
   const AicConfig &setConfigAndReturn(ReasonId reason);
 
-  std::optional<Event> run_search(AicGraph &graph);
+  std::optional<Event> runSearch(AicGraph &graph);
 
 private:
   const SudokuBoard &board;
