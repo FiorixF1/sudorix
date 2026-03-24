@@ -63,6 +63,12 @@ enum class ReasonId : uint8_t {
   EmptyRectangle,
   // uniqueness
   UniqueRectangle,
+  UniqueRectangleType1,
+  UniqueRectangleType2,
+  UniqueRectangleType3,
+  UniqueRectangleType4,
+  UniqueRectangleType5,
+  UniqueRectangleType6,
   HiddenRectangle,
   AvoidableRectangle,
   BUGPlusOne,

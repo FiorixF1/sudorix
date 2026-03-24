@@ -116,6 +116,12 @@ enum class ReasonId : uint8_t {
     EmptyRectangle,
     // uniqueness
     UniqueRectangle,
+    UniqueRectangleType1,
+    UniqueRectangleType2,
+    UniqueRectangleType3,
+    UniqueRectangleType4,
+    UniqueRectangleType5,
+    UniqueRectangleType6,
     HiddenRectangle,
     AvoidableRectangle,
     BUGPlusOne,
@@ -256,6 +262,22 @@ Se la fiŝo enhavas naĝilojn, necesas aldoni pluajn fontojn:
 * Ĉeloj entenantaj la naĝilon + Cifero
 
 Tio aplikiĝas al: **Finned X-Wing**, **Finned Swordfish**, **Finned Jellyfish**.
+
+---
+
+## Rektanguloj
+
+La rektanguloj estas prezentitaj de du fontoj:
+
+* Ĉeloj de la unua vico + Ciferoj
+* Ĉeloj de la dua vico + Ciferoj
+
+En kelkaj kazoj, pluaj fontoj estas prezentitaj:
+
+* Disigilo
+* Ĉeloj de la plua subaro + Ciferoj
+
+Tio aplikiĝas al: **Unique Rectangle**, **Hidden Rectangle**, **Avoidable Rectangle**.
 
 ---
 

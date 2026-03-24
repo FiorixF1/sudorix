@@ -401,19 +401,20 @@
       opacity: 0.0;
      }
 
+    /* set to !important so these rules have priority over flashCategoryX */
     .cand.flashSource {
-      outline: 2px solid var(--flashSourceOutline);
-      box-shadow: 0 0 0 2px var(--flashSourceGlow);
+      outline: 2px solid var(--flashSourceOutline) !important;
+      box-shadow: 0 0 0 2px var(--flashSourceGlow) !important;
     }
 
     .cand.flashSetCand {
-      outline: 2px solid var(--flashSourceOutline);
-      box-shadow: 0 0 0 2px var(--flashSourceGlow);
+      outline: 2px solid var(--flashSourceOutline) !important;
+      box-shadow: 0 0 0 2px var(--flashSourceGlow) !important;
     }
 
     .cand.flashRemoveCand {
-      outline: 2px solid var(--flashRemoveOutline2);
-      box-shadow: 0 0 0 2px var(--flashRemoveGlow2);
+      outline: 2px solid var(--flashRemoveOutline2) !important;
+      box-shadow: 0 0 0 2px var(--flashRemoveGlow2) !important;
     }
 
     .cand.flashCategory1 { outline: 2px solid var(--cat1Outline); box-shadow: 0 0 0 2px var(--cat1Glow); }

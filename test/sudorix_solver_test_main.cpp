@@ -351,6 +351,8 @@ int main(int argc, char **argv) {
   std::cerr << "Loaded " << caseNo << " test lines, running " << cases.size()
             << " valid puzzles on " << threads << " thread(s)...\n";
 
+  bool singleThreadMode = (threads == 1);
+
   std::vector<TestResult> results(cases.size());
   std::atomic<size_t> nextIndex{0};
 
@@ -380,7 +382,11 @@ int main(int argc, char **argv) {
       r.passed = (ok != 0);
       r.output = out81;
       r.why = why;
-      results[i] = std::move(r);
+      if (singleThreadMode) {
+        std::cout << formatResult(r);
+      } else {
+        results[i] = std::move(r);
+      }
     }
   };
 
@@ -400,7 +406,7 @@ int main(int argc, char **argv) {
   for (const auto &r : invalidResults) {
     total++;
     failed++;
-    std::cout << formatResult(r);
+    if (!singleThreadMode) std::cout << formatResult(r);
   }
 
   for (const auto &r : results) {
@@ -410,7 +416,7 @@ int main(int argc, char **argv) {
     } else {
       failed++;
     }
-    std::cout << formatResult(r);
+    if (!singleThreadMode) std::cout << formatResult(r);
   }
 
   std::cout << "SUMMARY: total=" << total << " passed=" << passed << " failed=" << failed << "\n";

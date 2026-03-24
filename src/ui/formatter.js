@@ -42,6 +42,34 @@
   REGISTRY["Swordfish"] = fishFormatter;
   REGISTRY["Jellyfish"] = fishFormatter;
 
+  const rectangleFormatter = {
+    formatLog(ev, ctx) {
+      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const parts = [];
+
+      let totalMask = 0;
+      let rectangleSet = [];
+      for (let source of groups[0]) {
+        totalMask |= source.mask;
+        rectangleSet.push(ctx.formatEurekaCellCode(source.cells));
+      }
+      let digits = ctx.maskToDigits(totalMask);
+
+      parts.push(`<div>{${ctx.escapeHtml(digits.join(","))}} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(rectangleSet.join(","))}</span> => </div>`);
+
+      defaultOperationsFormatter(ctx, ev, parts);
+
+      return { title: ev.reason, bodyHtml: parts.join("") };
+    }
+  };
+  REGISTRY["Unique Rectangle"] = rectangleFormatter;
+  REGISTRY["Unique Rectangle (Type 1)"] = rectangleFormatter;
+  REGISTRY["Unique Rectangle (Type 2)"] = rectangleFormatter;
+  REGISTRY["Unique Rectangle (Type 3)"] = rectangleFormatter;
+  REGISTRY["Unique Rectangle (Type 4)"] = rectangleFormatter;
+  REGISTRY["Unique Rectangle (Type 5)"] = rectangleFormatter;
+  REGISTRY["Unique Rectangle (Type 6)"] = rectangleFormatter;
+
   const wingFormatter = {
     formatLog(ev, ctx) {
       const groups = ctx.splitSourceGroups(ev.sources || []);
@@ -234,7 +262,7 @@
       for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
         const group = groups[groupIndex];
         if (groups.length > 1) {
-          parts.push(`<div class="logSourceCategory${normalizeSourceCategory(groupIndex + 1)}"><b>Group ${groupIndex + 1}</b></div>`);
+          parts.push(`<div class="logSourceCategory${ctx.normalizeSourceCategory(groupIndex + 1)}"><b>Group ${groupIndex + 1}</b></div>`);
         }
         for (let groupPos = 0; groupPos < group.length; groupPos++) {
           const s = group[groupPos];

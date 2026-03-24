@@ -61,7 +61,7 @@ Tio produktas nur la objektan dosieron. Ligu ĝin al ekzistanta aplikaĵo.
 make native
 ```
 
-### Sencimigo
+### Baza sencimigo
 
 Por obteni detalan protokolon dum la plenumo de la solvilo, aldonu la opcion `DEBUG=1` al la kompila komandlinio.
 
@@ -84,6 +84,16 @@ make test
 
 ```bash
 make run PUZZLES=/path/to/file.txt MODE=full|step
+```
+
+### Avana sencimigo
+
+Por sencimigo kun gdb, kompilu la solvilon ligatan al la provizita testa aro.
+
+```bash
+make test DEBUG=1
+gdb bin/sudorix_test
+> run /path/to/file.txt --mode=full --threads=1
 ```
 
 Nuntempe Sudorix povas solvi:

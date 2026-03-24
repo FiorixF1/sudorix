@@ -656,6 +656,115 @@ static void techSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
   }
 }
 
+static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
+  // Look for the four vertices of the rectangle, defined as:
+  // - Main vertex: the main bivalue cell
+  // - Box vertex: the vertex in the same box (and line) of the main vertex
+  // - Line vertex: the vertex in the same line of the main vertex, but different box
+  // - Opposite vertex: the vertex on the opposite side of the main vertex
+  CellSet bivalues = board.getBivalues();
+  for (Cell mainVertex : bivalues) {
+    DigitSet xy = board.getCandidates(mainVertex);
+    const Unit &box = SudokuBoard::getBoxByCell(mainVertex);
+    // Box vertex: look for peers in the same box and same row/column
+    for (Cell boxVertex : (box - CellSet({mainVertex})) &
+                          (SudokuBoard::getRowByCell(mainVertex) | SudokuBoard::getColumnByCell(mainVertex))) {
+      DigitSet boxVertexDigits = board.getCandidates(boxVertex);
+      if (boxVertexDigits.is_superset_of(xy)) {
+        // Line vertex: look for peers in the same row/column but different box (not visible by box vertex)
+        for (Cell lineVertex : board.getPeers(mainVertex) - board.getPeers(boxVertex) - CellSet({boxVertex})) {
+          DigitSet lineVertexDigits = board.getCandidates(lineVertex);
+          if (lineVertexDigits.is_superset_of(xy)) {
+            // Opposite vertex: the only *aligned* cell visible by both box vertex and line vertex
+            CellSet tmp = board.getBoxByCell(lineVertex) &
+                          board.getPeers(boxVertex) &
+                          (SudokuBoard::getRowByCell(lineVertex) | SudokuBoard::getColumnByCell(lineVertex));
+            // be careful, it could be a solved cell
+            if (tmp.empty()) continue;
+            Cell oppositeVertex = *tmp.begin();
+            DigitSet oppositeVertexDigits = board.getCandidates(oppositeVertex);
+            if (oppositeVertexDigits.is_superset_of(xy)) {
+              // rectangle found
+              Location rowMin = std::min({SudokuBoard::getRowLocation(mainVertex), 
+                                          SudokuBoard::getRowLocation(boxVertex),
+                                          SudokuBoard::getRowLocation(lineVertex),
+                                          SudokuBoard::getRowLocation(oppositeVertex)});
+              Location rowMax = std::max({SudokuBoard::getRowLocation(mainVertex), 
+                                          SudokuBoard::getRowLocation(boxVertex),
+                                          SudokuBoard::getRowLocation(lineVertex),
+                                          SudokuBoard::getRowLocation(oppositeVertex)});
+              Location colMin = std::min({SudokuBoard::getColumnLocation(mainVertex), 
+                                          SudokuBoard::getColumnLocation(boxVertex),
+                                          SudokuBoard::getColumnLocation(lineVertex),
+                                          SudokuBoard::getColumnLocation(oppositeVertex)});
+              Location colMax = std::max({SudokuBoard::getColumnLocation(mainVertex), 
+                                          SudokuBoard::getColumnLocation(boxVertex),
+                                          SudokuBoard::getColumnLocation(lineVertex),
+                                          SudokuBoard::getColumnLocation(oppositeVertex)});
+              Cell a = rowMin*9 + colMin;
+              Cell b = rowMin*9 + colMax;
+              Cell c = rowMax*9 + colMin;
+              Cell d = rowMax*9 + colMax;
+              CellSet rectangleUpper({a, b});
+              CellSet rectangleLower({c, d});
+              if (xy == boxVertexDigits) {
+                // UR types 1, 2, 3, 4
+                if (xy == lineVertexDigits || xy == oppositeVertexDigits) {
+                  // Type 1
+                  Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType1);
+                  event.addSource(rectangleUpper, xy);
+                  event.addSource(rectangleLower, xy);
+                  // remove xy from the vertex with more candidates
+                  event.addOperation(xy == lineVertexDigits ? oppositeVertex : lineVertex, xy);
+                  if (eventQueue.enqueue(board, event)) return;
+                }
+                if (lineVertexDigits.size() == 3 && lineVertexDigits == oppositeVertexDigits) {
+                  // Type 2
+                  Digit z = *(lineVertexDigits - xy).begin();
+                  Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType2);
+                  event.addSource(rectangleUpper, xy);
+                  event.addSource(rectangleLower, xy);
+                  event.addDelimiter();
+                  event.addSource({lineVertex, oppositeVertex}, z);
+                  // remove z from peers of lineVertex and oppositeVertex
+                  for (Cell idx : board.getPeers({lineVertex, oppositeVertex})) {
+                    event.addOperation(idx, z);
+                  }
+                  if (eventQueue.enqueue(board, event)) return;
+                }
+              } else if (xy == oppositeVertexDigits) {
+                // UR types 5, 6
+                if (lineVertexDigits.size() == 3 && lineVertexDigits == boxVertexDigits) {
+                  // Type 5
+                  Digit z = *(lineVertexDigits - xy).begin();
+                  Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType5);
+                  event.addSource(rectangleUpper, xy);
+                  event.addSource(rectangleLower, xy);
+                  event.addDelimiter();
+                  event.addSource({lineVertex, boxVertex}, z);
+                  // remove z from peers of lineVertex and boxVertex (and oppositeVertex, if applicable)
+                  if (lineVertexDigits == oppositeVertexDigits) {
+                    // case with three cells
+                    for (Cell idx : board.getPeers({lineVertex, boxVertex, oppositeVertex})) {
+                      event.addOperation(idx, z);
+                    }
+                  } else {
+                    // case with two cells
+                    for (Cell idx : board.getPeers({lineVertex, boxVertex})) {
+                      event.addOperation(idx, z);
+                    }
+                  }
+                  if (eventQueue.enqueue(board, event)) return;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 static void techBUGPlusOne(SudokuBoard &board, EventQueue &eventQueue) {
   // Condition 1: only bivalue cells except for one trivalue cell
   Cell trivalueCell = -1;
@@ -836,7 +945,7 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
               Digit y = v[1];
 
               // look for the common row/column of the two cells
-              const Unit *common_unit;
+              const Unit *common_unit = nullptr;
               if (SudokuBoard::getRowLocation(peer_of_a) == SudokuBoard::getRowLocation(peer_of_b)) {
                 // they are in the same row
                 common_unit = &SudokuBoard::getRowByCell(peer_of_a);
@@ -846,40 +955,42 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
                 common_unit = &SudokuBoard::getColumnByCell(peer_of_a);
               }
 
-              if (board.getPositionsOfDigit(*common_unit, x) == bilocationCandidates) {
-                // W-Wing spotted on digit x
-                Event event(EventType::RemoveCandidate, ReasonId::WWing);
-                // the source is the four cells forming the W-Wing
-                event.addSource(a, DigitSet({x, y}));
-                event.addSource(peer_of_a, DigitSet({x}));
-                event.addSource(peer_of_b, DigitSet({x}));
-                event.addSource(b, DigitSet({x, y}));
-                event.addDelimiter();
-                event.addSource(a, DigitSet({y}));
-                event.addSource(b, DigitSet({y}));
-                // remove instances of Y from peers of extreme cells
-                CellSet set = board.getPeersContaining(CellSet({a, b}), y);
-                for (Cell idx : set) {
-                  event.addOperation(idx, y);
+              if (common_unit) {
+                if (board.getPositionsOfDigit(*common_unit, x) == bilocationCandidates) {
+                  // W-Wing spotted on digit x
+                  Event event(EventType::RemoveCandidate, ReasonId::WWing);
+                  // the source is the four cells forming the W-Wing
+                  event.addSource(a, DigitSet({x, y}));
+                  event.addSource(peer_of_a, DigitSet({x}));
+                  event.addSource(peer_of_b, DigitSet({x}));
+                  event.addSource(b, DigitSet({x, y}));
+                  event.addDelimiter();
+                  event.addSource(a, DigitSet({y}));
+                  event.addSource(b, DigitSet({y}));
+                  // remove instances of Y from peers of extreme cells
+                  CellSet set = board.getPeersContaining(CellSet({a, b}), y);
+                  for (Cell idx : set) {
+                    event.addOperation(idx, y);
+                  }
+                  if (eventQueue.enqueue(board, event)) return;
+                } else if (board.getPositionsOfDigit(*common_unit, y) == bilocationCandidates) {
+                  // W-Wing spotted on digit y
+                  Event event(EventType::RemoveCandidate, ReasonId::WWing);
+                  // the source is the four cells forming the W-Wing
+                  event.addSource(a, DigitSet({x, y}));
+                  event.addSource(peer_of_a, DigitSet({y}));
+                  event.addSource(peer_of_b, DigitSet({y}));
+                  event.addSource(b, DigitSet({x, y}));
+                  event.addDelimiter();
+                  event.addSource(a, DigitSet({x}));
+                  event.addSource(b, DigitSet({x}));
+                  // remove instances of X from peers of extreme cells
+                  CellSet set = board.getPeersContaining(CellSet({a, b}), x);
+                  for (Cell idx : set) {
+                    event.addOperation(idx, x);
+                  }
+                  if (eventQueue.enqueue(board, event)) return;
                 }
-                if (eventQueue.enqueue(board, event)) return;
-              } else if (board.getPositionsOfDigit(*common_unit, y) == bilocationCandidates) {
-                // W-Wing spotted on digit y
-                Event event(EventType::RemoveCandidate, ReasonId::WWing);
-                // the source is the four cells forming the W-Wing
-                event.addSource(a, DigitSet({x, y}));
-                event.addSource(peer_of_a, DigitSet({y}));
-                event.addSource(peer_of_b, DigitSet({y}));
-                event.addSource(b, DigitSet({x, y}));
-                event.addDelimiter();
-                event.addSource(a, DigitSet({x}));
-                event.addSource(b, DigitSet({x}));
-                // remove instances of X from peers of extreme cells
-                CellSet set = board.getPeersContaining(CellSet({a, b}), x);
-                for (Cell idx : set) {
-                  event.addOperation(idx, x);
-                }
-                if (eventQueue.enqueue(board, event)) return;
               }
             }
           }
@@ -975,6 +1086,7 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techXYZWing,
   techSwordfish,
   techRemotePair,
+  techUniqueRectangle,
   techWWing,
   techSingleDigitPattern,
   techSimpleColoring,

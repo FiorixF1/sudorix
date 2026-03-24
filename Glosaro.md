@@ -30,6 +30,10 @@
 | - Jellyfish                               | - Meduzo                                  |
 | - Fin                                     | - Naĝilo                                  |
 | - Sashimi                                 | - Saŝimio                                 |
+| Uniqueness                                | Unikeco                                   |
+| - Unique rectangle                        | - Unika rektangulo                        |
+| - Hidden rectangle                        | - Kaŝita rektangulo                       |
+| - Avoidable rectangle                     | - Evitebla rektangulo                     |
 | Wing                                      | Flugilo                                   |
 | - XY-Wing                                 | - XY-Flugilo                              |
 | - XYZ-Wing                                | - XYZ-Flugilo                             |
