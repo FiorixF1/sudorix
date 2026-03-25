@@ -206,6 +206,9 @@ int SudokuBoard::importFromString(const char *values) {
     return 0;
   }
 
+  // invalidate graph
+  graph_valid = false;
+
   // calculate candidates
   _recalcAllCandidatesFromValues();
 
@@ -230,6 +233,8 @@ int SudokuBoard::importFromBuffers(const uint8_t *values, const uint16_t *cands)
       cells[i].setCandidates(DigitSet( {values[i]} ));  // single value, use { ... }
     }
   }
+  // invalidate graph
+  graph_valid = false;
   return 1;
  }
 
@@ -252,12 +257,14 @@ bool SudokuBoard::isSolved(Cell idx) const {
 void SudokuBoard::setValue(Cell idx, Digit digit) {
   ++counter[digit];
   ++solvedCells;
+  graph_valid = false;
   cells[idx].setValue(digit);
 }
 
 void SudokuBoard::clearValue(Cell idx) {
   --counter[cells[idx].getValue()];
   --solvedCells;
+  graph_valid = false;
   cells[idx].clearValue();
 }
 
@@ -267,6 +274,7 @@ DigitSet SudokuBoard::getCandidates(Cell idx) const {
 }
 
 void SudokuBoard::setCandidates(Cell idx, DigitSet candidates) {
+  graph_valid = false;
   cells[idx].setCandidates(candidates);
 }
 
@@ -283,6 +291,7 @@ Digit SudokuBoard::getSingleCandidate(Cell idx) const {
 }
 
 void SudokuBoard::disableCandidate(Cell idx, Digit digit) {
+  graph_valid = false;
   cells[idx].disableCandidate(digit);
 }
 
@@ -329,8 +338,8 @@ bool SudokuBoard::sees(CellSet a, CellSet b) const {
   return true;
 }
 
-// --- positions API ---
-CellSet SudokuBoard::getPositionsOfDigit(Unit unit, Digit d) const {
+// --- subsets API ---
+CellSet SudokuBoard::getPositionsOfDigit(const Unit &unit, Digit d) const {
   CellSet positions;
   for (Cell idx : unit) {
     if (this->isSolved(idx)) {
@@ -343,13 +352,52 @@ CellSet SudokuBoard::getPositionsOfDigit(Unit unit, Digit d) const {
   return positions;
 }
 
-DigitSet SudokuBoard::getDigitsInLocation(Unit unit, Location i) const {
+CellSet SudokuBoard::getPositionsOfDigitsAny(const Unit &unit, DigitSet set) const {
+  CellSet positions;
+  for (Cell idx : unit) {
+    if (this->isSolved(idx)) {
+      continue;
+    }
+    if (!(this->getCandidates(idx) & set).empty()) {
+      positions.insert(idx);
+    }
+  }
+  return positions;
+}
+
+CellSet SudokuBoard::getPositionsOfDigitsStrict(const Unit &unit, DigitSet set) const {
+  CellSet positions;
+  for (Cell idx : unit) {
+    if (this->isSolved(idx)) {
+      continue;
+    }
+    if (this->getCandidates(idx).is_subset_of(set)) {
+      positions.insert(idx);
+    }
+  }
+  return positions;
+}
+
+DigitSet SudokuBoard::getDigitsInLocation(const Unit &unit, Location i) const {
   std::vector<int> unitList = unit.to_vector();
   Cell idx = unitList[i];
   if (this->isSolved(idx)) {
     return DigitSet(0);
   }
   return this->getCandidates(idx);
+}
+
+DigitSet SudokuBoard::getDigitsInLocations(const Unit &unit, LocationSet set) const {
+  std::vector<int> unitList = unit.to_vector();
+  std::vector<int> indexes = set.to_vector();
+  DigitSet digits;
+  for (int i : indexes) {
+    Cell idx = unitList[i];
+    if (!this->isSolved(idx)) {
+      digits |= this->getCandidates(idx);
+    }
+  }
+  return digits;
 }
 
 // --- events API ---
@@ -414,11 +462,13 @@ Location SudokuBoard::getBoxLocation(Cell idx) {
 }
 
 // --- AIC ---
-void SudokuBoard::buildGraph() {
-  graph = graphBuilder.build();
-}
-
 AicGraph SudokuBoard::getPrunedGraph(const AicConfig &config) {
+  if (!graph_valid) {
+    // build a complete graph for AIC
+    graph = graphBuilder.build();
+    graph_valid = true;
+  }
+  // return a pruned version of the graph depending on the configuration given
   return graphBuilder.prune(graph, config);
 }
 
@@ -438,6 +488,28 @@ DigitSet SudokuBoard::getUnsolvedDigits() const {
   for (auto it = counter.begin(); it != counter.end(); ++it) {
     if (it->second != 9) {
       result.insert(it->first);
+    }
+  }
+  return result;
+}
+
+DigitSet SudokuBoard::getUnsolvedDigits(const Unit &unit) const {
+  DigitSet result(ALL_DIGITS);
+  for (Cell idx : unit) {
+    if (isSolved(idx)) {
+      result.erase(getSingleCandidate(idx));
+    }
+  }
+  return result;
+}
+
+LocationSet SudokuBoard::getUnsolvedLocations(const Unit &unit) const {
+  LocationSet result;
+  int i = 0;
+  for (auto it = unit.begin(); it != unit.end(); ++it, ++i) {
+    Cell idx = *it;
+    if (!isSolved(idx)) {
+      result.insert(i);
     }
   }
   return result;

@@ -8,13 +8,6 @@
 #include "SudokuCell.hpp"
 #include "AIC.hpp"
 
-enum PeerType : uint8_t {
-  ROWS = 1,
-  COLUMNS = 2,
-  BOXES = 4,
-  ALL = 7
-};
-
 class SudokuBoard
 {
 public:
@@ -64,13 +57,24 @@ public:
 
   bool sees(CellSet a, CellSet b) const;
 
-  // --- positions API ---
+  // --- subsets API ---
 
-  // given a unit and a digit, tell me which cells contain the digit
-  CellSet getPositionsOfDigit(Unit unit, Digit d) const;
+  // Given a unit and a digit, tell me which cells contain the digit
+  CellSet getPositionsOfDigit(const Unit &unit, Digit d) const;
 
-  // given a unit and a cell (as index 0..8), tell me which digits are contained in the cell
-  DigitSet getDigitsInLocation(Unit unit, Location i) const;
+  // Given a unit and a set of digits, tell me which cells contain any of the digits
+  // Hint: N digits exactly in N cells = hidden subset
+  CellSet getPositionsOfDigitsAny(const Unit &unit, DigitSet set) const;
+
+  // Given a unit and a set of digits, tell me which cells contain only those digits
+  CellSet getPositionsOfDigitsStrict(const Unit &unit, DigitSet set) const;
+
+  // Given a unit and a cell (as index 0..8), tell me which digits are contained in the cell
+  DigitSet getDigitsInLocation(const Unit &unit, Location i) const;
+
+  // Given a unit and a set of cells (as index 0..8), tell me which digits are contained in the cells
+  // Hint: N cells containing exactly N digits = naked subset
+  DigitSet getDigitsInLocations(const Unit &unit, LocationSet set) const;
 
   // --- events API ---
 
@@ -106,8 +110,6 @@ public:
 
   // --- AIC ---
 
-  void buildGraph();
-
   AicGraph getPrunedGraph(const AicConfig &config);
 
   // --- other ---
@@ -116,7 +118,14 @@ public:
 
   bool isCompletelySolved() const;
 
+  // Return the digits that are not completely solved yet in the grid
   DigitSet getUnsolvedDigits() const;
+
+  // Return the digits that are not solved yet in the unit
+  DigitSet getUnsolvedDigits(const Unit &unit) const;
+
+  // Return the cells of a unit (as index 0..8) that are not solved yet
+  LocationSet getUnsolvedLocations(const Unit &unit) const;
 
   int getNumberOfSolvedCells() const;
 
@@ -137,6 +146,7 @@ private:
   // Graph for AIC
   AicGraphBuilder graphBuilder;
   AicGraph graph;
+  bool graph_valid = false;
 
   bool _recalcAllCandidatesFromValues();
 };

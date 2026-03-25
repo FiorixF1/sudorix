@@ -244,8 +244,48 @@ public:
     return other.is_subset_of(*this);
   }
 
+  // ---- power set ----
+  std::vector<BitmaskSet> generate_power_set_of_size(int k) const noexcept {
+    // Warning: does not work if bit_count > 32
+    std::vector<BitmaskSet> result;
+
+    uint32_t mask = this->to_uint32();
+
+    // Estrai solo i bit attivi in una lista compatta
+    std::vector<int> pos;
+    for (int i = 0; i <= bit_count; i++) {
+      if (mask & (1UL << i)) {
+        pos.push_back(i + MinValue);
+      }
+    }
+
+    int m = pos.size();
+    if (k > m) return result;
+
+    uint32_t comb = (1UL << k) - 1;
+
+    while (comb < (1UL << m)) {
+      BitmaskSet subset;
+
+      for (int i = 0; i < m; i++) {
+        if (comb & (1UL << i)) {
+          subset.insert(pos[i]);
+        }
+      }
+
+      result.push_back(subset);
+
+      // Gosper’s hack
+      uint32_t x = comb & -comb;
+      uint32_t y = comb + x;
+      comb = (((comb ^ y) / x) >> 2) | y;
+    }
+
+    return result;
+  }
+
   // ---- utility ----
-  std::vector<int> to_vector() const {
+  std::vector<int> to_vector() const noexcept {
     std::vector<int> out;
     out.reserve(static_cast<std::size_t>(size()));
 
@@ -266,7 +306,8 @@ public:
     return out;
   }
 
-  uint32_t to_uint32() const {
+  constexpr uint32_t to_uint32() const noexcept {
+    // Warning: does not work if bit_count > 32
     return static_cast<uint32_t>(w_[0]);
   }
 

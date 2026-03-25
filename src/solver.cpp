@@ -78,30 +78,22 @@ static void techNakedSingles(SudokuBoard &board, EventQueue &eventQueue) {
 static void techNakedPairs(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanUnit = [&](const Unit &unit) -> void
   {
-    // map each location to its digits in this unit
-    DigitSet digitsOfLocation[9];
-    std::vector<int> unitList = unit.to_vector();
-    for (Location i = 0; i < 9; ++i) {
-      digitsOfLocation[i] = board.getDigitsInLocation(unit, i);
-    }
-
-    // iterate over all locations that have exactly two digits in the unit
-    for (Location a = 0; a < 8; ++a) {
-      if (digitsOfLocation[a].size() == 2) {
-        for (Location b = a+1; b < 9; ++b) {
-          if (digitsOfLocation[a] == digitsOfLocation[b]) {
-            // naked pair spotted
-            Event event(EventType::RemoveCandidate, ReasonId::NakedPair);
-            // the source is the two cells containing the pair
-            CellSet sourceSet = CellSet({unitList[a], unitList[b]});
-            event.addSource(sourceSet, digitsOfLocation[a]);
-            for (Cell idx : board.getPeers(sourceSet)) {
-              // remove digits present in a and b from other cells they can see
-              event.addOperation(idx, digitsOfLocation[a]);
-            }
-            eventQueue.enqueue(board, event);
-          }
+    std::vector<LocationSet> subsets = board.getUnsolvedLocations(unit).generate_power_set_of_size(2);
+    for (LocationSet &subset : subsets) {
+      DigitSet digitSet = board.getDigitsInLocations(unit, subset);
+      if (digitSet.size() == 2) {
+        std::vector<int> unitList = unit.to_vector();
+        std::vector<int> subsetList = subset.to_vector();
+        // naked pair spotted
+        Event event(EventType::RemoveCandidate, ReasonId::NakedPair);
+        // the source is the two cells containing the pair
+        CellSet sourceSet = CellSet({unitList[subsetList[0]], unitList[subsetList[1]]});
+        event.addSource(sourceSet, digitSet);
+        for (Cell idx : board.getPeers(sourceSet)) {
+          // remove digits from other cells in the unit
+          event.addOperation(idx, digitSet);
         }
+        eventQueue.enqueue(board, event);
       }
     }
   };
@@ -120,35 +112,22 @@ static void techNakedPairs(SudokuBoard &board, EventQueue &eventQueue) {
 static void techNakedTriples(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanUnit = [&](const Unit &unit) -> void
   {
-    // map each location to its digits in this unit
-    DigitSet digitsOfLocation[9];
-    for (Location i = 0; i < 9; ++i) {
-      digitsOfLocation[i] = board.getDigitsInLocation(unit, i);
-    }
-
-    // iterate over all locations that have up to three digits in the unit
-    std::vector<int> unitList = unit.to_vector();
-    for (Location a = 0; a < 7; ++a) {
-      if (!digitsOfLocation[a].empty() && digitsOfLocation[a].size() <= 3) {
-        for (Location b = a+1; b < 8; ++b) {
-          if (!digitsOfLocation[b].empty() && (digitsOfLocation[a] | digitsOfLocation[b]).size() <= 3) {
-            for (Location c = b+1; c < 9; ++c) {
-              if (!digitsOfLocation[c].empty() && (digitsOfLocation[a] | digitsOfLocation[b] | digitsOfLocation[c]).size() == 3) {
-                // naked triple spotted
-                Event event(EventType::RemoveCandidate, ReasonId::NakedTriple);
-                DigitSet lockedSet = digitsOfLocation[a] | digitsOfLocation[b] | digitsOfLocation[c];
-                // the source is the three cells containing the triple
-                CellSet sourceSet = CellSet({unitList[a], unitList[b], unitList[c]});
-                event.addSource(sourceSet, lockedSet);
-                for (Cell idx : board.getPeers(sourceSet)) {
-                  // remove digits present in a, b, c from other cells they can see
-                  event.addOperation(idx, lockedSet);
-                }
-                eventQueue.enqueue(board, event);
-              }
-            }
-          }
+    std::vector<LocationSet> subsets = board.getUnsolvedLocations(unit).generate_power_set_of_size(3);
+    for (LocationSet &subset : subsets) {
+      DigitSet digitSet = board.getDigitsInLocations(unit, subset);
+      if (digitSet.size() == 3) {
+        std::vector<int> unitList = unit.to_vector();
+        std::vector<int> subsetList = subset.to_vector();
+        // naked triple spotted
+        Event event(EventType::RemoveCandidate, ReasonId::NakedTriple);
+        // the source is the three cells containing the triple
+        CellSet sourceSet = CellSet({unitList[subsetList[0]], unitList[subsetList[1]], unitList[subsetList[2]]});
+        event.addSource(sourceSet, digitSet);
+        for (Cell idx : board.getPeers(sourceSet)) {
+          // remove digits from other cells in the unit
+          event.addOperation(idx, digitSet);
         }
+        eventQueue.enqueue(board, event);
       }
     }
   };
@@ -165,18 +144,11 @@ static void techNakedTriples(SudokuBoard &board, EventQueue &eventQueue) {
 }
 
 static void techHiddenSingles(SudokuBoard &board, EventQueue &eventQueue, const Unit &unit) {
-  // map each digit to its positions in this unit
-  CellSet positionsOfDigit[10];
   for (Digit d : board.getUnsolvedDigits()) {
-    positionsOfDigit[d] = board.getPositionsOfDigit(unit, d);
-  }
-
-  // iterate over all digits that appear exactly once in the unit
-  for (Digit a = 1; a <= 9; ++a) {
-    if (positionsOfDigit[a].size() == 1) {
-      // hidden single spotted
+    CellSet cellSet = board.getPositionsOfDigit(unit, d);
+    if (cellSet.size() == 1) {
       Event event(EventType::SetValue, ReasonId::HiddenSingle);
-      event.addOperation(*positionsOfDigit[a].begin(), a);
+      event.addOperation(*cellSet.begin(), d);
       eventQueue.enqueue(board, event);
     }
   }
@@ -198,30 +170,20 @@ static void techHiddenSinglesRowColumn(SudokuBoard &board, EventQueue &eventQueu
 }
 
 static void techHiddenPairs(SudokuBoard &board, EventQueue &eventQueue, const Unit &unit) {
-  // map each digit to its positions in this unit
-  CellSet positionsOfDigit[10];
-  for (Digit d : board.getUnsolvedDigits()) {
-    positionsOfDigit[d] = board.getPositionsOfDigit(unit, d);
-  }
-
-  // iterate over all pairs of digits that appear exactly twice in the unit
-  for (Digit a = 1; a <= 8; ++a) {
-    if (positionsOfDigit[a].size() == 2) {
-      for (Digit b = a+1; b <= 9; ++b) {
-        if (positionsOfDigit[a] == positionsOfDigit[b]) {
-          // hidden pair spotted
-          Event event(EventType::RemoveCandidate, ReasonId::HiddenPair);
-          // the source is the two cells containing the pair
-          CellSet lockedSet = positionsOfDigit[a];
-          CellSet sourceSet = lockedSet;
-          event.addSource(sourceSet, DigitSet({a, b}));
-          for (Cell idx : lockedSet) {
-            // remove digits different from a and b from the cells of the pair
-            event.addOperation(idx, board.getUnsolvedDigits() - DigitSet({a, b}));
-          }
-          eventQueue.enqueue(board, event);
-        }
+  std::vector<DigitSet> subsets = board.getUnsolvedDigits(unit).generate_power_set_of_size(2);
+  for (const DigitSet &subset : subsets) {
+    CellSet cellSet = board.getPositionsOfDigitsAny(unit, subset);
+    if (cellSet.size() == 2) {
+      // hidden pair spotted
+      Event event(EventType::RemoveCandidate, ReasonId::HiddenPair);
+      // the source is the two cells containing the pair
+      CellSet sourceSet = cellSet;
+      event.addSource(sourceSet, subset);
+      for (Cell idx : cellSet) {
+        // remove other digits from the cells of the pair
+        event.addOperation(idx, board.getUnsolvedDigits() - subset);
       }
+      eventQueue.enqueue(board, event);
     }
   }
 }
@@ -244,34 +206,20 @@ static void techHiddenPairsRowColumn(SudokuBoard &board, EventQueue &eventQueue)
 static void techHiddenTriples(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanUnit = [&](const Unit &unit) -> void
   {
-    // map each digit to its positions in this unit
-    CellSet positionsOfDigit[10];
-    for (Digit d : board.getUnsolvedDigits()) {
-      positionsOfDigit[d] = board.getPositionsOfDigit(unit, d);
-    }
-
-    // iterate over all digits that appear up to three times in the unit
-    for (Digit a = 1; a <= 7; ++a) {
-      if (!positionsOfDigit[a].empty() && positionsOfDigit[a].size() <= 3) {
-        for (Digit b = a+1; b <= 8; ++b) {
-          if (!positionsOfDigit[b].empty() && (positionsOfDigit[a] | positionsOfDigit[b]).size() <= 3) {
-            for (Digit c = b+1; c <= 9; ++c) {
-              if (!positionsOfDigit[c].empty() && (positionsOfDigit[a] | positionsOfDigit[b] | positionsOfDigit[c]).size() == 3) {
-                // hidden triple spotted
-                Event event(EventType::RemoveCandidate, ReasonId::HiddenTriple);
-                // the source is the three cells containing the triple
-                CellSet lockedSet = positionsOfDigit[a] | positionsOfDigit[b] | positionsOfDigit[c];
-                CellSet sourceSet = lockedSet;
-                event.addSource(sourceSet, DigitSet({a, b, c}));
-                for (Cell idx : lockedSet) {
-                  // remove digits different from a, b, c from the cells of the triple
-                  event.addOperation(idx, board.getCandidates(idx) - DigitSet({a, b, c}));
-                }
-                eventQueue.enqueue(board, event);
-              }
-            }
-          }
+    std::vector<DigitSet> subsets = board.getUnsolvedDigits(unit).generate_power_set_of_size(3);
+    for (const DigitSet &subset : subsets) {
+      CellSet cellSet = board.getPositionsOfDigitsAny(unit, subset);
+      if (cellSet.size() == 3) {
+        // hidden triple spotted
+        Event event(EventType::RemoveCandidate, ReasonId::HiddenTriple);
+        // the source is the three cells containing the triple
+        CellSet sourceSet = cellSet;
+        event.addSource(sourceSet, subset);
+        for (Cell idx : cellSet) {
+          // remove other digits from the cells of the triple
+          event.addOperation(idx, board.getUnsolvedDigits() - subset);
         }
+        eventQueue.enqueue(board, event);
       }
     }
   };
@@ -658,6 +606,13 @@ static void techSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
 }
 
 static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
+  std::vector<Event> type1;
+  std::vector<Event> type2;
+  std::vector<Event> type3;
+  std::vector<Event> type4;
+  std::vector<Event> type5;
+  std::vector<Event> type6;
+
   // Look for the four vertices of the rectangle, defined as:
   // - Main vertex: the main bivalue cell
   // - Box vertex: the vertex in the same box (and line) of the main vertex
@@ -666,6 +621,8 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
   CellSet bivalues = board.getBivalues();
   for (Cell mainVertex : bivalues) {
     DigitSet xy = board.getCandidates(mainVertex);
+    Digit x = *xy.begin();
+    Digit y = *(++xy.begin());
     const Unit &box = SudokuBoard::getBoxByCell(mainVertex);
     // Box vertex: look for peers in the same box and same row/column
     for (Cell boxVertex : (box - CellSet({mainVertex})) &
@@ -702,6 +659,10 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                                           SudokuBoard::getColumnLocation(boxVertex),
                                           SudokuBoard::getColumnLocation(lineVertex),
                                           SudokuBoard::getColumnLocation(oppositeVertex)});
+              const Unit &rowMinUnit = SudokuBoard::getRowByLocation(rowMin);
+              const Unit &rowMaxUnit = SudokuBoard::getRowByLocation(rowMax);
+              const Unit &colMinUnit = SudokuBoard::getRowByLocation(colMin);
+              const Unit &colMaxUnit = SudokuBoard::getRowByLocation(colMax);
               Cell a = rowMin*9 + colMin;
               Cell b = rowMin*9 + colMax;
               Cell c = rowMax*9 + colMin;
@@ -717,7 +678,7 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   event.addSource(rectangleLower, xy);
                   // remove xy from the vertex with more candidates
                   event.addOperation(xy == lineVertexDigits ? oppositeVertex : lineVertex, xy);
-                  if (eventQueue.enqueue(board, event)) return;
+                  type1.push_back(event);
                 }
                 if (lineVertexDigits.size() == 3 && lineVertexDigits == oppositeVertexDigits) {
                   // Type 2
@@ -731,7 +692,45 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   for (Cell idx : board.getPeers({lineVertex, oppositeVertex})) {
                     event.addOperation(idx, z);
                   }
-                  if (eventQueue.enqueue(board, event)) return;
+                  type2.push_back(event);
+                }
+                if (lineVertexDigits != oppositeVertexDigits) {
+                  // Type 3
+                  DigitSet extraDigits = (lineVertexDigits | oppositeVertexDigits) - xy;
+                  CellSet peers = board.getPeers({lineVertex, oppositeVertex});
+                  CellSet virtualSubset = board.getPositionsOfDigitsStrict(peers, extraDigits);
+                  if (virtualSubset.size() == extraDigits.size()-1) {
+                    Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType3);
+                    event.addSource(rectangleUpper, xy);
+                    event.addSource(rectangleLower, xy);
+                    event.addDelimiter();
+                    event.addSource({lineVertex, oppositeVertex}, extraDigits);
+                    // remove the extra digits from peers of lineVertex, oppositeVertex and the found cells
+                    for (Cell idx : board.getPeers(CellSet({lineVertex, oppositeVertex}) | virtualSubset)) {
+                      event.addOperation(idx, extraDigits);
+                    }
+                    type3.push_back(event);
+                  }
+                  // Type 4
+                  CellSet xPositions = board.getPositionsOfDigit(peers, x);
+                  CellSet yPositions = board.getPositionsOfDigit(peers, y);
+                  if (xPositions.empty()) {
+                    Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType4);
+                    event.addSource(rectangleUpper, xy);
+                    event.addSource(rectangleLower, xy);
+                    // remove the other digit from lineVertex and oppositeVertex
+                    event.addOperation(lineVertex, y);
+                    event.addOperation(oppositeVertex, y);
+                    type4.push_back(event);
+                  } else if (yPositions.empty()) {
+                    Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType4);
+                    event.addSource(rectangleUpper, xy);
+                    event.addSource(rectangleLower, xy);
+                    // remove the other digit from lineVertex and oppositeVertex
+                    event.addOperation(lineVertex, x);
+                    event.addOperation(oppositeVertex, x);
+                    type4.push_back(event);
+                  }
                 }
               } else if (xy == oppositeVertexDigits) {
                 // UR types 5, 6
@@ -755,7 +754,34 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                       event.addOperation(idx, z);
                     }
                   }
-                  if (eventQueue.enqueue(board, event)) return;
+                  type5.push_back(event);
+                }
+                if (lineVertexDigits != boxVertexDigits) {
+                  // Type 6
+                  if (board.getPositionsOfDigit(rowMinUnit, x).size() == 2 &&
+                      board.getPositionsOfDigit(rowMaxUnit, x).size() == 2 &&
+                      board.getPositionsOfDigit(colMinUnit, x).size() == 2 &&
+                      board.getPositionsOfDigit(colMaxUnit, x).size() == 2) {
+                    Event event(EventType::SetValue, ReasonId::UniqueRectangleType6);
+                    event.addSource(rectangleUpper, xy);
+                    event.addSource(rectangleLower, xy);
+                    // set the X-Wing digit in the bivalue cells of the UR
+                    event.addOperation(mainVertex, x);
+                    event.addOperation(oppositeVertex, x);
+                    type6.push_back(event);
+                  }
+                  if (board.getPositionsOfDigit(rowMinUnit, y).size() == 2 &&
+                      board.getPositionsOfDigit(rowMaxUnit, y).size() == 2 &&
+                      board.getPositionsOfDigit(colMinUnit, y).size() == 2 &&
+                      board.getPositionsOfDigit(colMaxUnit, y).size() == 2) {
+                    Event event(EventType::SetValue, ReasonId::UniqueRectangleType6);
+                    event.addSource(rectangleUpper, xy);
+                    event.addSource(rectangleLower, xy);
+                    // set the X-Wing digit in the bivalue cells of the UR
+                    event.addOperation(mainVertex, y);
+                    event.addOperation(oppositeVertex, y);
+                    type6.push_back(event);
+                  }
                 }
               }
             }
@@ -764,6 +790,14 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
       }
     }
   }
+
+  // return by priority
+  for (Event &event : type1) { if (eventQueue.enqueue(board, event)) return; }
+  for (Event &event : type2) { if (eventQueue.enqueue(board, event)) return; }
+  for (Event &event : type3) { if (eventQueue.enqueue(board, event)) return; }
+  for (Event &event : type4) { if (eventQueue.enqueue(board, event)) return; }
+  for (Event &event : type5) { if (eventQueue.enqueue(board, event)) return; }
+  for (Event &event : type6) { if (eventQueue.enqueue(board, event)) return; }
 }
 
 static void techBUGPlusOne(SudokuBoard &board, EventQueue &eventQueue) {
@@ -1003,10 +1037,6 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
 
 /* -------------------- AIC WORLD -------------------- */
 
-static void buildGraph(SudokuBoard &board, EventQueue &eventQueue) {
-  board.buildGraph();
-}
-
 static void techGenericAIC(SudokuBoard &board,
                            EventQueue &eventQueue,
                            ReasonId reason) {
@@ -1089,7 +1119,6 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techXYWing,
   techXYZWing,
   techSwordfish,
-  buildGraph, // dummy technique to build the graph for chaining techniques
   techRemotePair,
   techUniqueRectangle,
   techWWing,
