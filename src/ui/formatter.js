@@ -69,6 +69,7 @@
   REGISTRY["Unique Rectangle (Type 4)"] = rectangleFormatter;
   REGISTRY["Unique Rectangle (Type 5)"] = rectangleFormatter;
   REGISTRY["Unique Rectangle (Type 6)"] = rectangleFormatter;
+  REGISTRY["Hidden Rectangle"] = rectangleFormatter;
 
   const wingFormatter = {
     formatLog(ev, ctx) {

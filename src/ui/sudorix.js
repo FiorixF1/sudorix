@@ -121,6 +121,27 @@ var business_logic = (() => {
     "Death Blossom",
   ];
 
+  // techniques that require drawing of links
+  const CHAINS = [
+    "Single Digit Pattern",
+    "Skyscraper",
+    "Two-String Kite",
+    "Crane",
+    "Empty Rectangle",
+    "X-Chain",
+    "X-Ring",
+    "XY-Chain",
+    "XY-Ring",
+    "Alternating Inference Chain",
+    "Alternating Inference Chain (Type 1)",
+    "Alternating Inference Chain (Type 2)",
+    "Alternating Inference Chain (Type 3)",
+    "Grouped Alternating Inference Chain",
+    "Grouped Alternating Inference Chain (Type 1)",
+    "Grouped Alternating Inference Chain (Type 2)",
+    "Grouped Alternating Inference Chain (Type 3)",
+  ];
+
   function initWasmSolver() {
     // createSudorixSolver is defined by solver_wasm.js (Emscripten output)
     if (typeof createSudorixSolver !== "function") {
@@ -746,6 +767,42 @@ var business_logic = (() => {
 
         flashCell(idx, ev.type);
       }
+    }
+  }
+
+  function drawCandidateLinks(ev) {
+    if (!ev) {
+      return;
+    }
+
+    if (CHAINS.indexOf(ev.reason) == -1) {
+      return;
+    }
+
+    const groups = splitSourceGroups(ev.sources || []);
+
+    // Draw chain from sources
+    let i = 0;
+    let WANT_STRONG = true;
+    while (i < groups[0].length) {
+      const s = groups[0][i];
+      const t = groups[0][i+1];
+      if (s && s.cells && s.cells.idxs && s.cells.idxs.length > 0 &&
+          t && t.cells && t.cells.idxs && t.cells.idxs.length > 0) {
+        // TODO: support for grouped nodes
+        addCandidateLink(s.cells.idxs[0],
+                         maskToSingleDigit(s.mask),
+                         t.cells.idxs[0],
+                         maskToSingleDigit(t.mask),
+                         {
+                           dashed: !WANT_STRONG,
+                           bold: WANT_STRONG,
+                           color: null,
+                         }
+        );
+        WANT_STRONG = !WANT_STRONG;
+      }
+      ++i;
     }
   }
 
@@ -1609,8 +1666,10 @@ var business_logic = (() => {
     renderAll();
 
     clearAllEventHighlights();
+    clearCandidateLinks();
     if (entry.ev) {
       highlightSourcesAndOps(entry.ev);
+      drawCandidateLinks(entry.ev);
     }
 
     // Mark active
@@ -1627,6 +1686,7 @@ var business_logic = (() => {
     }
 
     clearAllEventHighlights();
+    clearCandidateLinks();
 
     if (previewSavedLiveState) {
       board.importState(previewSavedLiveState);
@@ -2277,6 +2337,7 @@ var business_logic = (() => {
 
     stopSolving();
     clearAllEventHighlights();
+    clearCandidateLinks();
     pendingStepEvent = null;
 
     const current = board.exportState();
@@ -2304,6 +2365,7 @@ var business_logic = (() => {
 
     stopSolving();
     clearAllEventHighlights();
+    clearCandidateLinks();
     pendingStepEvent = null;
 
     const current = board.exportState();
@@ -2427,6 +2489,7 @@ var business_logic = (() => {
       const did = applyEvent(ev);
       renderAll();
       clearAllEventHighlights();
+      clearCandidateLinks();
       callbackDone(did);
       return;
     }
@@ -2435,6 +2498,8 @@ var business_logic = (() => {
     renderAll();
     clearAllEventHighlights();
     highlightSourcesAndOps(ev);
+    clearCandidateLinks();
+    drawCandidateLinks(ev);
 
     setTimeout(() => {
       // Phase 2: apply, then highlight again on the updated grid.
@@ -2444,9 +2509,12 @@ var business_logic = (() => {
       renderAll();
       clearAllEventHighlights();
       highlightSourcesAndOps(ev);
+      clearCandidateLinks();
+      drawCandidateLinks(ev);
 
       setTimeout(() => {
         clearAllEventHighlights();
+        clearCandidateLinks();
         callbackDone(did);
       }, 200);
     }, 200);
@@ -2538,6 +2606,8 @@ var business_logic = (() => {
       renderAll();
       clearAllEventHighlights();
       highlightSourcesAndOps(ev);
+      clearCandidateLinks();
+      drawCandidateLinks(ev);
       logEventOnce(ev);
       return;
     }
@@ -2547,14 +2617,18 @@ var business_logic = (() => {
     pendingStepEvent = null;
 
     clearAllEventHighlights();
+    clearCandidateLinks();
     saveUndoSnapshot();
     const did = applyEvent(ev);
     renderAll();
     clearAllEventHighlights();
     highlightSourcesAndOps(ev);
+    clearCandidateLinks();
+    drawCandidateLinks(ev);
 
     setTimeout(() => {
       clearAllEventHighlights();
+      clearCandidateLinks();
     }, 200);
 
     if (!did) {
