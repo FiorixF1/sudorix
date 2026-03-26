@@ -236,13 +236,14 @@ int SudokuBoard::importFromBuffers(const uint8_t *values, const uint16_t *cands)
   // invalidate graph
   graph_valid = false;
   return 1;
- }
+}
 
-void SudokuBoard::exportToBuffers(Digit *values, DigitSet *cands) const {
+int SudokuBoard::exportToBuffers(uint8_t *values, uint16_t *cands) const {
   for (int i = 0; i < 81; i++) {
     values[i] = cells[i].getValue();
-    cands[i]  = cells[i].getCandidates();
+    cands[i]  = cells[i].getCandidates().to_uint32();
   }
+  return 1;
 }
 
 // --- values API ---

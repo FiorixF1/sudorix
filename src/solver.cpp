@@ -1427,6 +1427,22 @@ extern "C"
     return ok ? 1 : 0;
   }
 
+  // Exports the state of the currently loaded board (values and candidates).
+  // Returns 0 in case of error, else 1.
+  EMSCRIPTEN_KEEPALIVE
+  int sudorix_solver_export_board(uint8_t *values, uint16_t *cands) {
+    if (values == nullptr || cands == nullptr) {
+      return 0;
+    }
+
+    // Export Sudoku
+    if (!g_sudokuBoard.exportToBuffers(values, cands)) {
+      return 0;
+    }
+
+    return 1;
+  }
+
   // Calculate and return one step to solve the board given as input (both values and candidates are given).
   // Returns 0 in case of error or no event is produced, else 1.
   EMSCRIPTEN_KEEPALIVE

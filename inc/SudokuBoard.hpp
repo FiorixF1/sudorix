@@ -17,7 +17,7 @@ public:
 
   int importFromBuffers(const uint8_t *values, const uint16_t *cands);
 
-  void exportToBuffers(Digit *values, DigitSet *cands) const;
+  int exportToBuffers(uint8_t *values, uint16_t *cands) const;
 
   // --- values API ---
 

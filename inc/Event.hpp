@@ -13,13 +13,13 @@ enum class EventType : uint8_t {
 
 enum class ReasonId : uint8_t {
   Solver = 0,
-  // naked sets
+  // naked subsets
   FullHouse,
   NakedSingle,
   NakedPair,
   NakedTriple,
   NakedQuad,
-  // hidden sets
+  // hidden subsets
   HiddenSingle,
   HiddenPair,
   HiddenTriple,

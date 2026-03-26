@@ -66,13 +66,13 @@ Valoroj por `reasonId`:
 ```
 enum class ReasonId : uint8_t {
     Solver = 0,
-    // naked sets
+    // naked subsets
     FullHouse,
     NakedSingle,
     NakedPair,
     NakedTriple,
     NakedQuad,
-    // hidden sets
+    // hidden subsets
     HiddenSingle,
     HiddenPair,
     HiddenTriple,
@@ -213,6 +213,15 @@ Liveras unu solvopaŝon de la ŝargita Sudokuo kaj ĝisdatigas la internan stato
 
 ---
 
+## sudorix_solver_export_board
+
+```
+int sudorix_solver_export_board(uint8_t *values, uint16_t *cands)
+```
+
+Eksportas la staton de la ŝargita Sudokuo kun solvitaj ĉeloj kaj kandidatoj.
+---
+
 ## sudorix_solver_hint
 
 ```
@@ -242,7 +251,7 @@ La plej simplaj teknikoj necesas nur unu fonton:
 
 * Ĉeloj kiuj konsistigas la aron + Ciferoj de la aro
 
-Tio aplikiĝas al: **Naked Subset**, **Hidden Subset**, **Intersection Removal**.
+Tio aplikiĝas al: **Naked Subsets**, **Hidden Subsets**, **Intersection Removal**.
 
 ---
 

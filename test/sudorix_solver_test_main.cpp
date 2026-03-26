@@ -5,12 +5,14 @@
 #include <cstring>
 
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
 
+#include "Event.hpp"
 #include "solver.hpp"
 
 static inline bool isDigitChar(char c) {
@@ -77,6 +79,117 @@ static std::string normalize81(const std::string &line, std::string *err) {
 
 static inline uint16_t bitForDigit(int d) {
   return static_cast<uint16_t>(1u << (d - 1));
+}
+
+static constexpr size_t kReasonCount = static_cast<size_t>(ReasonId::DeathBlossom) + 1;
+static std::vector<uint64_t> g_reasonCounts(kReasonCount, 0);
+
+static const char *reasonIdToString(ReasonId reason) {
+  switch (reason) {
+    case ReasonId::Solver: return "Solver";
+    case ReasonId::FullHouse: return "Full House";
+    case ReasonId::NakedSingle: return "Naked Single";
+    case ReasonId::NakedPair: return "Naked Pair";
+    case ReasonId::NakedTriple: return "Naked Triple";
+    case ReasonId::NakedQuad: return "Naked Quad";
+    case ReasonId::HiddenSingle: return "Hidden Single";
+    case ReasonId::HiddenPair: return "Hidden Pair";
+    case ReasonId::HiddenTriple: return "Hidden Triple";
+    case ReasonId::HiddenQuad: return "Hidden Quad";
+    case ReasonId::PointingPair: return "Pointing Pair";
+    case ReasonId::PointingTriple: return "Pointing Triple";
+    case ReasonId::ClaimingPair: return "Claiming Pair";
+    case ReasonId::ClaimingTriple: return "Claiming Triple";
+    case ReasonId::XWing: return "X-Wing";
+    case ReasonId::Swordfish: return "Swordfish";
+    case ReasonId::Jellyfish: return "Jellyfish";
+    case ReasonId::FinnedXWing: return "Finned X-Wing";
+    case ReasonId::FinnedSwordfish: return "Finned Swordfish";
+    case ReasonId::FinnedJellyfish: return "Finned Jellyfish";
+    case ReasonId::SashimiXWing: return "Sashimi X-Wing";
+    case ReasonId::SashimiSwordfish: return "Sashimi Swordfish";
+    case ReasonId::SashimiJellyfish: return "Sashimi Jellyfish";
+    case ReasonId::FrankenXWing: return "Franken X-Wing";
+    case ReasonId::FrankenSwordfish: return "Franken Swordfish";
+    case ReasonId::FrankenJellyfish: return "Franken Jellyfish";
+    case ReasonId::FinnedFrankenXWing: return "Finned Franken X-Wing";
+    case ReasonId::FinnedFrankenSwordfish: return "Finned Franken Swordfish";
+    case ReasonId::FinnedFrankenJellyfish: return "Finned Franken Jellyfish";
+    case ReasonId::MutantXWing: return "Mutant X-Wing";
+    case ReasonId::MutantSwordfish: return "Mutant Swordfish";
+    case ReasonId::MutantJellyfish: return "Mutant Jellyfish";
+    case ReasonId::FinnedMutantXWing: return "Finned Mutant X-Wing";
+    case ReasonId::FinnedMutantSwordfish: return "Finned Mutant Swordfish";
+    case ReasonId::FinnedMutantJellyfish: return "Finned Mutant Jellyfish";
+    case ReasonId::SiameseFish: return "Siamese Fish";
+    case ReasonId::KrakenFish: return "Kraken Fish";
+    case ReasonId::SingleDigitPattern: return "Single Digit Pattern";
+    case ReasonId::Skyscraper: return "Skyscraper";
+    case ReasonId::TwoStringKite: return "Two-String Kite";
+    case ReasonId::Crane: return "Crane";
+    case ReasonId::EmptyRectangle: return "Empty Rectangle";
+    case ReasonId::UniqueRectangle: return "Unique Rectangle";
+    case ReasonId::UniqueRectangleType1: return "Unique Rectangle (Type 1)";
+    case ReasonId::UniqueRectangleType2: return "Unique Rectangle (Type 2)";
+    case ReasonId::UniqueRectangleType3: return "Unique Rectangle (Type 3)";
+    case ReasonId::UniqueRectangleType4: return "Unique Rectangle (Type 4)";
+    case ReasonId::UniqueRectangleType5: return "Unique Rectangle (Type 5)";
+    case ReasonId::UniqueRectangleType6: return "Unique Rectangle (Type 6)";
+    case ReasonId::HiddenRectangle: return "Hidden Rectangle";
+    case ReasonId::AvoidableRectangle: return "Avoidable Rectangle";
+    case ReasonId::BUGPlusOne: return "BUG+1";
+    case ReasonId::XYWing: return "XY-Wing";
+    case ReasonId::XYZWing: return "XYZ-Wing";
+    case ReasonId::WXYZWing: return "WXYZ-Wing";
+    case ReasonId::ChuteRemotePair: return "Chute Remote Pair";
+    case ReasonId::WWing: return "W-Wing";
+    case ReasonId::SimpleColoring: return "Simple Coloring";
+    case ReasonId::SimpleColoringColorTrap: return "Simple Coloring (Color Trap)";
+    case ReasonId::SimpleColoringColorWrap: return "Simple Coloring (Color Wrap)";
+    case ReasonId::_3DMedusa: return "3D Medusa";
+    case ReasonId::_3DMedusaColorTrap: return "3D Medusa (Color Trap)";
+    case ReasonId::_3DMedusaColorWrap: return "3D Medusa (Color Wrap)";
+    case ReasonId::_3DMedusaEmptiedCell: return "3D Medusa (Emptied Cell)";
+    case ReasonId::RemotePair: return "Remote Pair";
+    case ReasonId::XChain: return "X-Chain";
+    case ReasonId::XRing: return "X-Ring";
+    case ReasonId::XYChain: return "XY-Chain";
+    case ReasonId::XYRing: return "XY-Ring";
+    case ReasonId::AIC: return "AIC";
+    case ReasonId::AICType1: return "AIC (Type 1)";
+    case ReasonId::AICType2: return "AIC (Type 2)";
+    case ReasonId::AICType3: return "AIC (Type 3)";
+    case ReasonId::GroupedAIC: return "Grouped AIC";
+    case ReasonId::GroupedAICType1: return "Grouped AIC (Type 1)";
+    case ReasonId::GroupedAICType2: return "Grouped AIC (Type 2)";
+    case ReasonId::GroupedAICType3: return "Grouped AIC (Type 3)";
+    case ReasonId::ALSXZ: return "ALS-XZ";
+    case ReasonId::ALSXY: return "ALS-XY";
+    case ReasonId::ALSChain: return "ALS Chain";
+    case ReasonId::SueDeCoq: return "Sue-De-Coq";
+    case ReasonId::DeathBlossom: return "Death Blossom";
+  }
+  return "Unknown Reason";
+}
+
+static void recordReasonId(uint32_t reasonIdRaw) {
+  if (reasonIdRaw < g_reasonCounts.size()) {
+    g_reasonCounts[reasonIdRaw]++;
+  }
+}
+
+static void printTechniqueUsageSummary() {
+  bool printedAny = false;
+  std::cout << "TECHNIQUE USAGE:\n";
+  for (size_t i = 0; i < g_reasonCounts.size(); i++) {
+    printedAny = true;
+    std::cout << "  " << std::left << std::setw(28)
+              << reasonIdToString(static_cast<ReasonId>(i))
+              << " : " << g_reasonCounts[i] << "\n";
+  }
+  if (!printedAny) {
+    std::cout << "  (no techniques recorded)\n";
+  }
 }
 
 static bool checkUnitMask(const std::vector<int> &idxs, const std::string &out81, std::string *why) {
@@ -217,20 +330,69 @@ static int runFullSolveOne(const std::string &in81, std::string *out81, std::str
   return 1;
 }
 
-// Future: step-based runner stub.
-// For now it just calls full solve, but the structure is here to extend.
 static int runStepSolveOne(const std::string &in81, std::string *out81, std::string *why) {
-  (void)why;
-  // TODO: implement when you expose an "export" or allow reading internal board after next_step loop.
-  // A possible approach:
-  //   sudorix_solver_init_board(in81.c_str());
-  //   loop:
-  //     sudorix_solver_next_step(outEvent);
-  //     if outEvent.type==0 break;
-  //   sudorix_solver_export(out81) OR pass out81 as an output parameter.
-  //
-  // For now, fall back to full.
-  return runFullSolveOne(in81, out81, why);
+  uint8_t outValuesBuf[81];
+  std::memset(outValuesBuf, 0, sizeof(outValuesBuf));
+
+  uint16_t outCandidatesBuf[81];
+  std::memset(outCandidatesBuf, 0, sizeof(outCandidatesBuf));
+
+  int rc = sudorix_solver_init_board(in81.c_str());
+  if (rc == 0) {
+    if (why) {
+      *why = "sudorix_solver_init_board returned 0 (failure)";
+    }
+    return 0;
+  }
+
+  int guard = 0;
+  const int guardMax = 200000;
+
+  while (guard++ < guardMax) {
+    uint32_t out[1024];
+    std::memset(out, 0, sizeof(out));
+
+    rc = sudorix_solver_next_step(out, 1024);
+    if (rc == 0) {
+      break;
+    }
+
+    if (out[0] != 0) {
+      recordReasonId(out[1]);
+    }
+  }
+
+  if (guard >= guardMax) {
+    if (why) {
+      *why = "Step solve guard limit reached";
+    }
+    return 0;
+  }
+
+  rc = sudorix_solver_export_board(outValuesBuf, outCandidatesBuf);
+  if (rc == 0) {
+    if (why) {
+      *why = "sudorix_solver_export_board returned 0 (failure)";
+    }
+    return 0;
+  }
+
+  out81->clear();
+  out81->reserve(81);
+  for (int i = 0; i < 81; i++) {
+    const uint8_t value = outValuesBuf[i];
+    out81->push_back(value ? static_cast<char>('0' + value) : '.');
+  }
+
+  std::string w;
+  if (!validateSolution(in81, *out81, &w)) {
+    if (why) {
+      *why = w;
+    }
+    return 0;
+  }
+
+  return 1;
 }
 
 static void usage(const char *argv0) {
@@ -341,11 +503,18 @@ int main(int argc, char **argv) {
     cases.push_back(std::move(tc));
   }
 
-  if (!cases.empty() && threads > cases.size()) {
-    threads = static_cast<unsigned int>(cases.size());
-  }
-  if (threads == 0) {
+  if (mode == "step") {
+    if (threads != 1) {
+      std::cerr << "Step mode is not thread-safe, forcing --threads=1\n";
+    }
     threads = 1;
+  } else {
+    if (!cases.empty() && threads > cases.size()) {
+      threads = static_cast<unsigned int>(cases.size());
+    }
+    if (threads == 0) {
+      threads = 1;
+    }
   }
 
   std::cerr << "Loaded " << caseNo << " test lines, running " << cases.size()
@@ -384,9 +553,8 @@ int main(int argc, char **argv) {
       r.why = why;
       if (singleThreadMode) {
         std::cout << formatResult(r);
-      } else {
-        results[i] = std::move(r);
       }
+      results[i] = std::move(r);
     }
   };
 
@@ -420,5 +588,6 @@ int main(int argc, char **argv) {
   }
 
   std::cout << "SUMMARY: total=" << total << " passed=" << passed << " failed=" << failed << "\n";
-  return 0;
+  if (singleThreadMode) printTechniqueUsageSummary();
+  return (failed == 0) ? 0 : 1;
 }
