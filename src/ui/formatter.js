@@ -31,7 +31,19 @@
       }
       const digit = ctx.maskToSingleDigit(ev.sources[0].mask);
 
-      parts.push(`<div>${digit} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(baseSets.join(","))}</span> => </div>`);
+      const fins = [];
+      if (groups[1]) {
+        for (let fin of groups[1]) {
+          fins.push(ctx.formatEurekaCellCode(fin.cells));
+        }
+      }
+
+      if (fins.length == 0) {
+        parts.push(`<div>${digit} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(baseSets.join(","))}</span> => </div>`);
+      } else {
+        parts.push(`<div>${digit} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(baseSets.join(","))}</span></div>`);
+        parts.push(`<div>Naĝilo${fins.length > 1 ? "j" : ""} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(fins.join(","))}</span> => </div>`);
+      }
 
       defaultOperationsFormatter(ctx, ev, parts);
 
@@ -41,6 +53,24 @@
   REGISTRY["X-Wing"] = fishFormatter;
   REGISTRY["Swordfish"] = fishFormatter;
   REGISTRY["Jellyfish"] = fishFormatter;
+  REGISTRY["Finned X-Wing"] = fishFormatter;
+  REGISTRY["Finned Swordfish"] = fishFormatter;
+  REGISTRY["Finned Jellyfish"] = fishFormatter;
+  REGISTRY["Sashimi X-Wing"] = fishFormatter;
+  REGISTRY["Sashimi Swordfish"] = fishFormatter;
+  REGISTRY["Sashimi Jellyfish"] = fishFormatter;
+  REGISTRY["Franken X-Wing"] = fishFormatter;
+  REGISTRY["Franken Swordfish"] = fishFormatter;
+  REGISTRY["Franken Jellyfish"] = fishFormatter;
+  REGISTRY["Finned Franken X-Wing"] = fishFormatter;
+  REGISTRY["Finned Franken Swordfish"] = fishFormatter;
+  REGISTRY["Finned Franken Jellyfish"] = fishFormatter;
+  REGISTRY["Mutant X-Wing"] = fishFormatter;
+  REGISTRY["Mutant Swordfish"] = fishFormatter;
+  REGISTRY["Mutant Jellyfish"] = fishFormatter;
+  REGISTRY["Finned Mutant X-Wing"] = fishFormatter;
+  REGISTRY["Finned Mutant Swordfish"] = fishFormatter;
+  REGISTRY["Finned Mutant Jellyfish"] = fishFormatter;
 
   const rectangleFormatter = {
     formatLog(ev, ctx) {

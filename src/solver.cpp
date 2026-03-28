@@ -357,36 +357,44 @@ static void techXWing(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanDigit = [&](Digit digit) -> void
   {
     const int FISH_SIZE = 2;
-    const std::vector<Unit> &rows = board.getRows();
-    const std::vector<Unit> &columns = board.getColumns();
-    const std::vector<LocationSet> subsets = ALL_LOCATIONS.generate_power_set_of_size(FISH_SIZE);
 
-    for (const LocationSet &baseSets : subsets) {
-      std::vector<int> baseSetsList = baseSets.to_vector();
+    auto fishSearcher = [&](const std::vector<Unit> &units,
+                            const Unit &(*getBaseByLocation)(Location),
+                            const Unit &(*getCoverByLocation)(Location),
+                            Location (*getCoverLocation)(Cell)) -> void
+    {
+      LocationSet possibleUnits;
+      for (Location i = 0; i < 9; ++i) {
+        const Unit &unit = units[i];
+        if (!board.getPositionsOfDigit(unit, digit).empty()) {
+          possibleUnits.insert(i);
+        }
+      }
 
-      // rows
-      {
-        const Unit &rowA = rows[baseSetsList[0]];
-        const Unit &rowB = rows[baseSetsList[1]];
-        CellSet positionsA = board.getPositionsOfDigit(rowA, digit);
-        CellSet positionsB = board.getPositionsOfDigit(rowB, digit);
+      const std::vector<LocationSet> allBaseSets = possibleUnits.generate_power_set_of_size(FISH_SIZE);
+      for (const LocationSet &baseSets : allBaseSets) {
+        std::vector<int> baseSetsList = baseSets.to_vector();
 
-        if (!positionsA.empty() && positionsA.size() <= FISH_SIZE &&
-            !positionsB.empty() && positionsB.size() <= FISH_SIZE) {
-          LocationSet locationsA; for (Cell idx : positionsA) { locationsA.insert(SudokuBoard::getColumnLocation(idx)); }
-          LocationSet locationsB; for (Cell idx : positionsB) { locationsB.insert(SudokuBoard::getColumnLocation(idx)); }
+        const Unit &baseA = getBaseByLocation(baseSetsList[0]);
+        const Unit &baseB = getBaseByLocation(baseSetsList[1]);
+        CellSet positionsA = board.getPositionsOfDigit(baseA, digit);
+        CellSet positionsB = board.getPositionsOfDigit(baseB, digit);
+
+        if (positionsA.size() <= FISH_SIZE && positionsB.size() <= FISH_SIZE) {
+          LocationSet locationsA; for (Cell idx : positionsA) { locationsA.insert(getCoverLocation(idx)); }
+          LocationSet locationsB; for (Cell idx : positionsB) { locationsB.insert(getCoverLocation(idx)); }
           LocationSet coverSets = locationsA | locationsB;
           if (coverSets.size() == FISH_SIZE) {
             // X-Wing spotted
             std::vector<int> coverSetsList = coverSets.to_vector();
-            const Unit &columnA = columns[coverSetsList[0]];
-            const Unit &columnB = columns[coverSetsList[1]];
+            const Unit &coverA = getCoverByLocation(coverSetsList[0]);
+            const Unit &coverB = getCoverByLocation(coverSetsList[1]);
             Event event(EventType::RemoveCandidate, ReasonId::XWing);
-            // the source is the four cells forming the X-Wing, unit by unit
+            // the source is the base sets forming the X-Wing
             event.addSource(positionsA, digit);
             event.addSource(positionsB, digit);
             // remove instances of the digit from cover sets, excluding the base sets
-            CellSet set = (columnA | columnB) - (rowA | rowB);
+            CellSet set = (coverA | coverB) - (baseA | baseB);
             for (Cell idx : set) {
               event.addOperation(idx, digit);
             }
@@ -394,38 +402,12 @@ static void techXWing(SudokuBoard &board, EventQueue &eventQueue) {
           }
         }
       }
-      
-      // columns
-      {
-        const Unit &columnA = columns[baseSetsList[0]];
-        const Unit &columnB = columns[baseSetsList[1]];
-        CellSet positionsA = board.getPositionsOfDigit(columnA, digit);
-        CellSet positionsB = board.getPositionsOfDigit(columnB, digit);
+    };
 
-        if (!positionsA.empty() && positionsA.size() <= FISH_SIZE &&
-            !positionsB.empty() && positionsB.size() <= FISH_SIZE) {
-          LocationSet locationsA; for (Cell idx : positionsA) { locationsA.insert(SudokuBoard::getRowLocation(idx)); }
-          LocationSet locationsB; for (Cell idx : positionsB) { locationsB.insert(SudokuBoard::getRowLocation(idx)); }
-          LocationSet coverSets = locationsA | locationsB;
-          if (coverSets.size() == FISH_SIZE) {
-            // X-Wing spotted
-            std::vector<int> coverSetsList = coverSets.to_vector();
-            const Unit &rowA = rows[coverSetsList[0]];
-            const Unit &rowB = rows[coverSetsList[1]];
-            Event event(EventType::RemoveCandidate, ReasonId::XWing);
-            // the source is the four cells forming the X-Wing, unit by unit
-            event.addSource(positionsA, digit);
-            event.addSource(positionsB, digit);
-            // remove instances of the digit from cover sets, excluding the base sets
-            CellSet set = (rowA | rowB) - (columnA | columnB);
-            for (Cell idx : set) {
-              event.addOperation(idx, digit);
-            }
-            if (eventQueue.enqueue(board, event)) return;
-          }
-        }
-      }
-    }
+    // base sets: rows | cover sets: columns
+    fishSearcher(board.getRows(), SudokuBoard::getRowByLocation, SudokuBoard::getColumnByLocation, SudokuBoard::getColumnLocation);
+    // base sets: columns | cover sets: rows
+    fishSearcher(board.getColumns(), SudokuBoard::getColumnByLocation, SudokuBoard::getRowByLocation, SudokuBoard::getRowLocation);
   };
 
   for (Digit digit : board.getUnsolvedDigits()) {
@@ -437,42 +419,49 @@ static void techSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanDigit = [&](Digit digit) -> void
   {
     const int FISH_SIZE = 3;
-    const std::vector<Unit> &rows = board.getRows();
-    const std::vector<Unit> &columns = board.getColumns();
-    const std::vector<LocationSet> subsets = ALL_LOCATIONS.generate_power_set_of_size(FISH_SIZE);
 
-    for (const LocationSet &baseSets : subsets) {
-      std::vector<int> baseSetsList = baseSets.to_vector();
+    auto fishSearcher = [&](const std::vector<Unit> &units,
+                            const Unit &(*getBaseByLocation)(Location),
+                            const Unit &(*getCoverByLocation)(Location),
+                            Location (*getCoverLocation)(Cell)) -> void
+    {
+      LocationSet possibleUnits;
+      for (Location i = 0; i < 9; ++i) {
+        const Unit &unit = units[i];
+        if (!board.getPositionsOfDigit(unit, digit).empty()) {
+          possibleUnits.insert(i);
+        }
+      }
 
-      // rows
-      {
-        const Unit &rowA = rows[baseSetsList[0]];
-        const Unit &rowB = rows[baseSetsList[1]];
-        const Unit &rowC = rows[baseSetsList[2]];
-        CellSet positionsA = board.getPositionsOfDigit(rowA, digit);
-        CellSet positionsB = board.getPositionsOfDigit(rowB, digit);
-        CellSet positionsC = board.getPositionsOfDigit(rowC, digit);
+      const std::vector<LocationSet> allBaseSets = possibleUnits.generate_power_set_of_size(FISH_SIZE);
+      for (const LocationSet &baseSets : allBaseSets) {
+        std::vector<int> baseSetsList = baseSets.to_vector();
 
-        if (!positionsA.empty() && positionsA.size() <= FISH_SIZE &&
-            !positionsB.empty() && positionsB.size() <= FISH_SIZE &&
-            !positionsC.empty() && positionsC.size() <= FISH_SIZE) {
-          LocationSet locationsA; for (Cell idx : positionsA) { locationsA.insert(SudokuBoard::getColumnLocation(idx)); }
-          LocationSet locationsB; for (Cell idx : positionsB) { locationsB.insert(SudokuBoard::getColumnLocation(idx)); }
-          LocationSet locationsC; for (Cell idx : positionsC) { locationsB.insert(SudokuBoard::getColumnLocation(idx)); }
+        const Unit &baseA = getBaseByLocation(baseSetsList[0]);
+        const Unit &baseB = getBaseByLocation(baseSetsList[1]);
+        const Unit &baseC = getBaseByLocation(baseSetsList[2]);
+        CellSet positionsA = board.getPositionsOfDigit(baseA, digit);
+        CellSet positionsB = board.getPositionsOfDigit(baseB, digit);
+        CellSet positionsC = board.getPositionsOfDigit(baseC, digit);
+
+        if (positionsA.size() <= FISH_SIZE && positionsB.size() <= FISH_SIZE && positionsC.size() <= FISH_SIZE) {
+          LocationSet locationsA; for (Cell idx : positionsA) { locationsA.insert(getCoverLocation(idx)); }
+          LocationSet locationsB; for (Cell idx : positionsB) { locationsB.insert(getCoverLocation(idx)); }
+          LocationSet locationsC; for (Cell idx : positionsC) { locationsC.insert(getCoverLocation(idx)); }
           LocationSet coverSets = locationsA | locationsB | locationsC;
           if (coverSets.size() == FISH_SIZE) {
             // Swordfish spotted
             std::vector<int> coverSetsList = coverSets.to_vector();
-            const Unit &columnA = columns[coverSetsList[0]];
-            const Unit &columnB = columns[coverSetsList[1]];
-            const Unit &columnC = columns[coverSetsList[2]];
+            const Unit &coverA = getCoverByLocation(coverSetsList[0]);
+            const Unit &coverB = getCoverByLocation(coverSetsList[1]);
+            const Unit &coverC = getCoverByLocation(coverSetsList[2]);
             Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
-            // the source is the cells forming the Swordfish, unit by unit
+            // the source is the base sets forming the Swordfish
             event.addSource(positionsA, digit);
             event.addSource(positionsB, digit);
             event.addSource(positionsC, digit);
             // remove instances of the digit from cover sets, excluding the base sets
-            CellSet set = (columnA | columnB | columnC) - (rowA | rowB | rowC);
+            CellSet set = (coverA | coverB | coverC) - (baseA | baseB | baseC);
             for (Cell idx : set) {
               event.addOperation(idx, digit);
             }
@@ -480,44 +469,179 @@ static void techSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
           }
         }
       }
+    };
 
-      // columns
-      {
-        const Unit &columnA = columns[baseSetsList[0]];
-        const Unit &columnB = columns[baseSetsList[1]];
-        const Unit &columnC = columns[baseSetsList[2]];
-        CellSet positionsA = board.getPositionsOfDigit(columnA, digit);
-        CellSet positionsB = board.getPositionsOfDigit(columnB, digit);
-        CellSet positionsC = board.getPositionsOfDigit(columnC, digit);
+    // base sets: rows | cover sets: columns
+    fishSearcher(board.getRows(), SudokuBoard::getRowByLocation, SudokuBoard::getColumnByLocation, SudokuBoard::getColumnLocation);
+    // base sets: columns | cover sets: rows
+    fishSearcher(board.getColumns(), SudokuBoard::getColumnByLocation, SudokuBoard::getRowByLocation, SudokuBoard::getRowLocation);
+  };
 
-        if (!positionsA.empty() && positionsA.size() <= FISH_SIZE &&
-            !positionsB.empty() && positionsB.size() <= FISH_SIZE &&
-            !positionsC.empty() && positionsC.size() <= FISH_SIZE) {
-          LocationSet locationsA; for (Cell idx : positionsA) { locationsA.insert(SudokuBoard::getRowLocation(idx)); }
-          LocationSet locationsB; for (Cell idx : positionsB) { locationsB.insert(SudokuBoard::getRowLocation(idx)); }
-          LocationSet locationsC; for (Cell idx : positionsC) { locationsC.insert(SudokuBoard::getRowLocation(idx)); }
-          LocationSet coverSets = locationsA | locationsB | locationsC;
-          if (coverSets.size() == FISH_SIZE) {
-            // Swordfish spotted
-            std::vector<int> coverSetsList = coverSets.to_vector();
-            const Unit &rowA = rows[coverSetsList[0]];
-            const Unit &rowB = rows[coverSetsList[1]];
-            const Unit &rowC = rows[coverSetsList[2]];
-            Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
-            // the source is the cells forming the Swordfish, unit by unit
-            event.addSource(positionsA, digit);
-            event.addSource(positionsB, digit);
-            event.addSource(positionsC, digit);
-            // remove instances of the digit from cover sets, excluding the base sets
-            CellSet set = (rowA | rowB | rowC) - (columnA | columnB | columnC);
-            for (Cell idx : set) {
-              event.addOperation(idx, digit);
+  for (Digit digit : board.getUnsolvedDigits()) {
+    scanDigit(digit);
+  }
+}
+
+static void techFinnedXWing(SudokuBoard &board, EventQueue &eventQueue) {
+  auto scanDigit = [&](Digit digit) -> void
+  {
+    const int FISH_SIZE = 2;
+
+    auto fishSearcher = [&](const std::vector<Unit> &units,
+                            const Unit &(*getBaseByLocation)(Location),
+                            const Unit &(*getCoverByLocation)(Location),
+                            Location (*getCoverLocation)(Cell)) -> void
+    {
+      LocationSet possibleUnits;
+      for (Location i = 0; i < 9; ++i) {
+        const Unit &unit = units[i];
+        if (!board.getPositionsOfDigit(unit, digit).empty()) {
+          possibleUnits.insert(i);
+        }
+      }
+
+      const std::vector<LocationSet> allBaseSets = possibleUnits.generate_power_set_of_size(FISH_SIZE);
+      for (const LocationSet &baseSets : allBaseSets) {
+        std::vector<int> baseSetsList = baseSets.to_vector();
+
+        const Unit &baseA = getBaseByLocation(baseSetsList[0]);
+        const Unit &baseB = getBaseByLocation(baseSetsList[1]);
+        CellSet positionsA = board.getPositionsOfDigit(baseA, digit);
+        CellSet positionsB = board.getPositionsOfDigit(baseB, digit);
+        CellSet vertices = positionsA | positionsB;
+
+        LocationSet locationsA; for (Cell idx : positionsA) { locationsA.insert(getCoverLocation(idx)); }
+        LocationSet locationsB; for (Cell idx : positionsB) { locationsB.insert(getCoverLocation(idx)); }
+        LocationSet coverSets = locationsA | locationsB;
+
+        if (coverSets.size() <= FISH_SIZE+2) {
+          for (const LocationSet &coverSet : coverSets.generate_power_set_of_size(FISH_SIZE)) {
+            // look for the real cover sets
+            std::vector<int> coverSetList = coverSet.to_vector();
+            const Unit &coverA = getCoverByLocation(coverSetList[0]);
+            const Unit &coverB = getCoverByLocation(coverSetList[1]);
+            CellSet covered = vertices & (coverA | coverB);
+            CellSet fins = vertices - covered;
+            // look for fins and check they belong to a single box
+            LocationSet boxes;
+            for (Cell fin : fins) { boxes.insert(SudokuBoard::getBoxLocation(fin)); }
+            if (boxes.size() == 1) {
+              // check for possible eliminations
+              const Unit &finBox = SudokuBoard::getBoxByLocation(*boxes.begin());
+              CellSet set = ((coverA | coverB) - (baseA | baseB)) & finBox;
+              if (!set.empty()) {
+                // Finned X-Wing spotted
+                Event event(EventType::RemoveCandidate, covered.size() == FISH_SIZE*FISH_SIZE ? ReasonId::FinnedXWing : ReasonId::SashimiXWing);
+                // base sets without the fins
+                event.addSource(positionsA - fins, digit);
+                event.addSource(positionsB - fins, digit);
+                // fins
+                event.addDelimiter();
+                for (Cell idx : fins) {
+                  event.addSource(idx, digit);
+                }
+                // eliminations
+                for (Cell idx : set) {
+                  event.addOperation(idx, digit);
+                }
+                if (eventQueue.enqueue(board, event)) return;
+              }
             }
-            if (eventQueue.enqueue(board, event)) return;
           }
         }
       }
-    }
+    };
+
+    // base sets: rows | cover sets: columns
+    fishSearcher(board.getRows(), SudokuBoard::getRowByLocation, SudokuBoard::getColumnByLocation, SudokuBoard::getColumnLocation);
+    // base sets: columns | cover sets: rows
+    fishSearcher(board.getColumns(), SudokuBoard::getColumnByLocation, SudokuBoard::getRowByLocation, SudokuBoard::getRowLocation);
+  };
+
+  for (Digit digit : board.getUnsolvedDigits()) {
+    scanDigit(digit);
+  }
+}
+
+static void techFinnedSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
+  auto scanDigit = [&](Digit digit) -> void
+  {
+    const int FISH_SIZE = 3;
+
+    auto fishSearcher = [&](const std::vector<Unit> &units,
+                            const Unit &(*getBaseByLocation)(Location),
+                            const Unit &(*getCoverByLocation)(Location),
+                            Location (*getCoverLocation)(Cell)) -> void
+    {
+      LocationSet possibleUnits;
+      for (Location i = 0; i < 9; ++i) {
+        const Unit &unit = units[i];
+        if (!board.getPositionsOfDigit(unit, digit).empty()) {
+          possibleUnits.insert(i);
+        }
+      }
+
+      const std::vector<LocationSet> allBaseSets = possibleUnits.generate_power_set_of_size(FISH_SIZE);
+      for (const LocationSet &baseSets : allBaseSets) {
+        std::vector<int> baseSetsList = baseSets.to_vector();
+
+        const Unit &baseA = getBaseByLocation(baseSetsList[0]);
+        const Unit &baseB = getBaseByLocation(baseSetsList[1]);
+        const Unit &baseC = getBaseByLocation(baseSetsList[2]);
+        CellSet positionsA = board.getPositionsOfDigit(baseA, digit);
+        CellSet positionsB = board.getPositionsOfDigit(baseB, digit);
+        CellSet positionsC = board.getPositionsOfDigit(baseC, digit);
+        CellSet vertices = positionsA | positionsB | positionsC;
+
+        LocationSet locationsA; for (Cell idx : positionsA) { locationsA.insert(getCoverLocation(idx)); }
+        LocationSet locationsB; for (Cell idx : positionsB) { locationsB.insert(getCoverLocation(idx)); }
+        LocationSet locationsC; for (Cell idx : positionsC) { locationsC.insert(getCoverLocation(idx)); }
+        LocationSet coverSets = locationsA | locationsB | locationsC;
+
+        if (coverSets.size() <= FISH_SIZE+2) {
+          for (const LocationSet &coverSet : coverSets.generate_power_set_of_size(FISH_SIZE)) {
+            // look for the real cover sets
+            std::vector<int> coverSetList = coverSet.to_vector();
+            const Unit &coverA = getCoverByLocation(coverSetList[0]);
+            const Unit &coverB = getCoverByLocation(coverSetList[1]);
+            const Unit &coverC = getCoverByLocation(coverSetList[2]);
+            CellSet covered = vertices & (coverA | coverB | coverC);
+            CellSet fins = vertices - covered;
+            // look for fins and check they belong to a single box
+            LocationSet boxes;
+            for (Cell fin : fins) { boxes.insert(SudokuBoard::getBoxLocation(fin)); }
+            if (boxes.size() == 1) {
+              // check for possible eliminations
+              const Unit &finBox = SudokuBoard::getBoxByLocation(*boxes.begin());
+              CellSet set = ((coverA | coverB | coverC) - (baseA | baseB | baseC)) & finBox;
+              if (!set.empty()) {
+                // Finned X-Wing spotted
+                Event event(EventType::RemoveCandidate, covered.size() == FISH_SIZE*FISH_SIZE ? ReasonId::FinnedSwordfish : ReasonId::SashimiSwordfish);
+                // base sets without the fins
+                event.addSource(positionsA - fins, digit);
+                event.addSource(positionsB - fins, digit);
+                event.addSource(positionsC - fins, digit);
+                // fins
+                event.addDelimiter();
+                for (Cell idx : fins) {
+                  event.addSource(idx, digit);
+                }
+                // eliminations
+                for (Cell idx : set) {
+                  event.addOperation(idx, digit);
+                }
+                if (eventQueue.enqueue(board, event)) return;
+              }
+            }
+          }
+        }
+      }
+    };
+
+    // base sets: rows | cover sets: columns
+    fishSearcher(board.getRows(), SudokuBoard::getRowByLocation, SudokuBoard::getColumnByLocation, SudokuBoard::getColumnLocation);
+    // base sets: columns | cover sets: rows
+    fishSearcher(board.getColumns(), SudokuBoard::getColumnByLocation, SudokuBoard::getRowByLocation, SudokuBoard::getRowLocation);
   };
 
   for (Digit digit : board.getUnsolvedDigits()) {
@@ -1067,15 +1191,17 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techBUGPlusOne,
   techXWing,
   techXYWing,
-  techXYZWing,
   techSwordfish,
   techRemotePair,
   techUniqueRectangle,
   techWWing,
   techSingleDigitPattern,
+  techFinnedXWing,
+  techXYZWing,
   techSimpleColoring,
   tech3DMedusa,
   techXChain,
+  techFinnedSwordfish,
   techXYChain,
   techAIC
 };
