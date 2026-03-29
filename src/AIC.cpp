@@ -553,6 +553,19 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .max_depth = 9,
       };
       break;
+    case ReasonId::GroupedAIC:
+      config = {
+        .useWeakLinks = true,
+        .multiDigit = true,
+        .useGroupedCells = true,
+        .useStrongBivalues = true,
+        .useStrongBilocations = true,
+        .useWeakInCell = true,
+        .useWeakInUnit = true,
+        .useRemotePairs = false,
+        .max_depth = 9,
+      };
+      break;
     default:
       break;
   }
@@ -857,7 +870,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   Digit start_digit = *startDigitSet.begin();
   Digit end_digit = *endDigitSet.begin();
 
-  // TODO: AIC Type 2 per adesso non supporta grouped cells, solo Type 1 e 3
+  // AIC Type 2 requires one end to be a singleton
   Cell start_cell = *startCellSet.begin();
   Cell end_cell = *endCellSet.begin();
 
@@ -866,7 +879,9 @@ std::optional<Event> AicSearcher::execute_aic_rules(
     CellSet peers = board.getPeers(startCellSet | endCellSet);
     AicPath path = reconstruct_path(end_state_idx, states, parents);
 
-    Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType1 : reason);
+    Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType1 :
+                                            reason == ReasonId::GroupedAIC ? ReasonId::GroupedAICType1 :
+                                            reason);
     for (int i = 0; i < path.nodes.size(); ++i) {
       AicNode node = path.nodes[i];
       CellSet cellSet;
@@ -888,11 +903,14 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   }
 
   // AIC Type 2
-  if (start_digit != end_digit && board.sees(start_cell, end_cell)) {
+  if (start_digit != end_digit && board.sees(startCellSet, endCellSet)) {
     AicPath path = reconstruct_path(end_state_idx, states, parents);
 
-    if (board.hasCandidate(start_cell, end_digit) || board.hasCandidate(end_cell, start_digit)) {
-      Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType2 : reason);
+    if ((!startIsGrouped && board.hasCandidate(start_cell, end_digit)) ||
+        (!endIsGrouped && board.hasCandidate(end_cell, start_digit))) {
+      Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType2 :
+                                              reason == ReasonId::GroupedAIC ? ReasonId::GroupedAICType2 :
+                                              reason);
       for (int i = 0; i < path.nodes.size(); ++i) {
         AicNode node = path.nodes[i];
         CellSet cellSet;
@@ -901,10 +919,10 @@ std::optional<Event> AicSearcher::execute_aic_rules(
         deserialize_unitcode(node, cellSet, digitSet, isGrouped);
         event.addSource(cellSet, digitSet);
       }
-      if (board.hasCandidate(start_cell, end_digit)) {
+      if (!startIsGrouped && board.hasCandidate(start_cell, end_digit)) {
         event.addOperation(start_cell, end_digit);
       }
-      if (board.hasCandidate(end_cell, start_digit)) {
+      if (!endIsGrouped && board.hasCandidate(end_cell, start_digit)) {
         event.addOperation(end_cell, start_digit);
       }
       return event;
@@ -918,6 +936,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
     Event event(EventType::RemoveCandidate, reason == ReasonId::XChain ? ReasonId::XRing :
                                             reason == ReasonId::XYChain ? ReasonId::XYRing :
                                             reason == ReasonId::AIC ? ReasonId::AICType3 :
+                                            reason == ReasonId::GroupedAIC ? ReasonId::GroupedAICType3 :
                                             reason == ReasonId::GroupedXChain ? ReasonId::GroupedXRing :
                                             reason);
     for (int i = 0; i < path.nodes.size(); ++i) {

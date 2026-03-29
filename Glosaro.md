@@ -37,6 +37,7 @@
 | Wing                                      | Flugilo                                   |
 | - XY-Wing                                 | - XY-Flugilo                              |
 | - XYZ-Wing                                | - XYZ-Flugilo                             |
+| - W-Wing                                  | - W-Flugilo                             |
 | - Pivot                                   | - Pivoto                                  |
 | Chain                                     | Ĉeno                                      |
 | - Skyscraper                              | - Ĉielskrapanto                           |

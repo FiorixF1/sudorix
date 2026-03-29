@@ -746,7 +746,14 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   DigitSet extraDigits = (lineVertexDigits | oppositeVertexDigits) - xy;
                   CellSet peers = board.getPeers({lineVertex, oppositeVertex});
                   CellSet virtualSubset = board.getPositionsOfDigitsStrict(peers, extraDigits);
-                  if (virtualSubset.size() == extraDigits.size()-1) {
+                  // make sure all digits are present in the virtual subset
+                  DigitSet foundDigits;
+                  for (Cell idx : virtualSubset) foundDigits |= board.getCandidates(idx);
+                  // make sure the virtual subset is inside a single house
+                  bool seeEachOther = true;
+                  for (Cell idx : virtualSubset) seeEachOther &= board.sees(CellSet({idx}), virtualSubset - CellSet({idx}));
+                  // let's go
+                  if (virtualSubset.size() == extraDigits.size()-1 && foundDigits == extraDigits && seeEachOther) {
                     Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType3);
                     event.addSource(rectangleUpper, xy);
                     event.addSource(rectangleLower, xy);
@@ -1158,6 +1165,10 @@ static void techAIC(SudokuBoard &board, EventQueue &eventQueue) {
 static void techGroupedXChain(SudokuBoard &board, EventQueue &eventQueue) {
   techGenericAIC(board, eventQueue, ReasonId::GroupedXChain);
 }
+
+static void techGroupedAIC(SudokuBoard &board, EventQueue &eventQueue) {
+  techGenericAIC(board, eventQueue, ReasonId::GroupedAIC);
+}
 /* ------------------ END AIC WORLD ------------------ */
 
 typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);
@@ -1212,6 +1223,7 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techXYChain,
   techGroupedXChain,
   techAIC,
+  techGroupedAIC,
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Operation &op) {
