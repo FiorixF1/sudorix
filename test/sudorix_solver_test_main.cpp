@@ -159,6 +159,8 @@ static const char *reasonIdToString(ReasonId reason) {
     case ReasonId::AICType1: return "AIC (Type 1)";
     case ReasonId::AICType2: return "AIC (Type 2)";
     case ReasonId::AICType3: return "AIC (Type 3)";
+    case ReasonId::GroupedXChain: return "Grouped X-Chain";
+    case ReasonId::GroupedXRing: return "Grouped X-Ring";
     case ReasonId::GroupedAIC: return "Grouped AIC";
     case ReasonId::GroupedAICType1: return "Grouped AIC (Type 1)";
     case ReasonId::GroupedAICType2: return "Grouped AIC (Type 2)";

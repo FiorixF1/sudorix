@@ -13,6 +13,8 @@ class SudokuBoard
 public:
   SudokuBoard();
 
+  void clear();
+
   int importFromString(const char *values);
 
   int importFromBuffers(const uint8_t *values, const uint16_t *cands);

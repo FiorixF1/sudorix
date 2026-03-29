@@ -100,7 +100,7 @@ Nuntempe Sudorix povas solvi:
 
 * **31512** enigmojn el **31512** el `Just17.txt`
 
-* **37738** enigmojn el **50000** el `top50000.txt`
+* **37882** enigmojn el **50000** el `top50000.txt`
 
 ## Etendado de teknikoj
 

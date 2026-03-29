@@ -7,7 +7,7 @@ AicGraph AicGraphBuilder::build() {
   AicGraph g;
 
   build_singleton_nodes(g.nodes);
-  //build_grouped_nodes(g.nodes);
+  build_grouped_nodes(g.nodes);
 
   build_strong_links(g.nodes, g.strong_links);
 
@@ -234,18 +234,18 @@ void AicGraphBuilder::build_strong_links(const std::vector<AicNode> &nodes,
 
   // TODO: ho il dubbio che queste funzioni trovino già i nodi di tipo bilocation fra singleton
   // Grouped cells (including empty rectangle intersection)
-  /*for (Digit d = 1; d <= 9; ++d) {
+  for (Digit d = 1; d <= 9; ++d) {
     // singletons and groups in a row
     build_grouped_strong_row_box(nodes, strong_links, d);
     // singletons and groups in a column
     build_grouped_strong_col_box(nodes, strong_links, d);
     // minirows in a box
-    build_grouped_strong_box_row(nodes, strong_links, d);
+    //build_grouped_strong_box_row(nodes, strong_links, d);
     // minicolumns in a box
-    build_grouped_strong_box_col(nodes, strong_links, d);
+    //build_grouped_strong_box_col(nodes, strong_links, d);
     // empty rectangle intersection
     build_grouped_strong_eri(nodes, strong_links, d);
-  }*/
+  }
 }
 
 void AicGraphBuilder::build_strong_links_in_units(const std::vector<AicNode> &nodes,
@@ -290,7 +290,7 @@ void AicGraphBuilder::build_grouped_strong_row_box(const std::vector<AicNode> &n
                                                    Digit d) {
   for (const Unit &r : SudokuBoard::getRows()) {
     CellSet pos = board.getPositionsOfDigit(r, d);
-    if (pos.size() < 2) {
+    if (pos.size() < 3) {
       continue;
     }
 
@@ -313,7 +313,7 @@ void AicGraphBuilder::build_grouped_strong_col_box(const std::vector<AicNode> &n
                                                    Digit d) {
   for (const Unit &c : SudokuBoard::getColumns()) {
     CellSet pos = board.getPositionsOfDigit(c, d);
-    if (pos.size() < 2) {
+    if (pos.size() < 3) {
       continue;
     }
 
@@ -336,7 +336,7 @@ void AicGraphBuilder::build_grouped_strong_box_row(const std::vector<AicNode> &n
                                                    Digit d) {
   for (const Unit &b : SudokuBoard::getBoxes()) {
     CellSet pos = board.getPositionsOfDigit(b, d);
-    if (pos.size() < 2) {
+    if (pos.size() < 3) {
       continue;
     }
 
@@ -348,8 +348,8 @@ void AicGraphBuilder::build_grouped_strong_box_row(const std::vector<AicNode> &n
 
     if (parts.size() == 2) {
       AicNode a = get_node_id(d, parts[0]);
-      AicNode bb = get_node_id(d, parts[1]);
-      if (a && bb) add_strong_edge(strong_links, a, bb);
+      AicNode b = get_node_id(d, parts[1]);
+      if (a && b) add_strong_edge(strong_links, a, b);
     }
   }
 }
@@ -359,7 +359,7 @@ void AicGraphBuilder::build_grouped_strong_box_col(const std::vector<AicNode> &n
                                                    Digit d) {
   for (const Unit &b : SudokuBoard::getBoxes()) {
     CellSet pos = board.getPositionsOfDigit(b, d);
-    if (pos.size() < 2) {
+    if (pos.size() < 3) {
       continue;
     }
 
@@ -371,8 +371,8 @@ void AicGraphBuilder::build_grouped_strong_box_col(const std::vector<AicNode> &n
 
     if (parts.size() == 2) {
       AicNode a = get_node_id(d, parts[0]);
-      AicNode bb = get_node_id(d, parts[1]);
-      if (a && bb) add_strong_edge(strong_links, a, bb);
+      AicNode b = get_node_id(d, parts[1]);
+      if (a && b) add_strong_edge(strong_links, a, b);
     }
   }
 }
@@ -382,26 +382,50 @@ void AicGraphBuilder::build_grouped_strong_eri(const std::vector<AicNode> &nodes
                                                Digit d) {
   for (const Unit &b : SudokuBoard::getBoxes()) {
     CellSet pos = board.getPositionsOfDigit(b, d);
-    if (pos.size() < 2) {
+    if (pos.size() < 3) {
       continue;
     }
 
-    std::vector<CellSet> row_parts;
+    const Unit *eri_row = nullptr;
+    const Unit *eri_col = nullptr;
     for (const Unit &r : SudokuBoard::getRows()) {
-      CellSet g = pos & r;
-      if (g.size() > 1) row_parts.push_back(g);
+      for (const Unit &c : SudokuBoard::getColumns()) {
+        CellSet eri = (r | c) & b;
+        if (eri.is_superset_of(pos)) {
+          eri_row = &r;
+          eri_col = &c;
+          break;
+        }
+      }
     }
 
-    std::vector<CellSet> col_parts;
-    for (const Unit &c : SudokuBoard::getColumns()) {
-      CellSet g = pos & c;
-      if (g.size() > 1) col_parts.push_back(g);
-    }
+    if (eri_row && eri_col) {
+      CellSet row_part = *eri_row & pos;
+      CellSet col_part = *eri_col & pos;
 
-    if (row_parts.size() == 1 && col_parts.size() == 1) {
-      AicNode r = get_node_id(d, row_parts[0]);
-      AicNode c = get_node_id(d, col_parts[0]);
-      if (r && c) add_strong_edge(strong_links, r, c);
+      if (row_part.size() > 1 || col_part.size() > 1) {
+        AicNode r = get_node_id(d, row_part);
+        AicNode c = get_node_id(d, col_part);
+        if (r && c) add_strong_edge(strong_links, r, c);
+      }
+
+      /*std::vector<CellSet> row_parts;
+      for (const Unit &r : SudokuBoard::getRows()) {
+        CellSet g = pos & r;
+        if (!g.empty()) row_parts.push_back(g);
+      }
+
+      std::vector<CellSet> col_parts;
+      for (const Unit &c : SudokuBoard::getColumns()) {
+        CellSet g = pos & c;
+        if (!g.empty()) col_parts.push_back(g);
+      }
+
+      if (row_parts.size() == 1 && col_parts.size() == 1) {
+        AicNode r = get_node_id(d, row_parts[0]);
+        AicNode c = get_node_id(d, col_parts[0]);
+        if (r && c) add_strong_edge(strong_links, r, c);
+      }*/
     }
   }
 }
@@ -432,6 +456,19 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .useWeakLinks = true,
         .multiDigit = false,
         .useGroupedCells = false,
+        .useStrongBivalues = false,
+        .useStrongBilocations = true,
+        .useWeakInCell = false,
+        .useWeakInUnit = true,
+        .useRemotePairs = false,
+        .max_depth = 3,
+      };
+      break;
+    case ReasonId::EmptyRectangle:
+      config = {
+        .useWeakLinks = true,
+        .multiDigit = false,
+        .useGroupedCells = true,
         .useStrongBivalues = false,
         .useStrongBilocations = true,
         .useWeakInCell = false,
@@ -503,6 +540,19 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .max_depth = 9,
       };
       break;
+    case ReasonId::GroupedXChain:
+      config = {
+        .useWeakLinks = true,
+        .multiDigit = false,
+        .useGroupedCells = true,
+        .useStrongBivalues = false,
+        .useStrongBilocations = true,
+        .useWeakInCell = false,
+        .useWeakInUnit = true,
+        .useRemotePairs = false,
+        .max_depth = 9,
+      };
+      break;
     default:
       break;
   }
@@ -557,6 +607,30 @@ std::optional<Event> AicSearcher::runSearch(AicGraph &graph) {
                    (bCol == cCol && cRow == dRow)) {
           event.reason = ReasonId::Crane;
         }
+      } else if (event.reason == ReasonId::EmptyRectangle) {
+        // identify if this is an empty rectangle pattern
+        bool valid = false;
+        auto &sources = event.getSources();
+        if (sources.size() == 4) {
+          CellSet a = sources[0].cells;
+          CellSet b = sources[1].cells;
+          CellSet c = sources[2].cells;
+          CellSet d = sources[3].cells;
+          if (a.size() >= 1 && b.size() >= 1 && c.size() == 1 && d.size() == 1) {
+            for (const Unit &box : SudokuBoard::getBoxes()) {
+              if ((a | b).is_subset_of(box)) {
+                valid = true;
+              }
+            }
+          } else if (a.size() == 1 && b.size() == 1 && c.size() >= 1 && d.size() >= 1) {
+            for (const Unit &box : SudokuBoard::getBoxes()) {
+              if ((c | d).is_subset_of(box)) {
+                valid = true;
+              }
+            }
+          }
+        }
+        if (!valid) return {};
       }
       return maybeEvent;
     }
@@ -848,6 +922,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
     Event event(EventType::RemoveCandidate, reason == ReasonId::XChain ? ReasonId::XRing :
                                             reason == ReasonId::XYChain ? ReasonId::XYRing :
                                             reason == ReasonId::AIC ? ReasonId::AICType3 :
+                                            reason == ReasonId::GroupedXChain ? ReasonId::GroupedXRing :
                                             reason);
     for (int i = 0; i < path.nodes.size(); ++i) {
       AicNode node = path.nodes[i];

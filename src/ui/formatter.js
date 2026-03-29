@@ -41,8 +41,8 @@
       if (fins.length == 0) {
         parts.push(`<div>${digit} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(baseSets.join(","))}</span> => </div>`);
       } else {
-        parts.push(`<div>${digit} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(baseSets.join(","))}</span></div>`);
-        parts.push(`<div>Naĝilo${fins.length > 1 ? "j" : ""} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(fins.join(","))}</span> => </div>`);
+        parts.push(`<div>${digit} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(baseSets.join(","))}</span>`);
+        parts.push(` kaj naĝilo${fins.length > 1 ? "j" : ""} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(fins.join(","))}</span> => </div>`);
       }
 
       defaultOperationsFormatter(ctx, ev, parts);
@@ -252,6 +252,8 @@
   REGISTRY["Alternating Inference Chain (Type 1)"] = chainFormatter;
   REGISTRY["Alternating Inference Chain (Type 2)"] = chainFormatter;
   REGISTRY["Alternating Inference Chain (Type 3)"] = chainFormatter;
+  REGISTRY["Grouped X-Chain"] = chainFormatter;
+  REGISTRY["Grouped X-Ring"] = chainFormatter;
   REGISTRY["Grouped Alternating Inference Chain"] = chainFormatter;
   REGISTRY["Grouped Alternating Inference Chain (Type 1)"] = chainFormatter;
   REGISTRY["Grouped Alternating Inference Chain (Type 2)"] = chainFormatter;

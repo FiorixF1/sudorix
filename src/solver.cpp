@@ -490,7 +490,7 @@ static void techFinnedXWing(SudokuBoard &board, EventQueue &eventQueue) {
     auto fishSearcher = [&](const std::vector<Unit> &units,
                             const Unit &(*getBaseByLocation)(Location),
                             const Unit &(*getCoverByLocation)(Location),
-                            Location (*getCoverLocation)(Cell)) -> void
+                            Location (*getCoverLocation)(Cell)) -> bool
     {
       LocationSet possibleUnits;
       for (Location i = 0; i < 9; ++i) {
@@ -544,18 +544,19 @@ static void techFinnedXWing(SudokuBoard &board, EventQueue &eventQueue) {
                 for (Cell idx : set) {
                   event.addOperation(idx, digit);
                 }
-                if (eventQueue.enqueue(board, event)) return;
+                if (eventQueue.enqueue(board, event)) return true;
               }
             }
           }
         }
       }
+      return false;
     };
 
     // base sets: rows | cover sets: columns
-    fishSearcher(board.getRows(), SudokuBoard::getRowByLocation, SudokuBoard::getColumnByLocation, SudokuBoard::getColumnLocation);
+    if (fishSearcher(board.getRows(), SudokuBoard::getRowByLocation, SudokuBoard::getColumnByLocation, SudokuBoard::getColumnLocation)) return;
     // base sets: columns | cover sets: rows
-    fishSearcher(board.getColumns(), SudokuBoard::getColumnByLocation, SudokuBoard::getRowByLocation, SudokuBoard::getRowLocation);
+    if (fishSearcher(board.getColumns(), SudokuBoard::getColumnByLocation, SudokuBoard::getRowByLocation, SudokuBoard::getRowLocation)) return;
   };
 
   for (Digit digit : board.getUnsolvedDigits()) {
@@ -571,7 +572,7 @@ static void techFinnedSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
     auto fishSearcher = [&](const std::vector<Unit> &units,
                             const Unit &(*getBaseByLocation)(Location),
                             const Unit &(*getCoverByLocation)(Location),
-                            Location (*getCoverLocation)(Cell)) -> void
+                            Location (*getCoverLocation)(Cell)) -> bool
     {
       LocationSet possibleUnits;
       for (Location i = 0; i < 9; ++i) {
@@ -630,18 +631,19 @@ static void techFinnedSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
                 for (Cell idx : set) {
                   event.addOperation(idx, digit);
                 }
-                if (eventQueue.enqueue(board, event)) return;
+                if (eventQueue.enqueue(board, event)) return true;
               }
             }
           }
         }
       }
+      return false;
     };
 
     // base sets: rows | cover sets: columns
-    fishSearcher(board.getRows(), SudokuBoard::getRowByLocation, SudokuBoard::getColumnByLocation, SudokuBoard::getColumnLocation);
+    if (fishSearcher(board.getRows(), SudokuBoard::getRowByLocation, SudokuBoard::getColumnByLocation, SudokuBoard::getColumnLocation)) return;
     // base sets: columns | cover sets: rows
-    fishSearcher(board.getColumns(), SudokuBoard::getColumnByLocation, SudokuBoard::getRowByLocation, SudokuBoard::getRowLocation);
+    if (fishSearcher(board.getColumns(), SudokuBoard::getColumnByLocation, SudokuBoard::getRowByLocation, SudokuBoard::getRowLocation)) return;
   };
 
   for (Digit digit : board.getUnsolvedDigits()) {
@@ -1130,6 +1132,7 @@ static void techRemotePair(SudokuBoard &board, EventQueue &eventQueue) {
 
 static void techSingleDigitPattern(SudokuBoard &board, EventQueue &eventQueue) {
   techGenericAIC(board, eventQueue, ReasonId::SingleDigitPattern);
+  techGenericAIC(board, eventQueue, ReasonId::EmptyRectangle);
 }
 
 static void techSimpleColoring(SudokuBoard &board, EventQueue &eventQueue) {
@@ -1150,6 +1153,10 @@ static void techXYChain(SudokuBoard &board, EventQueue &eventQueue) {
 
 static void techAIC(SudokuBoard &board, EventQueue &eventQueue) {
   techGenericAIC(board, eventQueue, ReasonId::AIC);
+}
+
+static void techGroupedXChain(SudokuBoard &board, EventQueue &eventQueue) {
+  techGenericAIC(board, eventQueue, ReasonId::GroupedXChain);
 }
 /* ------------------ END AIC WORLD ------------------ */
 
@@ -1203,7 +1210,8 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techXChain,
   techFinnedSwordfish,
   techXYChain,
-  techAIC
+  techGroupedXChain,
+  techAIC,
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Operation &op) {

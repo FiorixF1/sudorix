@@ -96,6 +96,8 @@ enum class ReasonId : uint8_t {
   AICType1,
   AICType2,
   AICType3,
+  GroupedXChain,
+  GroupedXRing,
   GroupedAIC,
   GroupedAICType1,
   GroupedAICType2,

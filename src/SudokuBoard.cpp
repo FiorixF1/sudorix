@@ -171,12 +171,22 @@ static const std::vector<CellSet> PEERS = {
 // empty board
 SudokuBoard::SudokuBoard() : graphBuilder(*this) {};
 
-// only values, candidates are calculated automatically
-int SudokuBoard::importFromString(const char *values) {
-  // clear cache
+void SudokuBoard::clear() {
+  // clear digit cache
   for (Digit x = 1; x <= 9; ++x) {
     counter[x] = 0;
   }
+  // clear solved cells
+  solvedCells = 0;
+  // clear AIC graph
+  graph_valid = false;
+}
+
+// only values, candidates are calculated automatically
+int SudokuBoard::importFromString(const char *values) {
+  // reset state
+  this->clear();
+
   // parse: digits 1..9 are values; 0 or '.' are empty; ignore others
   int tokens = 0;
   for (int i = 0; values[i] != '\0'; i++) {
@@ -201,13 +211,10 @@ int SudokuBoard::importFromString(const char *values) {
     }
   }
 
-  /* Sudoku incompleto se non ho 81 simboli riconosciuti (0-9 o '.') */
+  // incomplete Sudoku if there are not enough symbols (0-9 or '.')
   if (tokens < 81) {
     return 0;
   }
-
-  // invalidate graph
-  graph_valid = false;
 
   // calculate candidates
   _recalcAllCandidatesFromValues();
@@ -217,10 +224,9 @@ int SudokuBoard::importFromString(const char *values) {
 
 // values and candidates
 int SudokuBoard::importFromBuffers(const uint8_t *values, const uint16_t *cands) {
-  // clear cache
-  for (Digit x = 1; x <= 9; ++x) {
-    counter[x] = 0;
-  }
+  // reset state
+  this->clear();
+
   // TODO: error handling
   for (int i = 0; i < 81; i++) {
     cells[i].setValue(values[i]);
@@ -233,8 +239,7 @@ int SudokuBoard::importFromBuffers(const uint8_t *values, const uint16_t *cands)
       cells[i].setCandidates(DigitSet( {values[i]} ));  // single value, use { ... }
     }
   }
-  // invalidate graph
-  graph_valid = false;
+
   return 1;
 }
 
