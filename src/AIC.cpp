@@ -857,17 +857,13 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   Digit start_digit = *startDigitSet.begin();
   Digit end_digit = *endDigitSet.begin();
 
-  // Per adesso non facciamo chain con gruppi.
-  if (startIsGrouped || endIsGrouped) {
-    return {};
-  }
-
+  // TODO: AIC Type 2 per adesso non supporta grouped cells, solo Type 1 e 3
   Cell start_cell = *startCellSet.begin();
   Cell end_cell = *endCellSet.begin();
 
   // AIC Type 1
-  if (start_digit == end_digit && !board.sees(start_cell, end_cell)) {
-    CellSet peers = board.getPeers({start_cell, end_cell});
+  if (start_digit == end_digit && !are_weakly_linked(start, end)) {
+    CellSet peers = board.getPeers(startCellSet | endCellSet);
     AicPath path = reconstruct_path(end_state_idx, states, parents);
 
     Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType1 : reason);
@@ -942,13 +938,13 @@ std::optional<Event> AicSearcher::execute_aic_rules(
       event.addSource(cellSet, digitSet);
     }
 
-    for (int i = 0; i < path.nodes.size()-1; ++i) {
+    for (int i = 0; i < path.nodes.size(); ++i) {
       AicNode node = path.nodes[i];
       CellSet cellSet;
       DigitSet digitSet;
       bool isGrouped;
       deserialize_unitcode(node, cellSet, digitSet, isGrouped);
-      AicNode nextNode = path.nodes[i+1];
+      AicNode nextNode = path.nodes[(i+1) % path.nodes.size()]; // wrap around when reaching the last node
       CellSet nextCellSet;
       DigitSet nextDigitSet;
       bool nextIsGrouped;
