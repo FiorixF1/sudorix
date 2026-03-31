@@ -20,6 +20,24 @@
   };
   REGISTRY["BUG+1"] = noSourcesFormatter;
 
+  const chuteFormatter = {
+    formatLog(ev, ctx) {
+      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const parts = [];
+
+      let digits = ctx.maskToDigits(groups[0][0].mask);
+      let euFirstCell = ctx.formatEurekaCellCode(groups[0][0].cells);
+      let euSecondCell = ctx.formatEurekaCellCode(groups[0][1].cells);
+
+      parts.push(`<div>{${ctx.escapeHtml(digits.join(","))}} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(euFirstCell)}</span> kaj <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(euSecondCell)}</span> => </div>`);
+
+      defaultOperationsFormatter(ctx, ev, parts);
+
+      return { title: ev.reason, bodyHtml: parts.join("") };
+    }
+  };
+  REGISTRY["Chute Remote Pair"] = chuteFormatter;
+
   const fishFormatter = {
     formatLog(ev, ctx) {
       const groups = ctx.splitSourceGroups(ev.sources || []);

@@ -253,7 +253,7 @@ La plej simplaj teknikoj necesas nur unu fonton:
 
 * Ĉeloj kiuj konsistigas la aron + Ciferoj de la aro
 
-Tio aplikiĝas al: **Naked Subsets**, **Hidden Subsets**, **Intersection Removal**.
+Tio aplikiĝas al: **Naked Subsets**, **Hidden Subsets**, **Intersection Removal**, **Chute Remote Pair**.
 
 ---
 
