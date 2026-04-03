@@ -166,8 +166,12 @@ static const char *reasonIdToString(ReasonId reason) {
     case ReasonId::GroupedAICType2: return "Grouped AIC (Type 2)";
     case ReasonId::GroupedAICType3: return "Grouped AIC (Type 3)";
     case ReasonId::ALSXZ: return "ALS-XZ";
-    case ReasonId::ALSXY: return "ALS-XY";
+    case ReasonId::ALSXZSinglyLinked: return "ALS-XZ Singly Linked";
+    case ReasonId::ALSXZDoublyLinked: return "ALS-XZ Doubly Linked";
+    case ReasonId::ALSXYWing: return "ALS-XY-Wing";
+    case ReasonId::ALSXYRing: return "ALS-XY-Ring";
     case ReasonId::ALSChain: return "ALS Chain";
+    case ReasonId::ALSRing: return "ALS Ring";
     case ReasonId::SueDeCoq: return "Sue-De-Coq";
     case ReasonId::DeathBlossom: return "Death Blossom";
   }

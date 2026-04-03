@@ -158,7 +158,7 @@
         return 1;
       } else if (groupIndex == 2) {
         // yellow for emptied cell
-        return 3;
+        return 4;
       } else {
         if (ev.type === "removeCandidate") {
           // blue for second color
@@ -276,6 +276,66 @@
   REGISTRY["Grouped Alternating Inference Chain (Type 1)"] = chainFormatter;
   REGISTRY["Grouped Alternating Inference Chain (Type 2)"] = chainFormatter;
   REGISTRY["Grouped Alternating Inference Chain (Type 3)"] = chainFormatter;
+
+  const alsFormatter = {
+    formatLog(ev, ctx) {
+      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const parts = [];
+
+      let alsCellsList = [];
+      let alsDigitsList = [];
+      for (let als of groups[0]) {
+        alsCellsList.push(ctx.formatEurekaCellCode(als.cells));
+        alsDigitsList.push(ctx.maskToDigits(als.mask));
+      }
+
+      let rccs = [];
+      for (let rcc of groups[1]) {
+        rccs.push(ctx.maskToSingleDigit(rcc.mask));
+      }
+
+      let zs = [];
+      if (groups[2]) {
+        for (let z of groups[2]) {
+          zs.push(ctx.maskToSingleDigit(z.mask));
+        }
+      }
+
+      const ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      parts.push(`<div>`);
+      for (let i in alsCellsList) {
+        parts.push(`${ALPHA[i]} = <span class="logSourceCategory${(i % 9) + 4}">${ctx.escapeHtml(alsCellsList[i])} {${ctx.escapeHtml(alsDigitsList[i])}}</span>${rccs[i*2] ? ' -'+rccs[i*2]+'-' : ''}</br>`);
+      }
+      if (groups[2]) {
+        parts.push(`Z = ${zs[0]} => </div>`);
+      } else {
+        parts.push(`=> </div>`);
+      }
+
+      defaultOperationsFormatter(ctx, ev, parts);
+
+      return { title: ev.reason, bodyHtml: parts.join("") };
+    },
+    getSourceCategory(ev, source, sourceIndex, groupIndex) {
+      if (groupIndex == 0) {
+        // use a different color for each ALS
+        return (sourceIndex % 9) + 4;
+      } else if (groupIndex == 1) {
+        // purple for RCCs
+        return 3;
+      } else {
+        // blue for Z
+        return 2;
+      }
+    }
+  };
+  REGISTRY["Almost Locked Set XZ"] = alsFormatter;
+  REGISTRY["Almost Locked Set XZ Singly Linked"] = alsFormatter;
+  REGISTRY["Almost Locked Set XZ Doubly Linked"] = alsFormatter;
+  REGISTRY["Almost Locked Set XY-Wing"] = alsFormatter;
+  REGISTRY["Almost Locked Set XY-Ring"] = alsFormatter;
+  REGISTRY["Almost Locked Set Chain"] = alsFormatter;
+  REGISTRY["Almost Locked Set Ring"] = alsFormatter;
 
   window.SudorixFormatterRegistry = REGISTRY;
 

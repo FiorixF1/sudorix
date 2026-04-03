@@ -62,10 +62,10 @@
       --cat1Glow: rgba(124, 255, 0, 0.35);
       --cat2Outline: rgba(76, 176, 255, 0.95);
       --cat2Glow: rgba(76, 176, 255, 0.30);
-      --cat3Outline: rgba(255, 225, 80, 0.95);
-      --cat3Glow: rgba(255, 225, 80, 0.32);
-      --cat4Outline: rgba(180, 132, 255, 0.95);
-      --cat4Glow: rgba(180, 132, 255, 0.30);
+      --cat3Outline: rgba(180, 132, 255, 0.95);
+      --cat3Glow: rgba(180, 132, 255, 0.30);
+      --cat4Outline: rgba(255, 225, 80, 0.95);
+      --cat4Glow: rgba(255, 225, 80, 0.32);
       --cat5Outline: rgba(0, 232, 255, 0.95);
       --cat5Glow: rgba(0, 232, 255, 0.30);
       --cat6Outline: rgba(255, 163, 72, 0.95);
@@ -431,19 +431,19 @@
     .cand.flashCategory12 { outline: 2px solid var(--cat12Outline); box-shadow: 0 0 0 2px var(--cat12Glow); }
     .cand.flashCategory13 { outline: 2px solid var(--flashRemoveOutline2); box-shadow: 0 0 0 2px var(--cat12Glow); }
 
-    .logSourceCategory1 { color: var(--cat1Outline); }
-    .logSourceCategory2 { color: var(--cat2Outline); }
-    .logSourceCategory3 { color: var(--cat3Outline); }
-    .logSourceCategory4 { color: var(--cat4Outline); }
-    .logSourceCategory5 { color: var(--cat5Outline); }
-    .logSourceCategory6 { color: var(--cat6Outline); }
-    .logSourceCategory7 { color: var(--cat7Outline); }
-    .logSourceCategory8 { color: var(--cat8Outline); }
-    .logSourceCategory9 { color: var(--cat9Outline); }
-    .logSourceCategory10 { color: var(--cat10Outline); }
-    .logSourceCategory11 { color: var(--cat11Outline); }
-    .logSourceCategory12 { color: var(--cat12Outline); }
-    .logSourceCategory13 { color: var(--flashRemoveOutline2); }
+    .logSourceCategory1 { color: var(--cat1Outline); font-weight: 750; }
+    .logSourceCategory2 { color: var(--cat2Outline); font-weight: 750; }
+    .logSourceCategory3 { color: var(--cat3Outline); font-weight: 750; }
+    .logSourceCategory4 { color: var(--cat4Outline); font-weight: 750; }
+    .logSourceCategory5 { color: var(--cat5Outline); font-weight: 750; }
+    .logSourceCategory6 { color: var(--cat6Outline); font-weight: 750; }
+    .logSourceCategory7 { color: var(--cat7Outline); font-weight: 750; }
+    .logSourceCategory8 { color: var(--cat8Outline); font-weight: 750; }
+    .logSourceCategory9 { color: var(--cat9Outline); font-weight: 750; }
+    .logSourceCategory10 { color: var(--cat10Outline); font-weight: 750; }
+    .logSourceCategory11 { color: var(--cat11Outline); font-weight: 750; }
+    .logSourceCategory12 { color: var(--cat12Outline); font-weight: 750; }
+    .logSourceCategory13 { color: var(--flashRemoveOutline2); font-weight: 750; }
 
     /* Candidates clickable only in Kolorigado (visual cue) */
     .sudoku.candClickable .cand {

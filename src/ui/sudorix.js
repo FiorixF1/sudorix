@@ -116,9 +116,13 @@ var business_logic = (() => {
     "Grouped Alternating Inference Chain (Type 1)",
     "Grouped Alternating Inference Chain (Type 2)",
     "Grouped Alternating Inference Chain (Type 3)",
-    "ALS-XZ",
-    "ALS-XY",
-    "ALS Chain",
+    "Almost Locked Set XZ",
+    "Almost Locked Set XZ Singly Linked",
+    "Almost Locked Set XZ Doubly Linked",
+    "Almost Locked Set XY-Wing",
+    "Almost Locked Set XY-Ring",
+    "Almost Locked Set Chain",
+    "Almost Locked Set Ring",
     "Sue de Coq",
     "Death Blossom",
   ];
@@ -551,7 +555,14 @@ var business_logic = (() => {
     }
 
     if (source.kind === "box") {
-      return source.idxs.map(idx => idxToRef(idx)).join("|");
+      const b = (source.unitId - 18) + 1;
+      const cells = [];
+      for (let i = 0; i < 9; i++) {
+        if (source.mask9 & (1 << i)) {
+          cells.push(String(i + 1));
+        }
+      }
+      return `b${b}p${cells.join("")}`;
     }
 
     return source.idxs.map(idx => idxToRef(idx)).join(",");
@@ -779,34 +790,56 @@ var business_logic = (() => {
       return;
     }
 
-    if (CHAINS.indexOf(ev.reason) == -1) {
-      return;
-    }
+    if (CHAINS.indexOf(ev.reason) != -1) {
+      // AIC
+      const groups = splitSourceGroups(ev.sources || []);
 
-    const groups = splitSourceGroups(ev.sources || []);
-
-    // Draw chain from sources
-    let i = 0;
-    let WANT_STRONG = true;
-    while (i < groups[0].length) {
-      const s = groups[0][i];
-      const t = groups[0][i+1];
-      if (s && s.cells && s.cells.idxs && s.cells.idxs.length > 0 &&
-          t && t.cells && t.cells.idxs && t.cells.idxs.length > 0) {
-        // TODO: support for grouped nodes
-        addCandidateLink(s.cells.idxs[0],
-                         maskToSingleDigit(s.mask),
-                         t.cells.idxs[0],
-                         maskToSingleDigit(t.mask),
-                         {
-                           dashed: !WANT_STRONG,
-                           bold: WANT_STRONG,
-                           color: null,
-                         }
-        );
-        WANT_STRONG = !WANT_STRONG;
+      // Draw chain from sources
+      let i = 0;
+      let WANT_STRONG = true;
+      while (i < groups[0].length) {
+        const s = groups[0][i];
+        const t = groups[0][i+1];
+        if (s && s.cells && s.cells.idxs && s.cells.idxs.length > 0 &&
+            t && t.cells && t.cells.idxs && t.cells.idxs.length > 0) {
+          addCandidateLink(s.cells.idxs[0],
+                           maskToSingleDigit(s.mask),
+                           t.cells.idxs[0],
+                           maskToSingleDigit(t.mask),
+                           {
+                             dashed: !WANT_STRONG,
+                             bold: WANT_STRONG,
+                             color: null,
+                           }
+          );
+          WANT_STRONG = !WANT_STRONG;
+        }
+        ++i;
       }
-      ++i;
+    } else if (ev.reason.indexOf("Almost Locked Set") != -1) {
+      // ALS
+      const groups = splitSourceGroups(ev.sources || []);
+
+      // Draw links between RCCs from sources
+      let i = 0;
+      while (i < groups[1].length) {
+        const s = groups[1][i];
+        const t = groups[1][i+1];
+        if (s && s.cells && s.cells.idxs && s.cells.idxs.length > 0 &&
+            t && t.cells && t.cells.idxs && t.cells.idxs.length > 0) {
+          addCandidateLink(s.cells.idxs[0],
+                           maskToSingleDigit(s.mask),
+                           t.cells.idxs[0],
+                           maskToSingleDigit(t.mask),
+                           {
+                             dashed: true,
+                             bold: false,
+                             color: null,
+                           }
+          );
+        }
+        i += 2;
+      }
     }
   }
 

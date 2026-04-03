@@ -343,6 +343,25 @@ Tio aplikiĝas al: **Skyscraper**, **Two-String Kite**, **Crane**, **Empty Recta
 
 ---
 
+## ALS
+
+Ĉenoj konstruitaj per ALS-oj (Preskaŭ Blokitaj Aroj) havas tiujn ĉi fontojn:
+
+* Ĉeloj de la unua aro + Ciferoj
+* Ĉeloj de la dua aro + Ciferoj
+* ...
+* Disigilo
+* Ĉeloj de la aro entenanta la unuan RCC-on + Cifero RCC
+* Ĉeloj de la aro entenanta la duan RCC-on + Cifero RCC
+* ...
+* Disigilo
+* Ĉeloj en la unua aro entenantaj ciferon Z + Cifero Z (se aplikebla)
+* Ĉeloj en la lasta aro entenantaj ciferon Z + Cifero Z (se aplikebla)
+
+Tio aplikiĝas al: **ALS-XZ**, **ALS-XY-Wing**, **ALS Chain**.
+
+---
+
 ## BUG+1
 
 En BUG+1, la fontoj estas la sekvaj:

@@ -104,8 +104,12 @@ enum class ReasonId : uint8_t {
   GroupedAICType3,
   // almost locked sets
   ALSXZ,
-  ALSXY,
+  ALSXZSinglyLinked,
+  ALSXZDoublyLinked,
+  ALSXYWing,
+  ALSXYRing,
   ALSChain,
+  ALSRing,
   SueDeCoq,
   DeathBlossom,
 };

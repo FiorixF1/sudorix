@@ -72,7 +72,7 @@ AicGraph AicGraphBuilder::prune(const AicGraph &graph, const AicConfig &config) 
     prunedGraph.nodes.push_back(it->first);
   }
 
-#ifdef DEBUG
+#if 0
   console_log("AIC GRAPH");
   for (auto &it : prunedGraph.strong_links) {
     AicNode fromID = it.first;
@@ -232,7 +232,6 @@ void AicGraphBuilder::build_strong_links(const std::vector<AicNode> &nodes,
     build_strong_links_in_cells(nodes, strong_links, cell);
   }
 
-  // TODO: ho il dubbio che queste funzioni trovino già i nodi di tipo bilocation fra singleton
   // Grouped cells (including empty rectangle intersection)
   for (Digit d = 1; d <= 9; ++d) {
     // singletons and groups in a row
@@ -408,24 +407,6 @@ void AicGraphBuilder::build_grouped_strong_eri(const std::vector<AicNode> &nodes
         AicNode c = get_node_id(d, col_part);
         if (r && c) add_strong_edge(strong_links, r, c);
       }
-
-      /*std::vector<CellSet> row_parts;
-      for (const Unit &r : SudokuBoard::getRows()) {
-        CellSet g = pos & r;
-        if (!g.empty()) row_parts.push_back(g);
-      }
-
-      std::vector<CellSet> col_parts;
-      for (const Unit &c : SudokuBoard::getColumns()) {
-        CellSet g = pos & c;
-        if (!g.empty()) col_parts.push_back(g);
-      }
-
-      if (row_parts.size() == 1 && col_parts.size() == 1) {
-        AicNode r = get_node_id(d, row_parts[0]);
-        AicNode c = get_node_id(d, col_parts[0]);
-        if (r && c) add_strong_edge(strong_links, r, c);
-      }*/
     }
   }
 }
@@ -678,7 +659,7 @@ std::optional<Event> AicSearcher::aic_search_from(AicGraph &graph) {
   std::deque<QueueItem> q;
 
   auto push_state = [&](AicNode start, AicNode node, EdgeType next_type, int depth, int prev_idx, AicNode prev_node, EdgeType edge_used) {
-    AicSearchState st{node, .next_type = next_type};
+    AicSearchState st{.node = node, .next_type = next_type};
     states.push_back(st);
     parents.push_back({prev_idx, prev_node, edge_used});
     int idx = static_cast<int>(states.size()) - 1;
@@ -700,7 +681,7 @@ std::optional<Event> AicSearcher::aic_search_from(AicGraph &graph) {
       continue;
     }
 
-#ifdef DEBUG
+#if 0
     bool isGrouped;
     CellSet cellSet;
     DigitSet digitSet;
@@ -764,7 +745,7 @@ std::optional<Event> AicSearcher::coloring_search_from(AicNode start, AicGraph &
   std::deque<QueueItem> q;
 
   auto push_state = [&](AicNode node, ColorType next_color, int depth, int prev_idx, AicNode prev_node, ColorType color_used) {
-    AicSearchState st{node, .next_color = next_color};
+    AicSearchState st{.node = node, .next_color = next_color};
     states.push_back(st);
     int idx = static_cast<int>(states.size()) - 1;
     q.push_back({node, next_color, depth, idx});
@@ -783,7 +764,7 @@ std::optional<Event> AicSearcher::coloring_search_from(AicNode start, AicGraph &
     }
     visited.insert(cur.node);
 
-#ifdef DEBUG
+#if 0
     bool isGrouped;
     CellSet cellSet;
     DigitSet digitSet;
@@ -833,12 +814,15 @@ AicPath AicSearcher::reconstruct_path(int end_state_idx,
                                       const std::vector<AicSearchState> &states,
                                       const std::vector<AicParent> &parents) const {
   AicPath p;
-  std::vector<AicNode> rev_nodes;
+  std::vector<FullAicNode> rev_nodes;
   std::vector<EdgeType> rev_edges;
 
   int idx = end_state_idx;
   while (idx >= 0) {
-    rev_nodes.push_back(states[idx].node);
+    FullAicNode node;
+    deserialize_unitcode(states[idx].node, node.cellSet, node.digitSet, node.isGrouped);
+
+    rev_nodes.push_back(node);
     if (parents[idx].prev_state_index >= 0) {
       rev_edges.push_back(parents[idx].edge_used);
     }
@@ -883,12 +867,8 @@ std::optional<Event> AicSearcher::execute_aic_rules(
                                             reason == ReasonId::GroupedAIC ? ReasonId::GroupedAICType1 :
                                             reason);
     for (int i = 0; i < path.nodes.size(); ++i) {
-      AicNode node = path.nodes[i];
-      CellSet cellSet;
-      DigitSet digitSet;
-      bool isGrouped;
-      deserialize_unitcode(node, cellSet, digitSet, isGrouped);
-      event.addSource(cellSet, digitSet);
+      FullAicNode node = path.nodes[i];
+      event.addSource(node.cellSet, node.digitSet);
     }
 
     for (Cell idx : peers) {
@@ -912,12 +892,8 @@ std::optional<Event> AicSearcher::execute_aic_rules(
                                               reason == ReasonId::GroupedAIC ? ReasonId::GroupedAICType2 :
                                               reason);
       for (int i = 0; i < path.nodes.size(); ++i) {
-        AicNode node = path.nodes[i];
-        CellSet cellSet;
-        DigitSet digitSet;
-        bool isGrouped;
-        deserialize_unitcode(node, cellSet, digitSet, isGrouped);
-        event.addSource(cellSet, digitSet);
+        FullAicNode node = path.nodes[i];
+        event.addSource(node.cellSet, node.digitSet);
       }
       if (!startIsGrouped && board.hasCandidate(start_cell, end_digit)) {
         event.addOperation(start_cell, end_digit);
@@ -940,51 +916,35 @@ std::optional<Event> AicSearcher::execute_aic_rules(
                                             reason == ReasonId::GroupedXChain ? ReasonId::GroupedXRing :
                                             reason);
     for (int i = 0; i < path.nodes.size(); ++i) {
-      AicNode node = path.nodes[i];
-      CellSet cellSet;
-      DigitSet digitSet;
-      bool isGrouped;
-      deserialize_unitcode(node, cellSet, digitSet, isGrouped);
-      event.addSource(cellSet, digitSet);
+      FullAicNode node = path.nodes[i];
+      event.addSource(node.cellSet, node.digitSet);
     }
     {
       // add again the first node since this is a ring
-      AicNode node = path.nodes[0];
-      CellSet cellSet;
-      DigitSet digitSet;
-      bool isGrouped;
-      deserialize_unitcode(node, cellSet, digitSet, isGrouped);
-      event.addSource(cellSet, digitSet);
+      FullAicNode node = path.nodes[0];
+      event.addSource(node.cellSet, node.digitSet);
     }
 
     for (int i = 0; i < path.nodes.size(); ++i) {
-      AicNode node = path.nodes[i];
-      CellSet cellSet;
-      DigitSet digitSet;
-      bool isGrouped;
-      deserialize_unitcode(node, cellSet, digitSet, isGrouped);
-      AicNode nextNode = path.nodes[(i+1) % path.nodes.size()]; // wrap around when reaching the last node
-      CellSet nextCellSet;
-      DigitSet nextDigitSet;
-      bool nextIsGrouped;
-      deserialize_unitcode(nextNode, nextCellSet, nextDigitSet, nextIsGrouped);
+      FullAicNode node = path.nodes[i];
+      FullAicNode nextNode = path.nodes[(i+1) % path.nodes.size()]; // wrap around when reaching the last node
 
-      if (cellSet != nextCellSet) {
+      if (node.cellSet != nextNode.cellSet) {
         // different cell, same digit
-        CellSet peers = board.getPeers(cellSet | nextCellSet);
-        Digit digit = *digitSet.begin();
+        CellSet peers = board.getPeers(node.cellSet | nextNode.cellSet); 
+        Digit digit = *node.digitSet.begin();
         for (Cell idx : peers) {
           if (board.hasCandidate(idx, digit)) {
             event.addOperation(idx, digit);
           }
         }
       }
-      if (cellSet == nextCellSet) {
+      if (node.cellSet == nextNode.cellSet) {
         // same cell, different digit
-        Cell cell = *cellSet.begin();
-        Digit digit = *digitSet.begin();
-        Digit nextDigit = *nextDigitSet.begin();
-        DigitSet toRemove = board.getCandidates(cell) - digitSet - nextDigitSet;
+        Cell cell = *node.cellSet.begin();
+        Digit digit = *node.digitSet.begin();
+        Digit nextDigit = *nextNode.digitSet.begin();
+        DigitSet toRemove = board.getCandidates(cell) - node.digitSet - nextNode.digitSet;
         if (!toRemove.empty()) {
           event.addOperation(cell, toRemove);
         }

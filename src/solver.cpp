@@ -9,6 +9,7 @@
 #include "SudokuBoard.hpp"
 #include "EventQueue.hpp"
 #include "AIC.hpp"
+#include "ALS.hpp"
 #include "encoder.hpp"
 #include "types.hpp"
 
@@ -1232,6 +1233,35 @@ static void techGroupedAIC(SudokuBoard &board, EventQueue &eventQueue) {
 }
 /* ------------------ END AIC WORLD ------------------ */
 
+/* -------------------- ALS WORLD -------------------- */
+
+static void techGenericALS(SudokuBoard &board,
+                           EventQueue &eventQueue,
+                           ReasonId reason) {
+  AlsGraphBuilder builder(board);
+  AlsSearcher searcher(board);
+  const AlsConfig &config = searcher.setConfigAndReturn(reason);
+  AlsGraph prunedGraph = builder.build(); //board.getPrunedGraph(config);
+  std::optional<Event> event = searcher.runSearch(prunedGraph);
+
+  if (event) {
+    eventQueue.enqueue(board, *event);
+  }
+}
+
+static void techALSXZ(SudokuBoard &board, EventQueue &eventQueue) {
+  techGenericALS(board, eventQueue, ReasonId::ALSXZ);
+}
+
+static void techALSXYWing(SudokuBoard &board, EventQueue &eventQueue) {
+  techGenericALS(board, eventQueue, ReasonId::ALSXYWing);
+}
+
+static void techALSChain(SudokuBoard &board, EventQueue &eventQueue) {
+  techGenericALS(board, eventQueue, ReasonId::ALSChain);
+}
+/* ------------------ END ALS WORLD ------------------ */
+
 typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);
 
 // nCr(9, 2) = 36
@@ -1270,6 +1300,9 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techGroupedXChain,
   techAIC,
   techGroupedAIC,
+  //techALSXZ,
+  //techALSXYWing,
+  techALSChain,
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Operation &op) {

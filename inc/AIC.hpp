@@ -27,6 +27,13 @@ class SudokuBoard;
 // because all its data can be univocally extracted.
 using AicNode = uint32_t;
 
+// Deserialized node from ID
+struct FullAicNode {
+  CellSet cellSet;
+  DigitSet digitSet;
+  bool isGrouped;
+};
+
 enum class ColorType : uint8_t {
   FIRST,
   SECOND
@@ -38,7 +45,7 @@ enum class EdgeType : uint8_t {
 };
 
 struct AicPath {
-  std::vector<AicNode> nodes;
+  std::vector<FullAicNode> nodes;
   std::vector<EdgeType> edges;  // edges[i] connects nodes[i] -> nodes[i+1]
 };
 
