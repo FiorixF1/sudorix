@@ -1121,15 +1121,17 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
               Digit x = v[0];
               Digit y = v[1];
 
-              // look for the common row/column of the two cells
+              // look for the common unit of the two cells
               const Unit *common_unit = nullptr;
               if (SudokuBoard::getRowLocation(peer_of_a) == SudokuBoard::getRowLocation(peer_of_b)) {
                 // they are in the same row
                 common_unit = &SudokuBoard::getRowByCell(peer_of_a);
-              }
-              if (SudokuBoard::getColumnLocation(peer_of_a) == SudokuBoard::getColumnLocation(peer_of_b)) {
+              } else if (SudokuBoard::getColumnLocation(peer_of_a) == SudokuBoard::getColumnLocation(peer_of_b)) {
                 // they are in the same column
                 common_unit = &SudokuBoard::getColumnByCell(peer_of_a);
+              } else if (SudokuBoard::getBoxLocation(peer_of_a) == SudokuBoard::getBoxLocation(peer_of_b)) {
+                // they are in the same box
+                common_unit = &SudokuBoard::getBoxByCell(peer_of_a);
               }
 
               if (common_unit) {

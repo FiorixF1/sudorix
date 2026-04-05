@@ -25,10 +25,14 @@ class SudokuBoard;
 //        ^digits      ^cells    ^unit
 // This way the ID can be used also to represent the node itself
 // because all its data can be univocally extracted.
-using AicNode = uint32_t;
+//
+// Note: a node could potentially have more than one representation, but if it is built with
+// serialize_cellset_to_unitcodes it is guaranteed to be unique.
+using AicNodeID = uint32_t;
 
-// Deserialized node from ID
-struct FullAicNode {
+// Actual node structure
+struct AicNode {
+  AicNodeID id;
   CellSet cellSet;
   DigitSet digitSet;
   bool isGrouped;
@@ -45,13 +49,13 @@ enum class EdgeType : uint8_t {
 };
 
 struct AicPath {
-  std::vector<FullAicNode> nodes;
+  std::vector<AicNode> nodes;
   std::vector<EdgeType> edges;  // edges[i] connects nodes[i] -> nodes[i+1]
 };
 
 struct AicGraph {
-  std::vector<AicNode> nodes;
-  std::map<AicNode, std::vector<AicNode>> strong_links;
+  std::map<AicNodeID, AicNode> nodes;
+  std::map<AicNodeID, std::vector<AicNodeID>> strong_links;
   // weak non lo materializziamo tutto: lo calcoliamo on-demand
 };
 
@@ -76,64 +80,64 @@ public:
 
   AicGraph build();
 
-  AicGraph prune(const AicGraph &graph, const AicConfig &config);
+  AicGraph prune(AicGraph &graph, const AicConfig &config);
 
 private:
   const SudokuBoard &board;
 
-  void build_singleton_nodes(std::vector<AicNode> &nodes);
+  void build_singleton_nodes(std::map<AicNodeID, AicNode> &nodes);
 
-  void add_group_if_new(std::vector<AicNode> &nodes, Digit digit, const CellSet &cells);
+  void add_group_if_new(std::map<AicNodeID, AicNode> &nodes, Digit digit, const CellSet &cells);
 
-  void build_grouped_nodes(std::vector<AicNode> &nodes);
+  void build_grouped_nodes(std::map<AicNodeID, AicNode> &nodes);
 
-  AicNode get_node_id(Digit digit, Cell cell) const;
+  AicNodeID get_node_id(Digit digit, Cell cell) const;
 
-  AicNode get_node_id(Digit digit, const CellSet &cells) const;
+  AicNodeID get_node_id(Digit digit, const CellSet &cells) const;
 
-  AicNode get_node_id(const DigitSet &digits, Cell cell) const;
+  AicNodeID get_node_id(const DigitSet &digits, Cell cell) const;
 
-  AicNode get_node_id(const DigitSet &digits, const CellSet &cells) const;
+  AicNodeID get_node_id(const DigitSet &digits, const CellSet &cells) const;
 
-  void add_strong_edge(std::map<AicNode, std::vector<AicNode>> &adj, AicNode a, AicNode b);
+  void add_strong_edge(std::map<AicNodeID, std::vector<AicNodeID>> &adj, AicNodeID a, AicNodeID b);
 
-  void build_strong_links(const std::vector<AicNode> &nodes,
-                          std::map<AicNode, std::vector<AicNode>> &strong_links);
+  void build_strong_links(const std::map<AicNodeID, AicNode> &nodes,
+                          std::map<AicNodeID, std::vector<AicNodeID>> &strong_links);
 
-  void build_strong_links_in_units(const std::vector<AicNode> &nodes,
-                                   std::map<AicNode, std::vector<AicNode>> &strong_links,
+  void build_strong_links_in_units(const std::map<AicNodeID, AicNode> &nodes,
+                                   std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
                                    const std::vector<Unit> &units,
                                    Digit d);
 
-  void build_strong_links_in_cells(const std::vector<AicNode> &nodes,
-                                   std::map<AicNode, std::vector<AicNode>> &strong_links,
+  void build_strong_links_in_cells(const std::map<AicNodeID, AicNode> &nodes,
+                                   std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
                                    Cell cell);
 
-  void build_grouped_strong_row_box(const std::vector<AicNode> &nodes,
-                                    std::map<AicNode, std::vector<AicNode>> &strong_links,
+  void build_grouped_strong_row_box(const std::map<AicNodeID, AicNode> &nodes,
+                                    std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
                                     Digit d);
 
-  void build_grouped_strong_col_box(const std::vector<AicNode> &nodes,
-                                    std::map<AicNode, std::vector<AicNode>> &strong_links,
+  void build_grouped_strong_col_box(const std::map<AicNodeID, AicNode> &nodes,
+                                    std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
                                     Digit d);
 
-  void build_grouped_strong_box_row(const std::vector<AicNode> &nodes,
-                                    std::map<AicNode, std::vector<AicNode>> &strong_links,
+  void build_grouped_strong_box_row(const std::map<AicNodeID, AicNode> &nodes,
+                                    std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
                                     Digit d);
 
-  void build_grouped_strong_box_col(const std::vector<AicNode> &nodes,
-                                    std::map<AicNode, std::vector<AicNode>> &strong_links,
+  void build_grouped_strong_box_col(const std::map<AicNodeID, AicNode> &nodes,
+                                    std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
                                     Digit d);
 
-  void build_grouped_strong_eri(const std::vector<AicNode> &nodes,
-                                std::map<AicNode, std::vector<AicNode>> &strong_links,
+  void build_grouped_strong_eri(const std::map<AicNodeID, AicNode> &nodes,
+                                std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
                                 Digit d);
 };
 
 /* ---------------------------------------------------------------------- */
 
 struct AicSearchState {
-  AicNode node;
+  AicNodeID node;
   union {
     EdgeType next_type;
     ColorType next_color;
@@ -142,7 +146,7 @@ struct AicSearchState {
 
 struct AicParent {
   int prev_state_index = -1;
-  AicNode prev_node = 0;
+  AicNodeID prev_node = 0;
   union {
     EdgeType edge_used;
     ColorType color_used;
@@ -161,31 +165,34 @@ private:
   const SudokuBoard &board;
   ReasonId reason;
   AicConfig config;
-  std::set<AicNode> visited;
+  std::set<AicNodeID> visited;
 
   std::optional<Event> aic_search_from(AicGraph &graph);
-  std::optional<Event> coloring_search_from(AicNode start, AicGraph &graph);
+  std::optional<Event> coloring_search_from(AicNodeID start, AicGraph &graph);
 
   bool path_contains_node(int state_idx,
-                          AicNode node,
+                          AicNodeID node,
                           const std::vector<AicSearchState> &states,
                           const std::vector<AicParent> &parents) const;
 
-  AicPath reconstruct_path(int end_state_idx,
+  AicPath reconstruct_path(AicGraph &graph,
+                           int end_state_idx,
                            const std::vector<AicSearchState> &states,
                            const std::vector<AicParent> &parents) const;
 
   std::optional<Event> execute_aic_rules(
-    AicNode start,
-    AicNode end,
+    AicGraph &graph,
+    AicNodeID start,
+    AicNodeID end,
     int end_state_idx,
     const std::vector<AicSearchState> &states,
     const std::vector<AicParent> &parents) const;
   std::optional<Event> execute_coloring_rules(
-    AicNode start,
+    AicGraph &graph,
+    AicNodeID start,
     const std::vector<AicSearchState> &states) const;
 
-  bool are_weakly_linked(AicNode a, AicNode b) const;
+  bool are_weakly_linked(AicNode &a, AicNode &b) const;
 };
 
 #endif // AIC_HPP

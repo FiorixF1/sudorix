@@ -151,6 +151,7 @@ private:
   bool graph_valid = false;
 
   bool _recalcAllCandidatesFromValues();
+  void _invalidateGraph();
 };
 
 #endif // SUDOKU_BOARD_H

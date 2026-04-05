@@ -14,7 +14,7 @@ AlsGraph AlsGraphBuilder::build() {
   return g;
 }
 
-void AlsGraphBuilder::build_nodes(std::vector<AlsNode> &nodes) {
+void AlsGraphBuilder::build_nodes(std::map<AlsNodeID, AlsNode> &nodes) {
   for (const Unit &row : board.getRows()) {
     build_nodes_in_unit(nodes, row);
   }
@@ -26,10 +26,11 @@ void AlsGraphBuilder::build_nodes(std::vector<AlsNode> &nodes) {
   }
 }
 
-void AlsGraphBuilder::build_nodes_in_unit(std::vector<AlsNode> &nodes, const Unit &unit) {
+void AlsGraphBuilder::build_nodes_in_unit(std::map<AlsNodeID, AlsNode> &nodes, const Unit &unit) {
   LocationSet unsolved = board.getUnsolvedLocations(unit);
   std::vector<int> unitList = unit.to_vector();
 
+  console_log("Building nodes...");
   int maxSubset = std::min<int>(DEFAULT_MAX_ALS_SIZE, unsolved.size());
   for (int subsetSize = 1; subsetSize <= maxSubset; ++subsetSize) {
     std::vector<LocationSet> subsets = unsolved.generate_power_set_of_size(subsetSize);
@@ -51,34 +52,33 @@ void AlsGraphBuilder::build_nodes_in_unit(std::vector<AlsNode> &nodes, const Uni
   }
 }
 
-void AlsGraphBuilder::add_node_if_new(std::vector<AlsNode> &nodes,
+void AlsGraphBuilder::add_node_if_new(std::map<AlsNodeID, AlsNode> &nodes,
                                       const CellSet &cells,
                                       const DigitSet &digits) const {
-  AlsNode candidate = get_node_id(digits, cells);
-  if (!candidate) {
-    return;
-  }
-  // TODO: change std::vector to std::set? this may explain the performance issues...
-  // all bivalue cells are duplicated and also some pairs and triples.
-  // Maybe the whole ID system must be redesigned.
-  if (std::find(nodes.begin(), nodes.end(), candidate) == nodes.end()) {
-    nodes.push_back(candidate);
-  }
+  AlsNodeID id = get_node_id(digits, cells);
+  if (!id) return;
+  AlsNode candidate{
+    .id = id,
+    .cellSet = cells,
+    .digitSet = digits,
+    .isGrouped = true
+  };
+  nodes[id] = candidate;
 }
 
-AlsNode AlsGraphBuilder::get_node_id(Digit digit, Cell cell) const {
+AlsNodeID AlsGraphBuilder::get_node_id(Digit digit, Cell cell) const {
   return get_node_id(DigitSet({digit}), CellSet({cell}));
 }
 
-AlsNode AlsGraphBuilder::get_node_id(Digit digit, const CellSet &cells) const {
+AlsNodeID AlsGraphBuilder::get_node_id(Digit digit, const CellSet &cells) const {
   return get_node_id(DigitSet({digit}), cells);
 }
 
-AlsNode AlsGraphBuilder::get_node_id(const DigitSet &digits, Cell cell) const {
+AlsNodeID AlsGraphBuilder::get_node_id(const DigitSet &digits, Cell cell) const {
   return get_node_id(digits, CellSet({cell}));
 }
 
-AlsNode AlsGraphBuilder::get_node_id(const DigitSet &digits, const CellSet &cells) const {
+AlsNodeID AlsGraphBuilder::get_node_id(const DigitSet &digits, const CellSet &cells) const {
   auto codes = serialize_cellset_to_unitcodes(cells);
 
   // check for invalid input
@@ -92,31 +92,27 @@ AlsNode AlsGraphBuilder::get_node_id(const DigitSet &digits, const CellSet &cell
   return shiftedDigits | code;
 }
 
-void AlsGraphBuilder::build_links(const std::vector<AlsNode> &nodes,
-                                  std::map<AlsNode, std::vector<AlsEdge>> &links) {
-  for (size_t i = 0; i < nodes.size(); ++i) {
-    bool grouped = false;
-    CellSet cellsA;
-    DigitSet digitsA;
-    deserialize_unitcode(nodes[i], cellsA, digitsA, grouped);
+void AlsGraphBuilder::build_links(std::map<AlsNodeID, AlsNode> &nodes,
+                                  std::map<AlsNodeID, std::vector<AlsEdge>> &links) {
+  for (auto it = nodes.begin(); it != nodes.end(); ++it) {
+    AlsNode &A = it->second;
+    for (auto ot = nodes.begin(); ot != nodes.end(); ++ot) {
+      AlsNode &B = ot->second;
 
-    for (size_t j = i+1; j < nodes.size(); ++j) {
-      CellSet cellsB;
-      DigitSet digitsB;
-      deserialize_unitcode(nodes[j], cellsB, digitsB, grouped);
+      if (A.id > B.id) continue;
 
-      if (!(cellsA & cellsB).empty()) {
+      if (!(A.cellSet & B.cellSet).empty()) {
         continue; // overlapping ALS are normally excluded
       }
 
-      if (board.sees(cellsA, cellsB)) {
+      if (board.sees(A.cellSet, B.cellSet)) {
         continue; // do not link ALS that completely see each other
       }
 
-      DigitSet common = digitsA & digitsB;
+      DigitSet common = A.digitSet & B.digitSet;
       for (Digit d : common) {
-        if (is_rcc(nodes[i], nodes[j], d)) {
-          add_edge(links, nodes[i], nodes[j], d);
+        if (is_rcc(A, B, d)) {
+          add_edge(links, A.id, B.id, d);
         }
       }
     }
@@ -124,25 +120,19 @@ void AlsGraphBuilder::build_links(const std::vector<AlsNode> &nodes,
 
 #if 0
   console_log("ALS GRAPH");
+  console_log("Number of nodes: %d", nodes.size());
+  console_log("Number of edges: %d", links.size());
   for (auto &it : links) {
-    AlsNode fromID = it.first;
+    AlsNode &from = nodes[it.first];
+
     auto &edges = it.second;
-
-    CellSet fromCellSet;
-    DigitSet fromDigitSet;
-    bool isGrouped;
-    deserialize_unitcode(fromID, fromCellSet, fromDigitSet, isGrouped);
-
-    for (auto &toID : edges) {
-      CellSet toCellSet;
-      DigitSet toDigitSet;
-      bool isGrouped;
-      deserialize_unitcode(toID.to, toCellSet, toDigitSet, isGrouped);
+    for (auto &edge : edges) {
+      AlsNode &to = nodes[edge.to];
 
       std::stringstream ss;
-      ss << "Edge from "   << fromCellSet << " with digits " << fromDigitSet <<
-            " to "         << toCellSet   << " with digits " << toDigitSet <<
-            " with RCC = " << std::to_string(toID.rcc);
+      ss << "Edge from "   << from.cellSet << " with digits " << from.digitSet <<
+            " to "         << to.cellSet   << " with digits " << to.digitSet <<
+            " with RCC = " << std::to_string(edge.rcc);
       std::string out = ss.str();
 
       console_log("%s", out.c_str());
@@ -151,21 +141,13 @@ void AlsGraphBuilder::build_links(const std::vector<AlsNode> &nodes,
 #endif
 }
 
-bool AlsGraphBuilder::is_rcc(AlsNode a, AlsNode b, Digit digit) const {
-  bool grouped = false;
-  CellSet cellsA;
-  CellSet cellsB;
-  DigitSet digitsA;
-  DigitSet digitsB;
-  deserialize_unitcode(a, cellsA, digitsA, grouped);
-  deserialize_unitcode(b, cellsB, digitsB, grouped);
-
-  if (!digitsA.contains(digit) || !digitsB.contains(digit)) {
+bool AlsGraphBuilder::is_rcc(AlsNode &a, AlsNode &b, Digit digit) const {
+  if (!a.digitSet.contains(digit) || !b.digitSet.contains(digit)) {
     return false;
   }
 
-  CellSet digitCellsA = board.getPositionsOfDigit(cellsA, digit);
-  CellSet digitCellsB = board.getPositionsOfDigit(cellsB, digit);
+  CellSet digitCellsA = board.getPositionsOfDigit(a.cellSet, digit);
+  CellSet digitCellsB = board.getPositionsOfDigit(b.cellSet, digit);
 
   if (digitCellsA.empty() || digitCellsB.empty()) {
     return false;
@@ -174,15 +156,15 @@ bool AlsGraphBuilder::is_rcc(AlsNode a, AlsNode b, Digit digit) const {
   return board.sees(digitCellsA, digitCellsB);
 }
 
-void AlsGraphBuilder::add_edge(std::map<AlsNode, std::vector<AlsEdge>> &adj,
-                               AlsNode a,
-                               AlsNode b,
+void AlsGraphBuilder::add_edge(std::map<AlsNodeID, std::vector<AlsEdge>> &adj,
+                               AlsNodeID a,
+                               AlsNodeID b,
                                Digit rcc) {
   if (a == b || rcc == 0) {
     return;
   }
 
-  auto add_one_way = [&](AlsNode x, AlsNode y) {
+  auto add_one_way = [&](AlsNodeID x, AlsNodeID y) {
     auto &v = adj[x];
     AlsEdge edge{y, rcc};
     if (std::find(v.begin(), v.end(), edge) == v.end()) {
@@ -230,8 +212,8 @@ std::optional<Event> AlsSearcher::runSearch(AlsGraph &graph) {
 
 std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
   struct QueueItem {
-    AlsNode start;
-    AlsNode node;
+    AlsNodeID start;
+    AlsNodeID node;
     Digit last_rcc;
     int depth;
     int state_index;
@@ -241,12 +223,12 @@ std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
   std::vector<AlsParent> parents;
   std::deque<QueueItem> q;
 
-  auto push_state = [&](AlsNode start,
-                        AlsNode node,
+  auto push_state = [&](AlsNodeID start,
+                        AlsNodeID node,
                         Digit last_rcc,
                         int depth,
                         int prev_idx,
-                        AlsNode prev_node,
+                        AlsNodeID prev_node,
                         Digit via_rcc) {
     states.push_back({node, last_rcc});
     parents.push_back({prev_idx, prev_node, via_rcc});
@@ -256,7 +238,7 @@ std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
   };
 
   for (auto it = graph.links.begin(); it != graph.links.end(); ++it) {
-    AlsNode start = it->first;
+    AlsNodeID start = it->first;
     push_state(start, start, 0, 0, -1, start, 0);
   }
 
@@ -300,7 +282,7 @@ std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
                                            nb.to,
                                            nc.rcc);
 
-          std::optional<Event> event = execute_als_rules(cur.start, nc.to, double_next_idx, states, parents);
+          std::optional<Event> event = execute_als_rules(graph, cur.start, nc.to, double_next_idx, states, parents);
           if (event) {
             return event;
           }
@@ -312,7 +294,7 @@ std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
       }
 
       // Look for eliminations according to ALS rules
-      std::optional<Event> event = execute_als_rules(cur.start, nb.to, next_idx, states, parents);
+      std::optional<Event> event = execute_als_rules(graph, cur.start, nb.to, next_idx, states, parents);
       if (event) {
         return event;
       }
@@ -323,7 +305,7 @@ std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
 }
 
 bool AlsSearcher::path_contains_node(int state_idx,
-                                     AlsNode node,
+                                     AlsNodeID node,
                                      const std::vector<AlsSearchState> &states,
                                      const std::vector<AlsParent> &parents) const {
   int idx = state_idx;
@@ -336,18 +318,17 @@ bool AlsSearcher::path_contains_node(int state_idx,
   return false;
 }
 
-AlsPath AlsSearcher::reconstruct_path(int end_state_idx,
+AlsPath AlsSearcher::reconstruct_path(AlsGraph &graph,
+                                      int end_state_idx,
                                       const std::vector<AlsSearchState> &states,
                                       const std::vector<AlsParent> &parents) const {
   AlsPath p;
-  std::vector<FullAlsNode> rev_nodes;
+  std::vector<AlsNode> rev_nodes;
   std::vector<AlsEdge> rev_edges;
 
   int idx = end_state_idx;
   while (idx >= 0) {
-    FullAlsNode node;
-    deserialize_unitcode(states[idx].node, node.cellSet, node.digitSet, node.isGrouped);
-    
+    AlsNode &node = graph.nodes[states[idx].node];
     rev_nodes.push_back(node);
     if (parents[idx].prev_state_index >= 0) {
       rev_edges.push_back({states[idx].node, parents[idx].rcc});
@@ -384,7 +365,7 @@ CellSet AlsSearcher::get_common_non_rcc_digits(const AlsPath &path,
   return result;
 }
 
-std::optional<Event> AlsSearcher::build_circular_elimination_event(const AlsPath &path,
+std::optional<Event> AlsSearcher::build_circular_elimination_event(AlsPath &path,
                                                                    ReasonId detailedReason) const {
   if (path.nodes.size() < 2) {
     return {};
@@ -394,7 +375,7 @@ std::optional<Event> AlsSearcher::build_circular_elimination_event(const AlsPath
 
   // sources: list of ALSs
   for (size_t i = 0; i < path.nodes.size(); ++i) {
-    FullAlsNode node = path.nodes[i];
+    AlsNode &node = path.nodes[i];
     event.addSource(node.cellSet, node.digitSet);
   }
 
@@ -402,23 +383,28 @@ std::optional<Event> AlsSearcher::build_circular_elimination_event(const AlsPath
 
   // sources: list of RCCs
   for (size_t i = 0; i < path.nodes.size(); ++i) {
-    FullAlsNode fromNode = path.nodes[i];
+    AlsNode &fromNode = path.nodes[i];
 
     if (i < path.edges.size()) {
-      FullAlsNode toNode;
+      AlsNode toNode;
       Digit RCC = path.edges[i].rcc;
       deserialize_unitcode(path.edges[i].to, toNode.cellSet, toNode.digitSet, toNode.isGrouped);
       event.addSource(board.getPositionsOfDigit(fromNode.cellSet, RCC), RCC);
       event.addSource(board.getPositionsOfDigit(toNode.cellSet, RCC), RCC);
+      
+      //AlsNode &toNode = path.nodes[(i+1)%path.nodes.size()];
+      //Digit RCC = path.edges[i].rcc;
+      //event.addSource(board.getPositionsOfDigit(fromNode.cellSet, RCC), RCC);
+      //event.addSource(board.getPositionsOfDigit(toNode.cellSet, RCC), RCC);
     }
   }
 
   event.addDelimiter();
 
   for (size_t i = 0; i < path.nodes.size(); ++i) {
-    FullAlsNode prevNode = path.nodes[i == 0 ? path.nodes.size()-1 : i-1];
-    FullAlsNode node = path.nodes[i];
-    FullAlsNode nextNode = path.nodes[(i+1)%path.nodes.size()];
+    AlsNode &prevNode = path.nodes[i == 0 ? path.nodes.size()-1 : i-1];
+    AlsNode &node = path.nodes[i];
+    AlsNode &nextNode = path.nodes[(i+1)%path.nodes.size()];
 
     // RCC between prev and curr set
     Digit rccA = path.edges[i == 0 ? path.nodes.size()-1 : i-1].rcc;
@@ -455,7 +441,7 @@ std::optional<Event> AlsSearcher::build_circular_elimination_event(const AlsPath
   return {};
 }
 
-std::optional<Event> AlsSearcher::build_endpoint_elimination_event(const AlsPath &path,
+std::optional<Event> AlsSearcher::build_endpoint_elimination_event(AlsPath &path,
                                                                    Digit z,
                                                                    ReasonId detailedReason) const {
   if (path.nodes.size() < 2) {
@@ -475,7 +461,7 @@ std::optional<Event> AlsSearcher::build_endpoint_elimination_event(const AlsPath
 
     // sources: list of ALSs
     for (size_t i = 0; i < path.nodes.size(); ++i) {
-      FullAlsNode node = path.nodes[i];
+      AlsNode &node = path.nodes[i];
       event.addSource(node.cellSet, node.digitSet);
     }
 
@@ -483,8 +469,8 @@ std::optional<Event> AlsSearcher::build_endpoint_elimination_event(const AlsPath
 
     // sources: list of RCCs
     for (size_t i = 0; i < path.nodes.size()-1; ++i) {
-      FullAlsNode fromNode = path.nodes[i];
-      FullAlsNode toNode = path.nodes[i+1];
+      AlsNode &fromNode = path.nodes[i];
+      AlsNode &toNode = path.nodes[i+1];
       Digit RCC = path.edges[i].rcc;
 
       if (i < path.edges.size()) {
@@ -513,28 +499,24 @@ std::optional<Event> AlsSearcher::build_endpoint_elimination_event(const AlsPath
 }
 
 std::optional<Event> AlsSearcher::execute_als_rules(
-  AlsNode start,
-  AlsNode end,
+  AlsGraph &graph,
+  AlsNodeID start,
+  AlsNodeID end,
   int end_state_idx,
   const std::vector<AlsSearchState> &states,
   const std::vector<AlsParent> &parents) const
 {
-  AlsPath path = reconstruct_path(end_state_idx, states, parents);
+  AlsPath path = reconstruct_path(graph, end_state_idx, states, parents);
   if (path.nodes.size() < 2) {
     return {};
   }
 
-  bool grouped;
-  CellSet startCells;
-  DigitSet startDigits;
-  deserialize_unitcode(start, startCells, startDigits, grouped);
-  CellSet endCells;
-  DigitSet endDigits;
-  deserialize_unitcode(end, endCells, endDigits, grouped);
+  AlsNode &Start = graph.nodes[start];
+  AlsNode &End = graph.nodes[end];
 
-  if (startCells == endCells && startDigits == endDigits) {
+  if (Start.cellSet == End.cellSet && Start.digitSet == End.digitSet) {
     // Ring
-    ReasonId detailedReason;// = reason;
+    ReasonId detailedReason;
     if (path.edges.size() == 2) {
       detailedReason = ReasonId::ALSXZDoublyLinked;
     } else if (path.edges.size() == 3) {
@@ -553,14 +535,14 @@ std::optional<Event> AlsSearcher::execute_als_rules(
   } else {
     // Wing
     DigitSet rccs = get_rcc_set(path);
-    DigitSet common = startDigits & endDigits;
+    DigitSet common = Start.digitSet & End.digitSet;
     DigitSet endpointDigits = common - rccs;
 
     if (endpointDigits.empty()) {
       return {};
     }
 
-    ReasonId detailedReason; // = reason;
+    ReasonId detailedReason;
     if (path.edges.size() == 1) {
       detailedReason = ReasonId::ALSXZSinglyLinked;
     } else if (path.edges.size() == 2) {

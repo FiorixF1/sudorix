@@ -179,7 +179,7 @@ void SudokuBoard::clear() {
   // clear solved cells
   solvedCells = 0;
   // clear AIC graph
-  graph_valid = false;
+  _invalidateGraph();
 }
 
 // only values, candidates are calculated automatically
@@ -263,14 +263,14 @@ bool SudokuBoard::isSolved(Cell idx) const {
 void SudokuBoard::setValue(Cell idx, Digit digit) {
   ++counter[digit];
   ++solvedCells;
-  graph_valid = false;
+  _invalidateGraph();
   cells[idx].setValue(digit);
 }
 
 void SudokuBoard::clearValue(Cell idx) {
   --counter[cells[idx].getValue()];
   --solvedCells;
-  graph_valid = false;
+  _invalidateGraph();
   cells[idx].clearValue();
 }
 
@@ -280,7 +280,7 @@ DigitSet SudokuBoard::getCandidates(Cell idx) const {
 }
 
 void SudokuBoard::setCandidates(Cell idx, DigitSet candidates) {
-  graph_valid = false;
+  _invalidateGraph();
   cells[idx].setCandidates(candidates);
 }
 
@@ -297,7 +297,7 @@ Digit SudokuBoard::getSingleCandidate(Cell idx) const {
 }
 
 void SudokuBoard::disableCandidate(Cell idx, Digit digit) {
-  graph_valid = false;
+  _invalidateGraph();
   cells[idx].disableCandidate(digit);
 }
 
@@ -604,4 +604,10 @@ bool SudokuBoard::_recalcAllCandidatesFromValues() {
   }
 
   return true;
+}
+
+void SudokuBoard::_invalidateGraph() {
+  graph.nodes.clear();
+  graph.strong_links.clear();
+  graph_valid = false;
 }

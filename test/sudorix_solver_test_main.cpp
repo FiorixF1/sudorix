@@ -538,6 +538,10 @@ int main(int argc, char **argv) {
         break;
       }
 
+      if (i % 1000 == 0) {
+        std::cerr << "Reached puzzle " << i << "\n";
+      }
+
       const TestCase &tc = cases[i];
       TestResult r;
       r.caseNo = tc.caseNo;
