@@ -141,7 +141,6 @@ static const char *reasonIdToString(ReasonId reason) {
     case ReasonId::XYWing: return "XY-Wing";
     case ReasonId::XYZWing: return "XYZ-Wing";
     case ReasonId::WXYZWing: return "WXYZ-Wing";
-    case ReasonId::ChuteRemotePair: return "Chute Remote Pair";
     case ReasonId::WWing: return "W-Wing";
     case ReasonId::SimpleColoring: return "Simple Coloring";
     case ReasonId::SimpleColoringColorTrap: return "Simple Coloring (Color Trap)";

@@ -1045,64 +1045,6 @@ static void techXYZWing(SudokuBoard &board, EventQueue &eventQueue) {
   }
 }
 
-static void techChuteRemotePair(SudokuBoard &board, EventQueue &eventQueue) {
-  CellSet bivalues = board.getBivalues();
-  for (Cell a : bivalues) {
-    DigitSet xy = board.getCandidates(a);
-    Digit x = *xy.begin();
-    Digit y = *(++xy.begin());
-    for (Cell b : bivalues) {
-      // we are looking for a remote pair
-      if (board.areRemotePair(a, b)) {
-        Location boxA = SudokuBoard::getBoxLocation(a);
-        Location boxB = SudokuBoard::getBoxLocation(b);
-        if (boxA/3 == boxB/3 || boxA%3 == boxB%3) {
-          // same chute
-          LocationSet tmp({0, 1, 2});
-          Location box;
-          // look for third box
-          if (boxA/3 == boxB/3) {
-            // horizontal chute
-            tmp.erase(boxA%3);
-            tmp.erase(boxB%3);
-            box = (boxA/3)*3 + *tmp.begin();
-          } else if (boxA%3 == boxB%3) {
-            // vertical chute
-            tmp.erase(boxA/3);
-            tmp.erase(boxB/3);
-            box = *tmp.begin()*3 + boxB%3;
-          }
-          // look for minisector in the box
-          Unit line = SudokuBoard::getBoxByLocation(box) -
-                      SudokuBoard::getRowByCell(a) -
-                      SudokuBoard::getColumnByCell(a) -
-                      SudokuBoard::getRowByCell(b) -
-                      SudokuBoard::getColumnByCell(b);
-          DigitSet lineDigits;
-          for (Cell idx : line) {
-            lineDigits |= board.getCandidates(idx);
-          }
-          Event event(EventType::RemoveCandidate, ReasonId::ChuteRemotePair);
-          // the source is the remote pair
-          event.addSource(a, xy);
-          event.addSource(b, xy);
-          if (!lineDigits.contains(x)) {
-            for (Cell idx : board.getPeers({a, b})) {
-              event.addOperation(idx, y);
-            }
-          }
-          if (!lineDigits.contains(y)) {
-            for (Cell idx : board.getPeers({a, b})) {
-              event.addOperation(idx, x);
-            }
-          }
-          if (eventQueue.enqueue(board, event)) return;
-        }
-      }
-    }
-  }
-}
-
 static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
   CellSet bivalues = board.getBivalues();
   for (Cell a : bivalues) {
@@ -1288,7 +1230,6 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techSwordfish,
   techRemotePair,
   techUniqueRectangle,
-  techChuteRemotePair,
   techWWing,
   techSingleDigitPattern,
   techEmptyRectangle,

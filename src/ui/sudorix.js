@@ -92,7 +92,6 @@ var business_logic = (() => {
     "XY-Wing",
     "XYZ-Wing",
     "WXYZ-Wing",
-    "Chute Remote Pair",
     "W-Wing",
     "Simple Coloring",
     "Simple Coloring (Color Trap)",

@@ -46,7 +46,7 @@ struct AlsGraph {
   // qui consideriamo solo link fra ALS tramite RCC
 };
 
-constexpr int DEFAULT_MAX_DEPTH = 6;
+constexpr int DEFAULT_MAX_DEPTH = 4;
 constexpr int DEFAULT_MAX_ALS_SIZE = 5;
 
 struct AlsConfig {
@@ -120,7 +120,7 @@ private:
   AlsConfig config;
   std::set<AlsNodeID> visited;
 
-  std::optional<Event> als_search_from(AlsGraph &graph);
+  std::optional<Event> als_search_from(AlsNodeID start, AlsGraph &graph);
 
   bool path_contains_node(int state_idx,
                           AlsNodeID node,

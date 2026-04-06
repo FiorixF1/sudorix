@@ -129,7 +129,6 @@ enum class ReasonId : uint8_t {
     XYWing,
     XYZWing,
     WXYZWing,
-    ChuteRemotePair,
     WWing,
     // coloring
     SimpleColoring,
@@ -253,7 +252,7 @@ La plej simplaj teknikoj necesas nur unu fonton:
 
 * Ĉeloj kiuj konsistigas la aron + Ciferoj de la aro
 
-Tio aplikiĝas al: **Naked Subsets**, **Hidden Subsets**, **Intersection Removal**, **Chute Remote Pair**.
+Tio aplikiĝas al: **Naked Subsets**, **Hidden Subsets**, **Intersection Removal**.
 
 ---
 

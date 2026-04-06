@@ -207,10 +207,20 @@ const AlsConfig &AlsSearcher::setConfigAndReturn(ReasonId reason) {
 }
 
 std::optional<Event> AlsSearcher::runSearch(AlsGraph &graph) {
-  return als_search_from(graph);
+  for (auto it = graph.links.begin(); it != graph.links.end(); ++it) {
+    AlsNodeID start = it->first;
+
+    std::optional<Event> maybeEvent;
+    maybeEvent = als_search_from(start, graph);
+
+    if (maybeEvent) {
+      return maybeEvent;
+    }
+  }
+  return {};
 }
 
-std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
+std::optional<Event> AlsSearcher::als_search_from(AlsNodeID start, AlsGraph &graph) {
   struct QueueItem {
     AlsNodeID start;
     AlsNodeID node;
@@ -237,10 +247,7 @@ std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
     return idx;
   };
 
-  for (auto it = graph.links.begin(); it != graph.links.end(); ++it) {
-    AlsNodeID start = it->first;
-    push_state(start, start, 0, 0, -1, start, 0);
-  }
+  push_state(start, start, 0, 0, -1, start, 0);
 
   while (!q.empty()) {
     QueueItem cur = q.front();

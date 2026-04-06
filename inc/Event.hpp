@@ -76,7 +76,6 @@ enum class ReasonId : uint8_t {
   XYWing,
   XYZWing,
   WXYZWing,
-  ChuteRemotePair,
   WWing,
   // coloring
   SimpleColoring,
