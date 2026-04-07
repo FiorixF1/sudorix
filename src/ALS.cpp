@@ -194,10 +194,10 @@ const AlsConfig &AlsSearcher::setConfigAndReturn(ReasonId reason) {
       config.max_depth = 2;
       break;
     case ReasonId::ALSChain:
-      config.max_depth = 6;
+      config.max_depth = DEFAULT_MAX_DEPTH;
       break;
     default:
-      config.max_depth = 6;
+      config.max_depth = DEFAULT_MAX_DEPTH;
       break;
   }
 

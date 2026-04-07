@@ -225,6 +225,7 @@
             ++i;
           }
         }
+        // remove trailing -/=
         if (chainString.endsWith("=") || chainString.endsWith("-")) {
           chainString = chainString.slice(0, -1);
         }

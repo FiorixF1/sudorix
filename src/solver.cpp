@@ -1128,7 +1128,7 @@ static void techGenericAIC(SudokuBoard &board,
                            ReasonId reason) {
   AicSearcher searcher(board);
   const AicConfig &config = searcher.setConfigAndReturn(reason);
-  AicGraph prunedGraph = board.getPrunedGraph(config);
+  AicGraph prunedGraph = board.getPrunedAicGraph(config);
   std::optional<Event> event = searcher.runSearch(prunedGraph);
 
   if (event) {
@@ -1185,8 +1185,8 @@ static void techGenericALS(SudokuBoard &board,
   AlsGraphBuilder builder(board);
   AlsSearcher searcher(board);
   const AlsConfig &config = searcher.setConfigAndReturn(reason);
-  AlsGraph prunedGraph = builder.build(); //board.getPrunedGraph(config);
-  std::optional<Event> event = searcher.runSearch(prunedGraph);
+  AlsGraph &graph = board.getAlsGraph(config);
+  std::optional<Event> event = searcher.runSearch(graph);
 
   if (event) {
     eventQueue.enqueue(board, *event);

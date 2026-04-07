@@ -7,6 +7,7 @@
 #include <algorithm>
 #include "SudokuCell.hpp"
 #include "AIC.hpp"
+#include "ALS.hpp"
 
 class SudokuBoard
 {
@@ -110,9 +111,11 @@ public:
 
   static Location getBoxLocation(Cell idx);
 
-  // --- AIC ---
+  // --- AIC & ALS ---
 
-  AicGraph getPrunedGraph(const AicConfig &config);
+  AicGraph getPrunedAicGraph(const AicConfig &config);
+
+  AlsGraph &getAlsGraph(const AlsConfig &config);
 
   // --- other ---
 
@@ -146,12 +149,17 @@ private:
   int solvedCells = 0;
 
   // Graph for AIC
-  AicGraphBuilder graphBuilder;
-  AicGraph graph;
-  bool graph_valid = false;
+  AicGraphBuilder aicGraphBuilder;
+  AicGraph aicGraph;
+  bool aic_graph_valid = false;
+
+  // Graph for ALS
+  AlsGraphBuilder alsGraphBuilder;
+  AlsGraph alsGraph;
+  bool als_graph_valid = false;
 
   bool _recalcAllCandidatesFromValues();
-  void _invalidateGraph();
+  void _invalidateCache();
 };
 
 #endif // SUDOKU_BOARD_H

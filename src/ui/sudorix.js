@@ -441,13 +441,6 @@ var business_logic = (() => {
     return 0;
   }
 
-  function singleBitIndex(mask) {
-    // return 0..8 for least significant set bit
-    const m = mask & 0x1FF;
-    const lb = m & -m;
-    return Math.log2(lb) | 0;
-  }
-
   function digitToBit(digit) {
     return 1 << (digit - 1);
   }

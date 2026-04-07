@@ -169,7 +169,7 @@ static const std::vector<CellSet> PEERS = {
 // =========================================================
 
 // empty board
-SudokuBoard::SudokuBoard() : graphBuilder(*this) {};
+SudokuBoard::SudokuBoard() : aicGraphBuilder(*this), alsGraphBuilder(*this) {};
 
 void SudokuBoard::clear() {
   // clear digit cache
@@ -178,8 +178,8 @@ void SudokuBoard::clear() {
   }
   // clear solved cells
   solvedCells = 0;
-  // clear AIC graph
-  _invalidateGraph();
+  // clear cached data
+  _invalidateCache();
 }
 
 // only values, candidates are calculated automatically
@@ -263,14 +263,14 @@ bool SudokuBoard::isSolved(Cell idx) const {
 void SudokuBoard::setValue(Cell idx, Digit digit) {
   ++counter[digit];
   ++solvedCells;
-  _invalidateGraph();
+  _invalidateCache();
   cells[idx].setValue(digit);
 }
 
 void SudokuBoard::clearValue(Cell idx) {
   --counter[cells[idx].getValue()];
   --solvedCells;
-  _invalidateGraph();
+  _invalidateCache();
   cells[idx].clearValue();
 }
 
@@ -280,7 +280,7 @@ DigitSet SudokuBoard::getCandidates(Cell idx) const {
 }
 
 void SudokuBoard::setCandidates(Cell idx, DigitSet candidates) {
-  _invalidateGraph();
+  _invalidateCache();
   cells[idx].setCandidates(candidates);
 }
 
@@ -297,7 +297,7 @@ Digit SudokuBoard::getSingleCandidate(Cell idx) const {
 }
 
 void SudokuBoard::disableCandidate(Cell idx, Digit digit) {
-  _invalidateGraph();
+  _invalidateCache();
   cells[idx].disableCandidate(digit);
 }
 
@@ -467,15 +467,24 @@ Location SudokuBoard::getBoxLocation(Cell idx) {
   return (Location)((r / 3) * 3 + (c / 3));
 }
 
-// --- AIC ---
-AicGraph SudokuBoard::getPrunedGraph(const AicConfig &config) {
-  if (!graph_valid) {
-    // build a complete graph for AIC
-    graph = graphBuilder.build();
-    graph_valid = true;
+// --- AIC & ALS ---
+AicGraph SudokuBoard::getPrunedAicGraph(const AicConfig &config) {
+  if (!aic_graph_valid) {
+    // build a complete graph for AIC (and cache it)
+    aicGraph = aicGraphBuilder.build();
+    aic_graph_valid = true;
   }
   // return a pruned version of the graph depending on the configuration given
-  return graphBuilder.prune(graph, config);
+  return aicGraphBuilder.prune(aicGraph, config);
+}
+
+AlsGraph &SudokuBoard::getAlsGraph(const AlsConfig &config) {
+  if (!als_graph_valid) {
+    // build a complete graph for ALS (and cache it)
+    alsGraph = alsGraphBuilder.build();
+    als_graph_valid = true;
+  }
+  return alsGraph;
 }
 
 // --- other ---
@@ -606,8 +615,13 @@ bool SudokuBoard::_recalcAllCandidatesFromValues() {
   return true;
 }
 
-void SudokuBoard::_invalidateGraph() {
-  graph.nodes.clear();
-  graph.strong_links.clear();
-  graph_valid = false;
+void SudokuBoard::_invalidateCache() {
+  // AIC graph
+  aicGraph.nodes.clear();
+  aicGraph.strong_links.clear();
+  aic_graph_valid = false;
+  // ALS graph
+  alsGraph.nodes.clear();
+  alsGraph.links.clear();
+  als_graph_valid = false;
 }

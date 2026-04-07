@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -416,6 +417,7 @@ struct TestResult {
   bool passed = false;
   size_t caseNo = 0;
   size_t lineNo = 0;
+  uint64_t elapsedUs = 0;
   std::string input;
   std::string output;
   std::string why;
@@ -426,6 +428,7 @@ static std::string formatResult(const TestResult &r) {
   oss << "[#" << r.caseNo << " line " << r.lineNo << "] \n"
       << "INPUT:  " << r.input << "\n"
       << "OUTPUT: " << r.output << "\n"
+      << "TIME:   " << r.elapsedUs/1000.0 << " ms\n"
       << "RESULT: " << (r.passed ? "PASSED" : "FAILED");
   if (!r.passed && !r.why.empty()) {
     oss << " (" << r.why << ")";
@@ -528,6 +531,7 @@ int main(int argc, char **argv) {
   bool singleThreadMode = (threads == 1);
 
   std::vector<TestResult> results(cases.size());
+  std::vector<uint64_t> solveTimesUs(cases.size(), 0);
   std::atomic<size_t> nextIndex{0};
 
   auto worker = [&]() {
@@ -551,13 +555,20 @@ int main(int argc, char **argv) {
       std::string why;
       int ok = 0;
 
+      auto t0 = std::chrono::steady_clock::now();
       if (mode == "full") {
         ok = runFullSolveOne(tc.input81, &out81, &why);
       } else {
         ok = runStepSolveOne(tc.input81, &out81, &why);
       }
+      auto t1 = std::chrono::steady_clock::now();
+
+      uint64_t elapsedUs = static_cast<uint64_t>(
+          std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count());
+      solveTimesUs[i] = elapsedUs;
 
       r.passed = (ok != 0);
+      r.elapsedUs = elapsedUs;
       r.output = out81;
       r.why = why;
       if (singleThreadMode) {
@@ -596,7 +607,24 @@ int main(int argc, char **argv) {
     if (!singleThreadMode) std::cout << formatResult(r);
   }
 
-  std::cout << "SUMMARY: total=" << total << " passed=" << passed << " failed=" << failed << "\n";
+  std::cout << "SUMMARY: total=" << total << " passed=" << passed << " failed=" << failed << "\n\n";
+
+  solveTimesUs;
+  uint64_t minTimeUs = 999999999;
+  uint64_t maxTimeUs = 0;
+  uint64_t sumTimeUs = 0;
+  for (uint64_t t : solveTimesUs) {
+    minTimeUs = std::min(minTimeUs, t);
+    maxTimeUs = std::max(maxTimeUs, t);
+    sumTimeUs += t;
+  }
+  uint64_t avgTimeUs = passed != 0 ? static_cast<double>(sumTimeUs) / passed : 0;
+
+  std::cout << "PERFORMANCE SUMMARY:\n";
+  std::cout << "Minimum time: " << minTimeUs/1000.0 << " ms\n";
+  std::cout << "Average time: " << avgTimeUs/1000.0 << " ms\n";
+  std::cout << "Maximum time: " << maxTimeUs/1000.0 << " ms\n\n";
+
   if (singleThreadMode) printTechniqueUsageSummary();
 
   return 0;
