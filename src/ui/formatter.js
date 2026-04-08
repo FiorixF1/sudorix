@@ -320,6 +320,52 @@
   REGISTRY["Almost Locked Set Chain"] = alsFormatter;
   REGISTRY["Almost Locked Set Ring"] = alsFormatter;
 
+  const sdcFormatter = {
+    formatLog(ev, ctx) {
+      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const parts = [];
+
+      let sdcCellsList = [];
+      let sdcDigitsList = [];
+
+      let alsCellsList = [];
+      let alsDigitsList = [];
+
+      const ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      parts.push(`<div>`);
+      for (let i in groups[0]) {
+        let sdc = groups[0][i];
+        sdcCellsList.push(ctx.formatEurekaCellCode(sdc.cells));
+        sdcDigitsList.push(ctx.maskToDigits(sdc.mask));
+        parts.push(`{${ctx.maskToDigits(sdc.mask)}} en <span class="logCellRef logSourceCategory1">${ctx.formatEurekaCellCode(sdc.cells)}</span>`);
+        if (i == groups[0].length-1) {
+          parts.push(` => </br>`);
+        } else {
+          parts.push(`</br>`);
+        }
+      }
+
+      defaultOperationsFormatter(ctx, ev, parts);
+
+      return { title: ev.reason, bodyHtml: parts.join("") };
+    },
+    getSourceCategory(ev, source, sourceIndex, groupIndex) {
+      if (groupIndex == 0) {
+        if (sourceIndex == 0) {
+          // blue
+          return 2;
+        } else if (sourceIndex == 1) {
+          // purple
+          return 3;
+        } else if (sourceIndex == 2) {
+          // orange
+          return 6;
+        }
+      }
+    }
+  };
+  REGISTRY["Sue de Coq"] = sdcFormatter;
+
   window.SudorixFormatterRegistry = REGISTRY;
 
   window.formatEventLogByReason = function (ev) {

@@ -370,6 +370,16 @@ En BUG+1, la fontoj estas la sekvaj:
 
 ---
 
+## Sue-de-Coq
+
+La Sue-de-Coq havas du aŭ tri fontojn:
+
+* Ĉeloj de la linio + Ciferoj kiuj apartenas nur al la linio
+* Ĉeloj de la bloko + Ciferoj kiuj apartenas nur al la bloko
+* Ĉeloj de la intersekco + Ciferoj kiuj apartenas nur al la intersekco (se aplikebla)
+
+---
+
 # Rimarko
 
 La solvilo liveras nur **strukturitajn datumojn**.

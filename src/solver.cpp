@@ -1206,6 +1206,175 @@ static void techALSChain(SudokuBoard &board, EventQueue &eventQueue) {
 }
 /* ------------------ END ALS WORLD ------------------ */
 
+static void techBasicSueDeCoq(SudokuBoard &board, EventQueue &eventQueue) {
+  auto scanSDC = [&](const Unit &box, const Unit &line) -> bool
+  {
+    CellSet intersection = (box & line).filter([&](Cell i){ return !board.isSolved(i); });
+    DigitSet intersectionDigits;
+    for (Cell idx : intersection) {
+      intersectionDigits |= board.getCandidates(idx);
+    }
+    int intersectionSize = intersection.size();
+    // basic Sue-de-Coq
+    if (intersectionSize == 2 && intersectionDigits.size() == 4 ||
+        intersectionSize == 3 && intersectionDigits.size() == 5) {
+      CellSet li = line - intersection;
+      CellSet bi = box - intersection;
+      for (Cell lidx : li) {
+        DigitSet liDigits = board.getCandidates(lidx);
+        for (Cell bidx : bi) {
+          DigitSet biDigits = board.getCandidates(bidx);
+          // intersection size 2
+          if ((liDigits & biDigits).empty() && (liDigits | biDigits) == intersectionDigits) {
+            // basic Sue-de-Coq spotted
+            Event event(EventType::RemoveCandidate, ReasonId::SueDeCoq);
+            // the source is the cells in intersection, line and box
+            event.addSource(CellSet({lidx}) | intersection, liDigits);
+            event.addSource(CellSet({bidx}) | intersection, biDigits);
+            // eliminate along line and inside the box
+            for (Cell idx : line - intersection - li) {
+              event.addOperation(idx, liDigits);
+            }
+            for (Cell idx : box - intersection - bi) {
+              event.addOperation(idx, biDigits);
+            }
+            if (eventQueue.enqueue(board, event)) return true;
+          }
+          // intersection size 3
+          if ((liDigits & biDigits).empty() && (intersectionDigits - liDigits - biDigits).size() == 1) {
+            DigitSet extraDigit = intersectionDigits - liDigits - biDigits;
+            // basic Sue-de-Coq spotted
+            Event event(EventType::RemoveCandidate, ReasonId::SueDeCoq);
+            // the source is the cells in intersection, line and box
+            event.addSource(CellSet({lidx}) | intersection, liDigits);
+            event.addSource(CellSet({bidx}) | intersection, biDigits);
+            event.addSource(intersection, extraDigit);
+            // eliminate along line and inside the box
+            for (Cell idx : line - intersection - li) {
+              event.addOperation(idx, liDigits | extraDigit);
+            }
+            for (Cell idx : box - intersection - bi) {
+              event.addOperation(idx, biDigits | extraDigit);
+            }
+            if (eventQueue.enqueue(board, event)) return true;
+          }
+        }
+      }
+    }
+    return false;
+  };
+
+  for (const Unit &b : SudokuBoard::getBoxes()) {
+    for (const Unit &r : SudokuBoard::getRows()) {
+      if (scanSDC(b, r)) return;
+    }
+  }
+
+  for (const Unit &b : SudokuBoard::getBoxes()) {
+    for (const Unit &c : SudokuBoard::getColumns()) {
+      if (scanSDC(b, c)) return;
+    }
+  }
+}
+
+static void techExtendedSueDeCoq(SudokuBoard &board, EventQueue &eventQueue) {
+  auto scanSDC = [&](const Unit &box, const Unit &line) -> bool
+  {
+    CellSet intersection = (box & line).filter([&](Cell i){ return !board.isSolved(i); });
+    DigitSet intersectionDigits;
+    for (Cell idx : intersection) {
+      intersectionDigits |= board.getCandidates(idx);
+    }
+    int intersectionSize = intersection.size();
+
+    if (intersectionDigits.size() >= intersectionSize + 2) {
+      // get unsolved locations in box outside intersection
+      std::vector<int> boxList = box.to_vector();
+      LocationSet boxUnsolved;
+      for (Location i = 0; i < 9; ++i) {
+        if (!board.isSolved(boxList[i]) && !intersection.contains(boxList[i])) {
+          boxUnsolved.insert(i);
+        }
+      }
+
+      // get unsolved locations in line outside intersection
+      std::vector<int> lineList = line.to_vector();
+      LocationSet lineUnsolved;
+      for (Location i = 0; i < 9; ++i) {
+        if (!board.isSolved(lineList[i]) && !intersection.contains(lineList[i])) {
+          lineUnsolved.insert(i);
+        }
+      }
+
+      for (int boxSubsetSize = 1; boxSubsetSize <= boxUnsolved.size(); ++boxSubsetSize) {
+        std::vector<LocationSet> subsets = boxUnsolved.generate_power_set_of_size(boxSubsetSize);
+        for (const LocationSet &boxSubset : subsets) {
+          CellSet boxCells;
+          DigitSet boxDigits;
+
+          for (Location l : boxSubset) {
+            Cell idx = static_cast<Cell>(boxList[l]);
+            DigitSet candidates = board.getCandidates(idx);
+            boxCells.insert(idx);
+            boxDigits |= candidates;
+          }
+
+          for (int lineSubsetSize = 1; lineSubsetSize <= lineUnsolved.size(); ++lineSubsetSize) {
+            std::vector<LocationSet> subsets = lineUnsolved.generate_power_set_of_size(lineSubsetSize);
+            for (const LocationSet &lineSubset : subsets) {
+              CellSet lineCells;
+              DigitSet lineDigits;
+
+              for (Location l : lineSubset) {
+                Cell idx = static_cast<Cell>(lineList[l]);
+                DigitSet candidates = board.getCandidates(idx);
+                lineCells.insert(idx);
+                lineDigits |= candidates;
+              }
+
+              // Sue-de-Coq test
+              if ((boxDigits & lineDigits).empty()) {
+                if ((intersection | boxCells | lineCells).size() == (intersectionDigits | boxDigits | lineDigits).size()) {
+                  DigitSet allDigits = intersectionDigits | boxDigits | lineDigits;
+                  DigitSet extraDigit = intersectionDigits - boxDigits - lineDigits;
+                  // extended Sue-de-Coq spotted
+                  Event event(EventType::RemoveCandidate, ReasonId::SueDeCoq);
+                  // the source is the cells in intersection, line and box
+                  event.addSource(lineCells | intersection, lineDigits);
+                  event.addSource(boxCells | intersection, boxDigits);
+                  if (!extraDigit.empty()) event.addSource(intersection, extraDigit);
+                  // eliminate along line and inside the box
+                  for (Cell idx : line - intersection - lineCells) {
+                    event.addOperation(idx, lineDigits | extraDigit);
+                  }
+                  for (Cell idx : box - intersection - boxCells) {
+                    event.addOperation(idx, boxDigits | extraDigit);
+                  }
+                  if (eventQueue.enqueue(board, event)) return true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return false;
+  };
+
+  for (const Unit &b : SudokuBoard::getBoxes()) {
+    for (const Unit &r : SudokuBoard::getRows()) {
+      if (scanSDC(b, r)) return;
+    }
+  }
+
+  for (const Unit &b : SudokuBoard::getBoxes()) {
+    for (const Unit &c : SudokuBoard::getColumns()) {
+      if (scanSDC(b, c)) return;
+    }
+  }
+}
+
 typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);
 
 // nCr(9, 2) = 36
@@ -1243,6 +1412,8 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techGroupedXChain,
   techAIC,
   techGroupedAIC,
+  techBasicSueDeCoq,
+  techExtendedSueDeCoq,
   //techALSXZ,
   //techALSXYWing,
   techALSChain,

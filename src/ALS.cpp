@@ -30,7 +30,6 @@ void AlsGraphBuilder::build_nodes_in_unit(std::map<AlsNodeID, AlsNode> &nodes, c
   LocationSet unsolved = board.getUnsolvedLocations(unit);
   std::vector<int> unitList = unit.to_vector();
 
-  console_log("Building nodes...");
   int maxSubset = std::min<int>(DEFAULT_MAX_ALS_SIZE, unsolved.size());
   for (int subsetSize = 1; subsetSize <= maxSubset; ++subsetSize) {
     std::vector<LocationSet> subsets = unsolved.generate_power_set_of_size(subsetSize);
