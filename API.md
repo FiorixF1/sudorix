@@ -380,6 +380,17 @@ La Sue-de-Coq havas du aŭ tri fontojn:
 
 ---
 
+## Death Blossom
+
+En Death Blossom oni havas unu fonton por la tigo kaj unu fonton por ĉiu petalo:
+
+* Ĉeloj de la tigo + Ciferoj
+* Ĉeloj de la unua petalo + Ciferoj
+* Ĉeloj de la dua petalo + Ciferoj
+* ...
+
+---
+
 # Rimarko
 
 La solvilo liveras nur **strukturitajn datumojn**.

@@ -1375,6 +1375,102 @@ static void techExtendedSueDeCoq(SudokuBoard &board, EventQueue &eventQueue) {
   }
 }
 
+static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
+  /* for each cell, register:
+   * - its candidates
+   * - which candidates are RCC for a given ALS
+   * - the corresponding ALS for each RCC
+   * */
+  struct BlossomNode {
+    DigitSet candidates;
+    DigitSet RCCs;
+    AlsNodeID setByDigit[10];
+  };
+
+  // initialize database
+  BlossomNode database[81];
+  for (Cell idx = 0; idx < 81; ++idx) {
+    database[idx] = {
+      .candidates = board.getCandidates(idx),
+      .RCCs = DigitSet(0),
+      .setByDigit = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    };
+  }
+
+  AlsGraphBuilder builder(board);
+  AlsSearcher searcher(board);
+  const AlsConfig &config = searcher.setConfigAndReturn(ReasonId::Solver);  // not important
+  AlsGraph &graph = board.getAlsGraph(config);
+
+  /* For each ALS:
+   *   For each digit:
+   *     Get peers outside the ALS containing that digit
+   *     Store those peers in a Blossom Node 
+   */
+  for (auto it = graph.nodes.begin(); it != graph.nodes.end(); ++it) {
+    AlsNodeID id = it->first;
+    const AlsNode &node = it->second;
+    for (Digit digit : node.digitSet) {
+      CellSet source = node.cellSet.filter([&](Cell i){ return board.hasCandidate(i, digit); });
+      CellSet target = board.getPeersContaining(source, digit);
+      for (Cell idx : target) {
+        database[idx].RCCs.insert(digit);
+        database[idx].setByDigit[digit] = id;
+      }
+    }
+  }
+
+  // search for Death Blossom
+  for (Cell i = 0; i < 81; ++i) {
+    const BlossomNode &stem = database[i];
+    // a cell where each candidate is an RCC
+    if (stem.candidates.size() > 1 && stem.candidates.size() == stem.RCCs.size()) {
+      // get the corresponding ALSs and a digit that is common to all the sets
+      DigitSet accumulator = ALL_DIGITS;
+      std::vector<const AlsNode *> petals;
+      for (Digit RCC : stem.RCCs) {
+        // look for digits
+        AlsNodeID id = stem.setByDigit[RCC];
+        const AlsNode &als = graph.nodes[id];
+        accumulator &= als.digitSet;
+        // check if the ALS of this RCC is already in the set of petals
+        bool already_present = false;
+        for (const AlsNode *petal : petals) {
+          if (petal->id == id) {
+            already_present = true;
+          }
+        }
+        // then add if new
+        if (!already_present) petals.push_back(&als);
+      }
+      // remove RCCs from potential eliminations
+      accumulator -= stem.candidates;
+      for (Digit elimination : accumulator) {
+        // common digit found, possible elimination ahead
+        CellSet source;
+        for (const AlsNode *petal : petals) {
+          source |= petal->cellSet.filter([&](Cell i){ return board.hasCandidate(i, elimination); });
+        }
+        CellSet target = board.getPeersContaining(source, elimination);
+        if (!target.empty()) {
+          // Death Blossom found
+          Event event(EventType::RemoveCandidate, ReasonId::DeathBlossom);
+          // the source is the stem and the petals
+          event.addSource(i, stem.candidates);
+          for (const AlsNode *petal : petals) {
+            event.addSource(petal->cellSet, petal->digitSet);
+          }
+          // eliminate the common digit
+          for (Cell idx : target) {
+            event.addOperation(idx, elimination);
+          }
+          if (eventQueue.enqueue(board, event)) return;
+        }
+      }
+    }
+  }
+}
+
 typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);
 
 // nCr(9, 2) = 36
@@ -1417,6 +1513,7 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   //techALSXZ,
   //techALSXYWing,
   techALSChain,
+  techDeathBlossom,
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Operation &op) {
