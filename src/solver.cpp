@@ -1510,8 +1510,8 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techGroupedAIC,
   techBasicSueDeCoq,
   techExtendedSueDeCoq,
-  //techALSXZ,
-  //techALSXYWing,
+  techALSXZ,
+  techALSXYWing,
   techALSChain,
   techDeathBlossom,
 };

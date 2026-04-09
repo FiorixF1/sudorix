@@ -396,16 +396,6 @@
     getSourceCategory(ev, source, sourceIndex, groupIndex) {
       if (groupIndex == 0) {
         return sourceIndex + 2;
-        if (sourceIndex == 0) {
-          // blue
-          return 2;
-        } else if (sourceIndex == 1) {
-          // purple
-          return 3;
-        } else if (sourceIndex == 2) {
-          // orange
-          return 6;
-        }
       }
     }
   };

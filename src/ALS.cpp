@@ -185,7 +185,7 @@ AlsSearcher::AlsSearcher(const SudokuBoard &board)
 const AlsConfig &AlsSearcher::setConfigAndReturn(ReasonId reason) {
   config = {};
 
-  /*switch(reason) {
+  switch(reason) {
     case ReasonId::ALSXZ:
       config.max_depth = 1;
       break;
@@ -200,7 +200,7 @@ const AlsConfig &AlsSearcher::setConfigAndReturn(ReasonId reason) {
       break;
   }
 
-  this->reason = reason;*/
+  this->reason = reason;
 
   return config;
 }
@@ -252,15 +252,22 @@ std::optional<Event> AlsSearcher::als_search_from(AlsNodeID start, AlsGraph &gra
     QueueItem cur = q.front();
     q.pop_front();
 
-    if (cur.depth >= DEFAULT_MAX_DEPTH) {
+    if (cur.depth > config.max_depth) {
       continue;
     }
 
     for (const AlsEdge &nb : graph.links[cur.node]) {
-      if (path_contains_node(cur.state_index, nb.to, states, parents)) {
+      bool IS_RING = nb.to == cur.start;
+
+      // only with rings one more level is allowed
+      if (!IS_RING && cur.depth >= config.max_depth) {
         continue;
       }
-      if (config.require_distinct_rcc && cur.last_rcc != 0 && nb.rcc == cur.last_rcc) {
+
+      if (path_contains_node(cur.start, cur.state_index, nb.to, states, parents)) {
+        continue;
+      }
+      if (cur.last_rcc != 0 && nb.rcc == cur.last_rcc) {
         continue;
       }
 
@@ -271,33 +278,6 @@ std::optional<Event> AlsSearcher::als_search_from(AlsNodeID start, AlsGraph &gra
                                 cur.state_index,
                                 cur.node,
                                 nb.rcc);
-
-      // Look for possible rings
-      for (const AlsEdge &nc : graph.links[nb.to]) {
-        if (nc.to == cur.start) {
-          if (config.require_distinct_rcc && nb.rcc != 0 && nc.rcc == nb.rcc) {
-            continue;
-          }
-
-          // Ring detected, give priority
-          int double_next_idx = push_state(cur.start,
-                                           nc.to,
-                                           nc.rcc,
-                                           cur.depth + 2,
-                                           next_idx,
-                                           nb.to,
-                                           nc.rcc);
-
-          std::optional<Event> event = execute_als_rules(graph, cur.start, nc.to, double_next_idx, states, parents);
-          if (event) {
-            return event;
-          }
-          // Restore state as if nothing had happened :)
-          states.pop_back();
-          parents.pop_back();
-          q.pop_back();
-        }
-      }
 
       // Look for eliminations according to ALS rules
       std::optional<Event> event = execute_als_rules(graph, cur.start, nb.to, next_idx, states, parents);
@@ -310,10 +290,14 @@ std::optional<Event> AlsSearcher::als_search_from(AlsNodeID start, AlsGraph &gra
   return {};
 }
 
-bool AlsSearcher::path_contains_node(int state_idx,
+bool AlsSearcher::path_contains_node(AlsNodeID start,
+                                     int state_idx,
                                      AlsNodeID node,
                                      const std::vector<AlsSearchState> &states,
                                      const std::vector<AlsParent> &parents) const {
+  // allow rings
+  if (node == start) return false;
+
   int idx = state_idx;
   while (idx >= 0) {
     if (states[idx].node == node) {
@@ -529,6 +513,11 @@ std::optional<Event> AlsSearcher::execute_als_rules(
       detailedReason = ReasonId::ALSXYRing;
     } else {
       detailedReason = ReasonId::ALSRing;
+    }
+
+    // ensure that the ring is not starting and finishing on the same RCC
+    if ((*path.edges.begin()).rcc == (*path.edges.rbegin()).rcc) {
+      return {};
     }
 
     // remove the last node since it is a duplicate of the first one, it simplifies things

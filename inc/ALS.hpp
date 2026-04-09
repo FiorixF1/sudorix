@@ -122,7 +122,8 @@ private:
 
   std::optional<Event> als_search_from(AlsNodeID start, AlsGraph &graph);
 
-  bool path_contains_node(int state_idx,
+  bool path_contains_node(AlsNodeID start,
+                          int state_idx,
                           AlsNodeID node,
                           const std::vector<AlsSearchState> &states,
                           const std::vector<AlsParent> &parents) const;
