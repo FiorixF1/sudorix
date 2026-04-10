@@ -14,7 +14,7 @@ AlsGraph AlsGraphBuilder::build() {
   return g;
 }
 
-void AlsGraphBuilder::build_nodes(std::map<AlsNodeID, AlsNode> &nodes) {
+void AlsGraphBuilder::build_nodes(AlsGraphNodes &nodes) {
   for (const Unit &row : board.getRows()) {
     build_nodes_in_unit(nodes, row);
   }
@@ -26,7 +26,7 @@ void AlsGraphBuilder::build_nodes(std::map<AlsNodeID, AlsNode> &nodes) {
   }
 }
 
-void AlsGraphBuilder::build_nodes_in_unit(std::map<AlsNodeID, AlsNode> &nodes, const Unit &unit) {
+void AlsGraphBuilder::build_nodes_in_unit(AlsGraphNodes &nodes, const Unit &unit) {
   LocationSet unsolved = board.getUnsolvedLocations(unit);
   std::vector<int> unitList = unit.to_vector();
 
@@ -51,7 +51,7 @@ void AlsGraphBuilder::build_nodes_in_unit(std::map<AlsNodeID, AlsNode> &nodes, c
   }
 }
 
-void AlsGraphBuilder::add_node_if_new(std::map<AlsNodeID, AlsNode> &nodes,
+void AlsGraphBuilder::add_node_if_new(AlsGraphNodes &nodes,
                                       const CellSet &cells,
                                       const DigitSet &digits) const {
   AlsNodeID id = get_node_id(digits, cells);
@@ -91,8 +91,8 @@ AlsNodeID AlsGraphBuilder::get_node_id(const DigitSet &digits, const CellSet &ce
   return shiftedDigits | code;
 }
 
-void AlsGraphBuilder::build_links(std::map<AlsNodeID, AlsNode> &nodes,
-                                  std::map<AlsNodeID, std::vector<AlsEdge>> &links) {
+void AlsGraphBuilder::build_links(AlsGraphNodes &nodes,
+                                  AlsGraphEdges &links) {
   for (auto it = nodes.begin(); it != nodes.end(); ++it) {
     AlsNode &A = it->second;
     for (auto ot = nodes.begin(); ot != nodes.end(); ++ot) {
@@ -155,7 +155,7 @@ bool AlsGraphBuilder::is_rcc(AlsNode &a, AlsNode &b, Digit digit) const {
   return board.sees(digitCellsA, digitCellsB);
 }
 
-void AlsGraphBuilder::add_edge(std::map<AlsNodeID, std::vector<AlsEdge>> &adj,
+void AlsGraphBuilder::add_edge(AlsGraphEdges &adj,
                                AlsNodeID a,
                                AlsNodeID b,
                                Digit rcc) {
@@ -173,6 +173,48 @@ void AlsGraphBuilder::add_edge(std::map<AlsNodeID, std::vector<AlsEdge>> &adj,
 
   add_one_way(a, b);
   add_one_way(b, a);
+}
+
+/* ---------------------------------------------------------------------- */
+
+static void retain(AlsSearchNode *n) {
+  if (n) {
+    ++n->refcount;
+  }
+}
+
+static void release(AlsSearchNode *n) {
+  while (n) {
+    --n->refcount;
+    if (n->refcount > 0) {
+      return;
+    }
+
+    AlsSearchNode *parent = n->parent;
+    delete n;
+    n = parent;
+  }
+}
+
+AlsSearchNode *make_node(AlsNodeID start,
+                         AlsNodeID node,
+                         Digit last_rcc,
+                         int depth,
+                         AlsSearchNode *parent) {
+  AlsSearchNode *s = new AlsSearchNode{
+    .start = start,
+    .node = node,
+    .last_rcc = last_rcc,
+    .depth = depth,
+    .parent = parent,
+    .refcount = 1
+  };
+
+  if (parent) {
+    retain(parent);
+  }
+
+  return s;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -206,124 +248,106 @@ const AlsConfig &AlsSearcher::setConfigAndReturn(ReasonId reason) {
 }
 
 std::optional<Event> AlsSearcher::runSearch(AlsGraph &graph) {
-  for (auto it = graph.links.begin(); it != graph.links.end(); ++it) {
-    AlsNodeID start = it->first;
+  std::optional<Event> maybeEvent;
+  maybeEvent = als_search_from(graph);
 
-    std::optional<Event> maybeEvent;
-    maybeEvent = als_search_from(start, graph);
-
-    if (maybeEvent) {
-      return maybeEvent;
-    }
+  if (maybeEvent) {
+    return maybeEvent;
   }
+
   return {};
 }
 
-std::optional<Event> AlsSearcher::als_search_from(AlsNodeID start, AlsGraph &graph) {
-  struct QueueItem {
-    AlsNodeID start;
-    AlsNodeID node;
-    Digit last_rcc;
-    int depth;
-    int state_index;
-  };
+std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
+  std::deque<AlsSearchNode *> q;
 
-  std::vector<AlsSearchState> states;
-  std::vector<AlsParent> parents;
-  std::deque<QueueItem> q;
-
-  auto push_state = [&](AlsNodeID start,
-                        AlsNodeID node,
-                        Digit last_rcc,
-                        int depth,
-                        int prev_idx,
-                        AlsNodeID prev_node,
-                        Digit via_rcc) {
-    states.push_back({node, last_rcc});
-    parents.push_back({prev_idx, prev_node, via_rcc});
-    int idx = static_cast<int>(states.size()) - 1;
-    q.push_back({start, node, last_rcc, depth, idx});
-    return idx;
-  };
-
-  push_state(start, start, 0, 0, -1, start, 0);
+  for (auto it = graph.links.begin(); it != graph.links.end(); ++it) {
+    AlsNodeID start = it->first;
+    q.push_back(make_node(start, start, 0, 0, nullptr));
+  }
 
   while (!q.empty()) {
-    QueueItem cur = q.front();
+    AlsSearchNode *cur = q.front();
     q.pop_front();
 
-    if (cur.depth > config.max_depth) {
+    if (cur->depth > config.max_depth) {
+      release(cur);
       continue;
     }
 
-    for (const AlsEdge &nb : graph.links[cur.node]) {
-      bool IS_RING = nb.to == cur.start;
+    for (const AlsEdge &nb : graph.links[cur->node]) {
+      bool IS_RING = (nb.to == cur->start);
 
       // only with rings one more level is allowed
-      if (!IS_RING && cur.depth >= config.max_depth) {
+      if (!IS_RING && cur->depth >= config.max_depth) {
         continue;
       }
 
-      if (path_contains_node(cur.start, cur.state_index, nb.to, states, parents)) {
+      if (path_contains_node(cur->start, cur, nb.to)) {
         continue;
       }
-      if (cur.last_rcc != 0 && nb.rcc == cur.last_rcc) {
+      if (cur->last_rcc != 0 && nb.rcc == cur->last_rcc) {
         continue;
       }
 
-      int next_idx = push_state(cur.start,
-                                nb.to,
-                                nb.rcc,
-                                cur.depth + 1,
-                                cur.state_index,
-                                cur.node,
-                                nb.rcc);
+      AlsSearchNode *child = make_node(cur->start,
+                                       nb.to,
+                                       nb.rcc,
+                                       cur->depth + 1,
+                                       cur);
 
       // Look for eliminations according to ALS rules
-      std::optional<Event> event = execute_als_rules(graph, cur.start, nb.to, next_idx, states, parents);
+      std::optional<Event> event = execute_als_rules(graph, cur->start, nb.to, child);
       if (event) {
+        release(child);
+
+        while (!q.empty()) {
+          release(q.front());
+          q.pop_front();
+        }
+
+        release(cur);
         return event;
       }
+
+      q.push_back(child);
     }
+
+    release(cur);
   }
 
   return {};
 }
 
-bool AlsSearcher::path_contains_node(AlsNodeID start,
-                                     int state_idx,
-                                     AlsNodeID node,
-                                     const std::vector<AlsSearchState> &states,
-                                     const std::vector<AlsParent> &parents) const {
+bool AlsSearcher::path_contains_node(AlsNodeID start, AlsSearchNode *cur, AlsNodeID node) const {
   // allow rings
-  if (node == start) return false;
+  if (node == start) {
+    return false;
+  }
 
-  int idx = state_idx;
-  while (idx >= 0) {
-    if (states[idx].node == node) {
+  while (cur) {
+    if (cur->node == node) {
       return true;
     }
-    idx = parents[idx].prev_state_index;
+    cur = cur->parent;
   }
   return false;
 }
 
-AlsPath AlsSearcher::reconstruct_path(AlsGraph &graph,
-                                      int end_state_idx,
-                                      const std::vector<AlsSearchState> &states,
-                                      const std::vector<AlsParent> &parents) const {
+AlsPath AlsSearcher::reconstruct_path(AlsGraph &graph, AlsSearchNode *end) const {
   AlsPath p;
   std::vector<AlsNode> rev_nodes;
   std::vector<AlsEdge> rev_edges;
 
-  int idx = end_state_idx;
-  while (idx >= 0) {
-    AlsNode &node = graph.nodes[states[idx].node];
-    rev_nodes.push_back(node);
-    if (parents[idx].prev_state_index >= 0) {
-      rev_edges.push_back({states[idx].node, parents[idx].rcc});
+  AlsSearchNode *cur = end;
+  while (cur) {
+    rev_nodes.push_back(graph.nodes[cur->node]);
+
+    if (cur->parent) {
+      rev_edges.push_back({cur->node, cur->last_rcc});
     }
-    idx = parents[idx].prev_state_index;
+
+    cur = cur->parent;
   }
 
   p.nodes.assign(rev_nodes.rbegin(), rev_nodes.rend());
@@ -339,20 +363,6 @@ DigitSet AlsSearcher::get_rcc_set(const AlsPath &path) const {
     }
   }
   return rccs;
-}
-
-CellSet AlsSearcher::get_common_non_rcc_digits(const AlsPath &path,
-                                               const DigitSet &startDigits,
-                                               const DigitSet &endDigits) const {
-  DigitSet rccs = get_rcc_set(path);
-  DigitSet common = startDigits & endDigits;
-  DigitSet usable = common - rccs;
-
-  CellSet result;
-  for (Digit d : usable) {
-    result.insert(static_cast<Cell>(d));
-  }
-  return result;
 }
 
 std::optional<Event> AlsSearcher::build_circular_elimination_event(AlsPath &path,
@@ -488,15 +498,11 @@ std::optional<Event> AlsSearcher::build_endpoint_elimination_event(AlsPath &path
   return {};
 }
 
-std::optional<Event> AlsSearcher::execute_als_rules(
-  AlsGraph &graph,
-  AlsNodeID start,
-  AlsNodeID end,
-  int end_state_idx,
-  const std::vector<AlsSearchState> &states,
-  const std::vector<AlsParent> &parents) const
-{
-  AlsPath path = reconstruct_path(graph, end_state_idx, states, parents);
+std::optional<Event> AlsSearcher::execute_als_rules(AlsGraph &graph,
+                                                    AlsNodeID start,
+                                                    AlsNodeID end,
+                                                    AlsSearchNode *end_state) const {
+  AlsPath path = reconstruct_path(graph, end_state);
   if (path.nodes.size() < 2) {
     return {};
   }

@@ -1,6 +1,8 @@
 #ifndef ALS_HPP
 #define ALS_HPP
 
+#include <bit>
+#include <bitset>
 #include <set>
 #include <map>
 #include <vector>
@@ -40,9 +42,27 @@ struct AlsPath {
   std::vector<AlsEdge> edges;  // edges[i] connects nodes[i] -> nodes[i+1] through edges[i].rcc
 };
 
+struct AlsComparator {
+  // std::popcount is available since C++20
+  bool operator()(AlsNodeID a, AlsNodeID b) const {
+    // give priority to ALSs with fewer digits
+    auto pa = std::popcount(a >> 16);
+    auto pb = std::popcount(b >> 16);
+
+    if (pa != pb)
+      return pa < pb;
+
+    // otherwise use the ID numeric value as tiebreaker
+    return a < b;
+  }
+};
+
+using AlsGraphNodes = std::map<AlsNodeID, AlsNode, AlsComparator>;
+using AlsGraphEdges = std::map<AlsNodeID, std::vector<AlsEdge>, AlsComparator>;
+
 struct AlsGraph {
-  std::map<AlsNodeID, AlsNode> nodes;
-  std::map<AlsNodeID, std::vector<AlsEdge>> links;
+  AlsGraphNodes nodes;
+  AlsGraphEdges links;
   // qui consideriamo solo link fra ALS tramite RCC
 };
 
@@ -55,7 +75,6 @@ struct AlsConfig {
   bool allow_box = true;
   bool allow_row = true;
   bool allow_col = true;
-  bool require_distinct_rcc = true;
 };
 
 /* ---------------------------------------------------------------------- */
@@ -71,11 +90,11 @@ public:
 private:
   const SudokuBoard &board;
 
-  void build_nodes(std::map<AlsNodeID, AlsNode> &nodes);
+  void build_nodes(AlsGraphNodes &nodes);
 
-  void build_nodes_in_unit(std::map<AlsNodeID, AlsNode> &nodes, const Unit &unit);
+  void build_nodes_in_unit(AlsGraphNodes &nodes, const Unit &unit);
 
-  void add_node_if_new(std::map<AlsNodeID, AlsNode> &nodes, const CellSet &cells, const DigitSet &digits) const;
+  void add_node_if_new(AlsGraphNodes &nodes, const CellSet &cells, const DigitSet &digits) const;
 
   AlsNodeID get_node_id(Digit digit, Cell cell) const;
 
@@ -85,25 +104,24 @@ private:
 
   AlsNodeID get_node_id(const DigitSet &digits, const CellSet &cells) const;
 
-  void build_links(std::map<AlsNodeID, AlsNode> &nodes,
-                   std::map<AlsNodeID, std::vector<AlsEdge>> &links);
+  void build_links(AlsGraphNodes &nodes,
+                   AlsGraphEdges &links);
 
   bool is_rcc(AlsNode &a, AlsNode &b, Digit digit) const;
 
-  void add_edge(std::map<AlsNodeID, std::vector<AlsEdge>> &adj, AlsNodeID a, AlsNodeID b, Digit rcc);
+  void add_edge(AlsGraphEdges &adj, AlsNodeID a, AlsNodeID b, Digit rcc);
 };
 
 /* ---------------------------------------------------------------------- */
 
-struct AlsSearchState {
-  AlsNodeID node = 0;
-  Digit last_rcc = 0;
-};
+struct AlsSearchNode {
+  AlsNodeID start;
+  AlsNodeID node;
+  Digit last_rcc;
+  int depth;
 
-struct AlsParent {
-  int prev_state_index = -1;
-  AlsNodeID prev_node = 0;
-  Digit rcc = 0;
+  AlsSearchNode *parent;
+  int refcount;
 };
 
 class AlsSearcher {
@@ -120,32 +138,19 @@ private:
   AlsConfig config;
   std::set<AlsNodeID> visited;
 
-  std::optional<Event> als_search_from(AlsNodeID start, AlsGraph &graph);
+  std::optional<Event> als_search_from(/*AlsNodeID start,*/ AlsGraph &graph);
 
-  bool path_contains_node(AlsNodeID start,
-                          int state_idx,
-                          AlsNodeID node,
-                          const std::vector<AlsSearchState> &states,
-                          const std::vector<AlsParent> &parents) const;
+  bool path_contains_node(AlsNodeID start, AlsSearchNode *cur, AlsNodeID node) const;
 
-  AlsPath reconstruct_path(AlsGraph &graph,
-                           int end_state_idx,
-                           const std::vector<AlsSearchState> &states,
-                           const std::vector<AlsParent> &parents) const;
+  AlsPath reconstruct_path(AlsGraph &graph, AlsSearchNode *end) const;
 
   std::optional<Event> execute_als_rules(
     AlsGraph &graph,
     AlsNodeID start,
     AlsNodeID end,
-    int end_state_idx,
-    const std::vector<AlsSearchState> &states,
-    const std::vector<AlsParent> &parents) const;
+    AlsSearchNode *end_state) const;
 
   DigitSet get_rcc_set(const AlsPath &path) const;
-
-  CellSet get_common_non_rcc_digits(const AlsPath &path,
-                                    const DigitSet &startDigits,
-                                    const DigitSet &endDigits) const;
 
   std::optional<Event> build_circular_elimination_event(AlsPath &path,
                                                         ReasonId detailedReason) const;

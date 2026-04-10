@@ -136,21 +136,22 @@ private:
 
 /* ---------------------------------------------------------------------- */
 
-struct AicSearchState {
+struct ColorSearchState {
+  AicNodeID node;
+  ColorType next_color;
+};
+
+struct AicSearchNode {
+  AicNodeID start;
   AicNodeID node;
   union {
     EdgeType next_type;
     ColorType next_color;
   };
-};
+  int depth;
 
-struct AicParent {
-  int prev_state_index = -1;
-  AicNodeID prev_node = 0;
-  union {
-    EdgeType edge_used;
-    ColorType color_used;
-  };
+  AicSearchNode *parent;
+  int refcount;
 };
 
 class AicSearcher {
@@ -170,27 +171,19 @@ private:
   std::optional<Event> aic_search_from(AicGraph &graph);
   std::optional<Event> coloring_search_from(AicNodeID start, AicGraph &graph);
 
-  bool path_contains_node(int state_idx,
-                          AicNodeID node,
-                          const std::vector<AicSearchState> &states,
-                          const std::vector<AicParent> &parents) const;
+  bool path_contains_node(AicNodeID start, AicSearchNode *cur, AicNodeID node) const;
 
-  AicPath reconstruct_path(AicGraph &graph,
-                           int end_state_idx,
-                           const std::vector<AicSearchState> &states,
-                           const std::vector<AicParent> &parents) const;
+  AicPath reconstruct_path(AicGraph &graph, AicSearchNode *end) const;
 
   std::optional<Event> execute_aic_rules(
     AicGraph &graph,
     AicNodeID start,
     AicNodeID end,
-    int end_state_idx,
-    const std::vector<AicSearchState> &states,
-    const std::vector<AicParent> &parents) const;
+    AicSearchNode *end_state) const;
   std::optional<Event> execute_coloring_rules(
     AicGraph &graph,
     AicNodeID start,
-    const std::vector<AicSearchState> &states) const;
+    const std::vector<ColorSearchState> &states) const;
 
   bool are_weakly_linked(AicNode &a, AicNode &b) const;
 };

@@ -406,6 +406,69 @@ void AicGraphBuilder::build_grouped_strong_eri(const std::map<AicNodeID, AicNode
 
 /* ---------------------------------------------------------------------- */
 
+static void retain(AicSearchNode *n) {
+  if (n) {
+    ++n->refcount;
+  }
+}
+
+static void release(AicSearchNode *n) {
+  while (n) {
+    --n->refcount;
+    if (n->refcount > 0) {
+      return;
+    }
+
+    AicSearchNode *parent = n->parent;
+    delete n;
+    n = parent;
+  }
+}
+
+AicSearchNode *make_node(AicNodeID start,
+                         AicNodeID node,
+                         EdgeType next_type,
+                         int depth,
+                         AicSearchNode *parent) {
+  AicSearchNode *s = new AicSearchNode{
+    .start = start,
+    .node = node,
+    .next_type = next_type,
+    .depth = depth,
+    .parent = parent,
+    .refcount = 1
+  };
+
+  if (parent) {
+    retain(parent);
+  }
+
+  return s;
+}
+
+AicSearchNode *make_node(AicNodeID start,
+                         AicNodeID node,
+                         ColorType next_color,
+                         int depth,
+                         AicSearchNode *parent) {
+  AicSearchNode *s = new AicSearchNode{
+    .start = start,
+    .node = node,
+    .next_color = next_color,
+    .depth = depth,
+    .parent = parent,
+    .refcount = 1
+  };
+
+  if (parent) {
+    retain(parent);
+  }
+
+  return s;
+}
+
+/* ---------------------------------------------------------------------- */
+
 AicSearcher::AicSearcher(const SudokuBoard &board)
   : board(board) {
 
@@ -639,140 +702,135 @@ std::optional<Event> AicSearcher::runSearch(AicGraph &graph) {
 }
 
 std::optional<Event> AicSearcher::aic_search_from(AicGraph &graph) {
-  struct QueueItem {
-    AicNodeID start;
-    AicNodeID node;
-    EdgeType next_type;
-    int depth;
-    int state_index;
-  };
-
-  std::vector<AicSearchState> states;
-  std::vector<AicParent> parents;
-  std::deque<QueueItem> q;
-
-  auto push_state = [&](AicNodeID start, AicNodeID node, EdgeType next_type, int depth, int prev_idx, AicNodeID prev_node, EdgeType edge_used) {
-    AicSearchState st{.node = node, .next_type = next_type};
-    states.push_back(st);
-    parents.push_back({prev_idx, prev_node, edge_used});
-    int idx = static_cast<int>(states.size()) - 1;
-    q.push_back({start, node, next_type, depth, idx});
-    return idx;
-  };
+  std::deque<AicSearchNode *> q;
 
   // Partiamo dal nodo iniziale e imponiamo che il primo arco sia strong.
   for (auto it = graph.strong_links.begin(); it != graph.strong_links.end(); ++it) {
     AicNodeID start = it->first;
-    push_state(start, start, EdgeType::STRONG, 0, -1, start, EdgeType::STRONG);
+    q.push_back(make_node(start, start, EdgeType::STRONG, 0, nullptr));
   }
 
   while (!q.empty()) {
-    QueueItem cur = q.front();
+    AicSearchNode *cur = q.front();
     q.pop_front();
 
-    if (cur.depth >= config.max_depth) {
+    if (cur->depth >= config.max_depth) {
+      release(cur);
       continue;
     }
 
 #if 0
-    AicNode &current = graph.nodes[cur.node];
+    AicNode &current = graph.nodes[cur->node];
     if (!current.isGrouped) {
       Cell cell = *current.cellSet.begin();
       Digit digit = *current.digitSet.begin();
       console_log("CURRENT STATE: r%dc%d (%d) - %s LINK - Length %d", SudokuBoard::getRowLocation(cell)+1,
                                                                       SudokuBoard::getColumnLocation(cell)+1,
                                                                       digit,
-                                                                      cur.next_type == EdgeType::STRONG ? "STRONG" : "WEAK",
-                                                                      cur.depth);
+                                                                      cur->next_type == EdgeType::STRONG ? "STRONG" : "WEAK",
+                                                                      cur->depth);
     }
 #endif
-    if (cur.next_type == EdgeType::STRONG) {
-      for (AicNodeID nb : graph.strong_links[cur.node]) {
-        if (path_contains_node(cur.state_index, nb, states, parents)) {
+    if (cur->next_type == EdgeType::STRONG) {
+      for (AicNodeID nb : graph.strong_links[cur->node]) {
+        if (path_contains_node(cur->start, cur, nb)) {
           continue;
         }
 
-        int next_idx = push_state(cur.start, nb, EdgeType::WEAK, cur.depth + 1,
-                                  cur.state_index, cur.node, EdgeType::STRONG);
+        AicSearchNode *child = make_node(cur->start,
+                                         nb,
+                                         EdgeType::WEAK,
+                                         cur->depth + 1,
+                                         cur);
 
         // Look for eliminations according to AIC rules
-        std::optional<Event> event = execute_aic_rules(graph, cur.start, nb, next_idx, states, parents);
+        std::optional<Event> event = execute_aic_rules(graph, cur->start, nb, child);
         if (event) {
+          release(child);
+
+          while (!q.empty()) {
+            release(q.front());
+            q.pop_front();
+          }
+
+          release(cur);
           return event;
         }
+
+        q.push_back(child);
       }
     } else {
       for (auto it = graph.strong_links.begin(); it != graph.strong_links.end(); ++it) {
         AicNodeID nb = it->first;
-        if (nb == cur.node) {
+        if (nb == cur->node) {
           continue;
         }
-        if (path_contains_node(cur.state_index, nb, states, parents)) {
+        if (path_contains_node(cur->start, cur, nb)) {
           continue;
         }
-        if (!are_weakly_linked(graph.nodes[cur.node], graph.nodes[nb])) {
+        if (!are_weakly_linked(graph.nodes[cur->node], graph.nodes[nb])) {
           continue;
         }
 
-        push_state(cur.start, nb, EdgeType::STRONG, cur.depth + 1,
-                   cur.state_index, cur.node, EdgeType::WEAK);
+        AicSearchNode *child = make_node(cur->start,
+                                         nb,
+                                         EdgeType::STRONG,
+                                         cur->depth + 1,
+                                         cur);
+        q.push_back(child);
       }
     }
+
+    release(cur);
   }
 
   return {};
 }
 
 std::optional<Event> AicSearcher::coloring_search_from(AicNodeID start, AicGraph &graph) {
-  struct QueueItem {
-    AicNodeID node;
-    ColorType next_color;
-    int depth;
-    int state_index;
-  };
-
-  std::vector<AicSearchState> states;
-  std::deque<QueueItem> q;
-
-  auto push_state = [&](AicNodeID node, ColorType next_color, int depth, int prev_idx, AicNodeID prev_node, ColorType color_used) {
-    AicSearchState st{.node = node, .next_color = next_color};
-    states.push_back(st);
-    int idx = static_cast<int>(states.size()) - 1;
-    q.push_back({node, next_color, depth, idx});
-    return idx;
-  };
+  std::vector<ColorSearchState> states;
+  std::deque<AicSearchNode *> q;
 
   // Partiamo dal nodo iniziale e imponiamo il primo colore.
-  push_state(start, ColorType::SECOND, 0, -1, start, ColorType::FIRST);
+  q.push_back(make_node(start, start, ColorType::SECOND, 0, nullptr));
 
   while (!q.empty()) {
-    QueueItem cur = q.front();
+    AicSearchNode *cur = q.front();
     q.pop_front();
 
-    if (visited.find(cur.node) != visited.end()) {
+    if (visited.find(cur->node) != visited.end()) {
+      release(cur);
       continue;
     }
-    visited.insert(cur.node);
+    visited.insert(cur->node);
 
 #if 0
-    AicNode &current = graph.nodes[cur.node];
+    AicNode &current = graph.nodes[cur->node];
     if (!current.isGrouped) {
       Cell cell = *current.cellSet.begin();
       Digit digit = *current.digitSet.begin();
       console_log("CURRENT STATE: r%dc%d (%d) - %s COLOR - Length %d", SudokuBoard::getRowLocation(cell)+1,
                                                                        SudokuBoard::getColumnLocation(cell)+1,
                                                                        digit,
-                                                                       cur.next_color == ColorType::FIRST ? "FIRST" : "SECOND",
-                                                                       cur.depth);
+                                                                       cur->next_color == ColorType::FIRST ? "FIRST" : "SECOND",
+                                                                       cur->depth);
     }
 #endif
-    for (AicNodeID nb : graph.strong_links[cur.node]) {
-      ColorType color_used = cur.next_color;
+    for (AicNodeID nb : graph.strong_links[cur->node]) {
+      ColorType color_used = cur->next_color;
       ColorType next_color = color_used == ColorType::FIRST ? ColorType::SECOND : ColorType::FIRST;
 
-      int next_idx = push_state(nb, next_color, cur.depth + 1,
-                                cur.state_index, cur.node, color_used);
+      ColorSearchState st{.node = nb, .next_color = next_color};
+      states.push_back(st);
+
+      AicSearchNode *child = make_node(cur->start,
+                                       nb,
+                                       next_color,
+                                       cur->depth + 1,
+                                       cur);
+      q.push_back(child);
     }
+    release(cur);
   }
 
   // Look for contradictions among colors
@@ -781,36 +839,30 @@ std::optional<Event> AicSearcher::coloring_search_from(AicNodeID start, AicGraph
   return event;
 }
 
-bool AicSearcher::path_contains_node(int state_idx,
-                                     AicNodeID node,
-                                     const std::vector<AicSearchState> &states,
-                                     const std::vector<AicParent> &parents) const {
-  int idx = state_idx;
-  while (idx >= 0) {
-    if (states[idx].node == node) {
+bool AicSearcher::path_contains_node(AicNodeID start, AicSearchNode *cur, AicNodeID node) const {
+  while (cur) {
+    if (cur->node == node) {
       return true;
     }
-    idx = parents[idx].prev_state_index;
+    cur = cur->parent;
   }
   return false;
 }
 
-AicPath AicSearcher::reconstruct_path(AicGraph &graph,
-                                      int end_state_idx,
-                                      const std::vector<AicSearchState> &states,
-                                      const std::vector<AicParent> &parents) const {
+AicPath AicSearcher::reconstruct_path(AicGraph &graph, AicSearchNode *end) const {
   AicPath p;
   std::vector<AicNode> rev_nodes;
   std::vector<EdgeType> rev_edges;
 
-  int idx = end_state_idx;
-  while (idx >= 0) {
-    AicNode &node = graph.nodes[states[idx].node];
-    rev_nodes.push_back(node);
-    if (parents[idx].prev_state_index >= 0) {
-      rev_edges.push_back(parents[idx].edge_used);
+  AicSearchNode *cur = end;
+  while (cur) {
+    rev_nodes.push_back(graph.nodes[cur->node]);
+
+    if (cur->parent) {
+      rev_edges.push_back(cur->next_type);
     }
-    idx = parents[idx].prev_state_index;
+
+    cur = cur->parent;
   }
 
   p.nodes.assign(rev_nodes.rbegin(), rev_nodes.rend());
@@ -822,9 +874,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   AicGraph &graph,
   AicNodeID start,
   AicNodeID end,
-  int end_state_idx,
-  const std::vector<AicSearchState> &states,
-  const std::vector<AicParent> &parents) const
+  AicSearchNode *end_state) const
 {
   AicNode &Start = graph.nodes[start];
   AicNode &End = graph.nodes[end];
@@ -839,7 +889,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   // AIC Type 1
   if (start_digit == end_digit && !are_weakly_linked(Start, End)) {
     CellSet peers = board.getPeers(Start.cellSet | End.cellSet);
-    AicPath path = reconstruct_path(graph, end_state_idx, states, parents);
+    AicPath path = reconstruct_path(graph, end_state);
 
     Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType1 :
                                             reason == ReasonId::GroupedAIC ? ReasonId::GroupedAICType1 :
@@ -862,7 +912,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
 
   // AIC Type 2
   if (start_digit != end_digit && board.sees(Start.cellSet, End.cellSet)) {
-    AicPath path = reconstruct_path(graph, end_state_idx, states, parents);
+    AicPath path = reconstruct_path(graph, end_state);
 
     if ((!Start.isGrouped && board.hasCandidate(start_cell, end_digit)) ||
         (!End.isGrouped && board.hasCandidate(end_cell, start_digit))) {
@@ -885,7 +935,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
 
   // AIC Type 3 (Ring)
   if (are_weakly_linked(Start, End)) {
-    AicPath path = reconstruct_path(graph, end_state_idx, states, parents);
+    AicPath path = reconstruct_path(graph, end_state);
 
     Event event(EventType::RemoveCandidate, reason == ReasonId::XChain ? ReasonId::XRing :
                                             reason == ReasonId::XYChain ? ReasonId::XYRing :
@@ -940,7 +990,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
 std::optional<Event> AicSearcher::execute_coloring_rules(
   AicGraph &graph,
   AicNodeID start,
-  const std::vector<AicSearchState> &states) const
+  const std::vector<ColorSearchState> &states) const
 {
   struct ColorNode {
     Cell cell;
