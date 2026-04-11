@@ -280,7 +280,10 @@
       let zs = [];
       if (groups[2]) {
         for (let z of groups[2]) {
-          zs.push(ctx.maskToSingleDigit(z.mask));
+          let digit = ctx.maskToSingleDigit(z.mask);
+          if (zs.indexOf(digit) == -1) {
+            zs.push(digit);
+          }
         }
       }
 
@@ -289,8 +292,11 @@
       for (let i in alsCellsList) {
         parts.push(`${ALPHA[i]} = <span class="logSourceCategory${(i % 9) + 4}">${ctx.escapeHtml(alsCellsList[i])} {${ctx.escapeHtml(alsDigitsList[i])}}</span>${rccs[i*2] ? ' -'+rccs[i*2]+'-' : ''}</br>`);
       }
-      if (groups[2]) {
+
+      if (zs.length == 1) {
         parts.push(`Z = ${zs[0]} => </div>`);
+      } else if (zs.length > 1) {
+        parts.push(`Z = {${zs.join(",")}} => </div>`);
       } else {
         parts.push(`=> </div>`);
       }

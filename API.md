@@ -356,6 +356,7 @@ Tio aplikiĝas al: **Skyscraper**, **Two-String Kite**, **Crane**, **Empty Recta
 * Disigilo
 * Ĉeloj en la unua aro entenantaj ciferon Z + Cifero Z (se aplikebla)
 * Ĉeloj en la lasta aro entenantaj ciferon Z + Cifero Z (se aplikebla)
+* ... (ripetite se ekzistas pli ol unu cifero Z)
 
 Tio aplikiĝas al: **ALS-XZ**, **ALS-XY-Wing**, **ALS Chain**.
 

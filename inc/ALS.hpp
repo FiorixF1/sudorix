@@ -155,7 +155,7 @@ private:
   std::optional<Event> build_circular_elimination_event(AlsPath &path,
                                                         ReasonId detailedReason) const;
   std::optional<Event> build_endpoint_elimination_event(AlsPath &path,
-                                                        Digit z,
+                                                        DigitSet zs,
                                                         ReasonId detailedReason) const;
 };
 

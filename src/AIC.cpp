@@ -95,7 +95,7 @@ AicGraph AicGraphBuilder::prune(AicGraph &graph, const AicConfig &config) {
   return prunedGraph;
 }
 
-void AicGraphBuilder::build_singleton_nodes(std::map<AicNodeID, AicNode> &nodes) {
+void AicGraphBuilder::build_singleton_nodes(AicGraphNodes &nodes) {
   for (Cell cell = 0; cell < 81; ++cell) {
     for (Digit d = 1; d <= 9; ++d) {
       if (board.isSolved(cell) || !board.hasCandidate(cell, d)) {
@@ -115,7 +115,7 @@ void AicGraphBuilder::build_singleton_nodes(std::map<AicNodeID, AicNode> &nodes)
   }
 }
 
-void AicGraphBuilder::add_group_if_new(std::map<AicNodeID, AicNode> &nodes, Digit digit, const CellSet &cells) {
+void AicGraphBuilder::add_group_if_new(AicGraphNodes &nodes, Digit digit, const CellSet &cells) {
   if (cells.size() < 2) {
     return;
   }
@@ -131,7 +131,7 @@ void AicGraphBuilder::add_group_if_new(std::map<AicNodeID, AicNode> &nodes, Digi
   nodes[id] = candidate;
 }
 
-void AicGraphBuilder::build_grouped_nodes(std::map<AicNodeID, AicNode> &nodes) {
+void AicGraphBuilder::build_grouped_nodes(AicGraphNodes &nodes) {
   // grouped da intersezione row∩box, col∩box, box∩row, box∩col
   for (Digit d = 1; d <= 9; ++d) {
     // row ∩ box
@@ -195,7 +195,7 @@ AicNodeID AicGraphBuilder::get_node_id(const DigitSet &digits, const CellSet &ce
   return shiftedDigits | code;
 }
 
-void AicGraphBuilder::add_strong_edge(std::map<AicNodeID, std::vector<AicNodeID>> &adj, AicNodeID a, AicNodeID b) {
+void AicGraphBuilder::add_strong_edge(AicGraphEdges &adj, AicNodeID a, AicNodeID b) {
   if (a == b) {
     return;
   }
@@ -211,8 +211,8 @@ void AicGraphBuilder::add_strong_edge(std::map<AicNodeID, std::vector<AicNodeID>
   add_one_way(b, a);
 }
 
-void AicGraphBuilder::build_strong_links(const std::map<AicNodeID, AicNode> &nodes,
-                                         std::map<AicNodeID, std::vector<AicNodeID>> &strong_links) {
+void AicGraphBuilder::build_strong_links(AicGraphNodes &nodes,
+                                         AicGraphEdges &strong_links) {
   // Bilocations
   for (Digit d = 1; d <= 9; ++d) {
     build_strong_links_in_units(nodes, strong_links, SudokuBoard::getRows(), d);
@@ -240,8 +240,8 @@ void AicGraphBuilder::build_strong_links(const std::map<AicNodeID, AicNode> &nod
   }
 }
 
-void AicGraphBuilder::build_strong_links_in_units(const std::map<AicNodeID, AicNode> &nodes,
-                                                  std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
+void AicGraphBuilder::build_strong_links_in_units(const AicGraphNodes &nodes,
+                                                  AicGraphEdges &strong_links,
                                                   const std::vector<Unit> &units,
                                                   Digit d) {
   for (const Unit &unit : units) {
@@ -260,8 +260,8 @@ void AicGraphBuilder::build_strong_links_in_units(const std::map<AicNodeID, AicN
   }
 }
 
-void AicGraphBuilder::build_strong_links_in_cells(const std::map<AicNodeID, AicNode> &nodes,
-                                                  std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
+void AicGraphBuilder::build_strong_links_in_cells(const AicGraphNodes &nodes,
+                                                  AicGraphEdges &strong_links,
                                                   Cell cell) {
   DigitSet candidates = board.getCandidates(cell);
   if (candidates.size() != 2) {
@@ -277,8 +277,8 @@ void AicGraphBuilder::build_strong_links_in_cells(const std::map<AicNodeID, AicN
   if (n1 && n2) add_strong_edge(strong_links, n1, n2);
 }
 
-void AicGraphBuilder::build_grouped_strong_row_box(const std::map<AicNodeID, AicNode> &nodes,
-                                                   std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
+void AicGraphBuilder::build_grouped_strong_row_box(const AicGraphNodes &nodes,
+                                                   AicGraphEdges &strong_links,
                                                    Digit d) {
   for (const Unit &r : SudokuBoard::getRows()) {
     CellSet pos = board.getPositionsOfDigit(r, d);
@@ -300,8 +300,8 @@ void AicGraphBuilder::build_grouped_strong_row_box(const std::map<AicNodeID, Aic
   }
 }
 
-void AicGraphBuilder::build_grouped_strong_col_box(const std::map<AicNodeID, AicNode> &nodes,
-                                                   std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
+void AicGraphBuilder::build_grouped_strong_col_box(const AicGraphNodes &nodes,
+                                                   AicGraphEdges &strong_links,
                                                    Digit d) {
   for (const Unit &c : SudokuBoard::getColumns()) {
     CellSet pos = board.getPositionsOfDigit(c, d);
@@ -323,8 +323,8 @@ void AicGraphBuilder::build_grouped_strong_col_box(const std::map<AicNodeID, Aic
   }
 }
 
-void AicGraphBuilder::build_grouped_strong_box_row(const std::map<AicNodeID, AicNode> &nodes,
-                                                   std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
+void AicGraphBuilder::build_grouped_strong_box_row(const AicGraphNodes &nodes,
+                                                   AicGraphEdges &strong_links,
                                                    Digit d) {
   for (const Unit &b : SudokuBoard::getBoxes()) {
     CellSet pos = board.getPositionsOfDigit(b, d);
@@ -346,8 +346,8 @@ void AicGraphBuilder::build_grouped_strong_box_row(const std::map<AicNodeID, Aic
   }
 }
 
-void AicGraphBuilder::build_grouped_strong_box_col(const std::map<AicNodeID, AicNode> &nodes,
-                                                   std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
+void AicGraphBuilder::build_grouped_strong_box_col(const AicGraphNodes &nodes,
+                                                   AicGraphEdges &strong_links,
                                                    Digit d) {
   for (const Unit &b : SudokuBoard::getBoxes()) {
     CellSet pos = board.getPositionsOfDigit(b, d);
@@ -369,8 +369,8 @@ void AicGraphBuilder::build_grouped_strong_box_col(const std::map<AicNodeID, Aic
   }
 }
 
-void AicGraphBuilder::build_grouped_strong_eri(const std::map<AicNodeID, AicNode> &nodes,
-                                               std::map<AicNodeID, std::vector<AicNodeID>> &strong_links,
+void AicGraphBuilder::build_grouped_strong_eri(AicGraphNodes &nodes,
+                                               AicGraphEdges &strong_links,
                                                Digit d) {
   for (const Unit &b : SudokuBoard::getBoxes()) {
     CellSet pos = board.getPositionsOfDigit(b, d);
@@ -396,9 +396,28 @@ void AicGraphBuilder::build_grouped_strong_eri(const std::map<AicNodeID, AicNode
       CellSet col_part = *eri_col & pos;
 
       if (row_part.size() > 1 || col_part.size() > 1) {
-        AicNodeID r = get_node_id(d, row_part);
-        AicNodeID c = get_node_id(d, col_part);
-        if (r && c) add_strong_edge(strong_links, r, c);
+        CellSet intersection = row_part & col_part;
+        if (intersection.empty()) {
+          // the cell in the intersection does not contain the candidate
+          AicNodeID r = get_node_id(d, row_part);
+          AicNodeID c = get_node_id(d, col_part);
+          if (r && c) add_strong_edge(strong_links, r, c);
+        } else {
+          // the intersecting cell contains the candidate: split the ERI in two parts
+          // a new node could be necessary in some cases
+          {
+            add_group_if_new(nodes, d, row_part - intersection);
+            AicNodeID r = get_node_id(d, row_part - intersection);
+            AicNodeID c = get_node_id(d, col_part);
+            if (r && c) add_strong_edge(strong_links, r, c);
+          }
+          {
+            add_group_if_new(nodes, d, col_part - intersection);
+            AicNodeID r = get_node_id(d, row_part);
+            AicNodeID c = get_node_id(d, col_part - intersection);
+            if (r && c) add_strong_edge(strong_links, r, c);
+          }
+        }
       }
     }
   }
@@ -619,69 +638,8 @@ std::optional<Event> AicSearcher::runSearch(AicGraph &graph) {
     // generic AIC search
     std::optional<Event> maybeEvent;
     maybeEvent = aic_search_from(graph);
+
     if (maybeEvent) {
-      Event &event = *maybeEvent;
-      if (event.reason == ReasonId::SingleDigitPattern) {
-        // identify the specific type of single digit pattern
-        auto &sources = event.getSources();
-
-        Cell a = *sources[0].cells.begin();
-        Cell b = *sources[1].cells.begin();
-        Cell c = *sources[2].cells.begin();
-        Cell d = *sources[3].cells.begin();
-
-        Location aRow = board.getRowLocation(a);
-        Location bRow = board.getRowLocation(b);
-        Location cRow = board.getRowLocation(c);
-        Location dRow = board.getRowLocation(d);
-
-        Location aCol = board.getColumnLocation(a);
-        Location bCol = board.getColumnLocation(b);
-        Location cCol = board.getColumnLocation(c);
-        Location dCol = board.getColumnLocation(d);
-
-        Location aBox = board.getBoxLocation(a);
-        Location bBox = board.getBoxLocation(b);
-        Location cBox = board.getBoxLocation(c);
-        Location dBox = board.getBoxLocation(d);
-
-        if ((aRow == bRow && cRow == dRow) ||
-            (aCol == bCol && cCol == dCol)) {
-          event.reason = ReasonId::Skyscraper;
-        } else if ((aRow == bRow && cCol == dCol) ||
-                   (aCol == bCol && cRow == dRow)) {
-          event.reason = ReasonId::TwoStringKite;
-        } else if ((aRow == bRow && bCol == cCol) ||
-                   (aCol == bCol && bRow == cRow) ||
-                   (bRow == cRow && cCol == dCol) ||
-                   (bCol == cCol && cRow == dRow)) {
-          event.reason = ReasonId::Crane;
-        }
-      } else if (event.reason == ReasonId::EmptyRectangle) {
-        // identify if this is an empty rectangle pattern
-        bool valid = false;
-        auto &sources = event.getSources();
-        if (sources.size() == 4) {
-          CellSet a = sources[0].cells;
-          CellSet b = sources[1].cells;
-          CellSet c = sources[2].cells;
-          CellSet d = sources[3].cells;
-          if (a.size() >= 1 && b.size() >= 1 && c.size() == 1 && d.size() == 1) {
-            for (const Unit &box : SudokuBoard::getBoxes()) {
-              if ((a | b).is_subset_of(box)) {
-                valid = true;
-              }
-            }
-          } else if (a.size() == 1 && b.size() == 1 && c.size() >= 1 && d.size() >= 1) {
-            for (const Unit &box : SudokuBoard::getBoxes()) {
-              if ((c | d).is_subset_of(box)) {
-                valid = true;
-              }
-            }
-          }
-        }
-        if (!valid) return {};
-      }
       return maybeEvent;
     }
   } else {
@@ -746,15 +704,20 @@ std::optional<Event> AicSearcher::aic_search_from(AicGraph &graph) {
         // Look for eliminations according to AIC rules
         std::optional<Event> event = execute_aic_rules(graph, cur->start, nb, child);
         if (event) {
-          release(child);
+          // for single-digit pattern and empty rectangle
+          bool valid = analyze_event(*event);
+          // if event found
+          if (valid) {
+            release(child);
 
-          while (!q.empty()) {
-            release(q.front());
-            q.pop_front();
+            while (!q.empty()) {
+              release(q.front());
+              q.pop_front();
+            }
+
+            release(cur);
+            return event;
           }
-
-          release(cur);
-          return event;
         }
 
         q.push_back(child);
@@ -837,6 +800,77 @@ std::optional<Event> AicSearcher::coloring_search_from(AicNodeID start, AicGraph
   std::optional<Event> event = execute_coloring_rules(graph, start, states);
 
   return event;
+}
+
+bool AicSearcher::analyze_event(Event &event) {
+  if (event.reason == ReasonId::SingleDigitPattern) {
+    // identify the specific type of single digit pattern
+    auto &sources = event.getSources();
+
+    Cell a = *sources[0].cells.begin();
+    Cell b = *sources[1].cells.begin();
+    Cell c = *sources[2].cells.begin();
+    Cell d = *sources[3].cells.begin();
+
+    Location aRow = board.getRowLocation(a);
+    Location bRow = board.getRowLocation(b);
+    Location cRow = board.getRowLocation(c);
+    Location dRow = board.getRowLocation(d);
+
+    Location aCol = board.getColumnLocation(a);
+    Location bCol = board.getColumnLocation(b);
+    Location cCol = board.getColumnLocation(c);
+    Location dCol = board.getColumnLocation(d);
+
+    Location aBox = board.getBoxLocation(a);
+    Location bBox = board.getBoxLocation(b);
+    Location cBox = board.getBoxLocation(c);
+    Location dBox = board.getBoxLocation(d);
+
+    if ((aRow == bRow && cRow == dRow) ||
+        (aCol == bCol && cCol == dCol)) {
+      event.reason = ReasonId::Skyscraper;
+      return true;
+    } else if ((aRow == bRow && cCol == dCol) ||
+               (aCol == bCol && cRow == dRow)) {
+      event.reason = ReasonId::TwoStringKite;
+      return true;
+    } else if ((aRow == bRow && bCol == cCol) ||
+               (aCol == bCol && bRow == cRow) ||
+               (bRow == cRow && cCol == dCol) ||
+               (bCol == cCol && cRow == dRow)) {
+      event.reason = ReasonId::Crane;
+      return true;
+    } else {
+      return false;
+    }
+  } else if (event.reason == ReasonId::EmptyRectangle) {
+    // identify if this is an empty rectangle pattern
+    bool valid = false;
+    auto &sources = event.getSources();
+    if (sources.size() == 4) {
+      CellSet a = sources[0].cells;
+      CellSet b = sources[1].cells;
+      CellSet c = sources[2].cells;
+      CellSet d = sources[3].cells;
+      if (a.size() >= 1 && b.size() >= 1 && c.size() == 1 && d.size() == 1) {
+        for (const Unit &box : SudokuBoard::getBoxes()) {
+          if ((a | b).is_subset_of(box)) {
+            valid = true;
+          }
+        }
+      } else if (a.size() == 1 && b.size() == 1 && c.size() >= 1 && d.size() >= 1) {
+        for (const Unit &box : SudokuBoard::getBoxes()) {
+          if ((c | d).is_subset_of(box)) {
+            valid = true;
+          }
+        }
+      }
+    }
+    return valid;
+  }
+  // any other type of event is valid
+  return true;
 }
 
 bool AicSearcher::path_contains_node(AicNodeID start, AicSearchNode *cur, AicNodeID node) const {

@@ -442,21 +442,34 @@ std::optional<Event> AlsSearcher::build_circular_elimination_event(AlsPath &path
 }
 
 std::optional<Event> AlsSearcher::build_endpoint_elimination_event(AlsPath &path,
-                                                                   Digit z,
+                                                                   DigitSet zs,
                                                                    ReasonId detailedReason) const {
   if (path.nodes.size() < 2) {
     return {};
   }
 
-  CellSet startZ = board.getPositionsOfDigit(path.nodes.front().cellSet, z);
-  CellSet endZ = board.getPositionsOfDigit(path.nodes.back().cellSet, z);
-  if (startZ.empty() || endZ.empty()) {
-    return {};
+  std::vector<Digit> validZs;
+  std::vector<CellSet> startZs;
+  std::vector<CellSet> endZs;
+  std::vector<CellSet> validVictims;
+
+  for (Digit z : zs) {
+    CellSet startZ = board.getPositionsOfDigit(path.nodes.front().cellSet, z);
+    CellSet endZ = board.getPositionsOfDigit(path.nodes.back().cellSet, z);
+    if (startZ.empty() || endZ.empty()) {
+      continue;
+    }
+
+    CellSet victims = board.getPeersContaining(startZ | endZ, z);
+    if (!victims.empty()) {
+      validZs.push_back(z);
+      startZs.push_back(startZ);
+      endZs.push_back(endZ);
+      validVictims.push_back(victims);
+    }
   }
 
-  CellSet victims = board.getPeersContaining(startZ | endZ, z);
-
-  if (!victims.empty()) {
+  if (!validVictims.empty()) {
     Event event(EventType::RemoveCandidate, detailedReason);
 
     // sources: list of ALSs
@@ -482,12 +495,16 @@ std::optional<Event> AlsSearcher::build_endpoint_elimination_event(AlsPath &path
     event.addDelimiter();
 
     // sources: list of Z digits
-    event.addSource(startZ, z);
-    event.addSource(endZ, z);
+    for (int i = 0; i < validZs.size(); ++i) {
+      event.addSource(startZs[i], validZs[i]);
+      event.addSource(endZs[i], validZs[i]);
+    }
 
     // operation: remove Z from peers
-    for (Cell c : victims) {
-      event.addOperation(c, z);
+    for (int i = 0; i < validZs.size(); ++i) {
+      for (Cell c : validVictims[i]) {
+        event.addOperation(c, validZs[i]);
+      }
     }
 
     if (event.getNumberOfOperations() > 0) {
@@ -552,11 +569,9 @@ std::optional<Event> AlsSearcher::execute_als_rules(AlsGraph &graph,
       detailedReason = ReasonId::ALSChain;
     }
 
-    for (Digit z : endpointDigits) {
-      std::optional<Event> event = build_endpoint_elimination_event(path, z, detailedReason);
-      if (event) {
-        return event;
-      }
+    std::optional<Event> event = build_endpoint_elimination_event(path, endpointDigits, detailedReason);
+    if (event) {
+      return event;
     }
   }
 
