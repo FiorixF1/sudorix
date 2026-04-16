@@ -1206,8 +1206,9 @@ static void techALSChain(SudokuBoard &board, EventQueue &eventQueue) {
 }
 /* ------------------ END ALS WORLD ------------------ */
 
-static void techBasicSueDeCoq(SudokuBoard &board, EventQueue &eventQueue) {
-  auto scanSDC = [&](const Unit &box, const Unit &line) -> bool
+static void techSueDeCoq(SudokuBoard &board, EventQueue &eventQueue) {
+  // basic Sue-de-Coq
+  auto scanBasicSDC = [&](const Unit &box, const Unit &line) -> bool
   {
     CellSet intersection = (box & line).filter([&](Cell i){ return !board.isSolved(i); });
     DigitSet intersectionDigits;
@@ -1266,19 +1267,18 @@ static void techBasicSueDeCoq(SudokuBoard &board, EventQueue &eventQueue) {
 
   for (const Unit &b : SudokuBoard::getBoxes()) {
     for (const Unit &r : SudokuBoard::getRows()) {
-      if (scanSDC(b, r)) return;
+      if (scanBasicSDC(b, r)) return;
     }
   }
 
   for (const Unit &b : SudokuBoard::getBoxes()) {
     for (const Unit &c : SudokuBoard::getColumns()) {
-      if (scanSDC(b, c)) return;
+      if (scanBasicSDC(b, c)) return;
     }
   }
-}
 
-static void techExtendedSueDeCoq(SudokuBoard &board, EventQueue &eventQueue) {
-  auto scanSDC = [&](const Unit &box, const Unit &line) -> bool
+  // extended Sue-de-Coq
+  auto scanExtendedSDC = [&](const Unit &box, const Unit &line) -> bool
   {
     CellSet intersection = (box & line).filter([&](Cell i){ return !board.isSolved(i); });
     DigitSet intersectionDigits;
@@ -1364,13 +1364,13 @@ static void techExtendedSueDeCoq(SudokuBoard &board, EventQueue &eventQueue) {
 
   for (const Unit &b : SudokuBoard::getBoxes()) {
     for (const Unit &r : SudokuBoard::getRows()) {
-      if (scanSDC(b, r)) return;
+      if (scanExtendedSDC(b, r)) return;
     }
   }
 
   for (const Unit &b : SudokuBoard::getBoxes()) {
     for (const Unit &c : SudokuBoard::getColumns()) {
-      if (scanSDC(b, c)) return;
+      if (scanExtendedSDC(b, c)) return;
     }
   }
 }
@@ -1497,8 +1497,8 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techUniqueRectangle,
   techWWing,
   techSingleDigitPattern,
-  techEmptyRectangle,
   techFinnedXWing,
+  techEmptyRectangle,
   techXYZWing,
   techSimpleColoring,
   tech3DMedusa,
@@ -1508,8 +1508,7 @@ static constexpr TechniqueFn TECHNIQUES[] = {
   techGroupedXChain,
   techAIC,
   techGroupedAIC,
-  techBasicSueDeCoq,
-  techExtendedSueDeCoq,
+  techSueDeCoq,
   //techALSXZ,
   //techALSXYWing,
   techALSChain,

@@ -704,7 +704,7 @@ std::optional<Event> AicSearcher::aic_search_from(AicGraph &graph) {
         // Look for eliminations according to AIC rules
         std::optional<Event> event = execute_aic_rules(graph, cur->start, nb, child);
         if (event) {
-          // for single-digit pattern and empty rectangle
+          // for single-digit pattern, empty rectangle and named wings
           bool valid = analyze_event(*event);
           // if event found
           if (valid) {
@@ -868,7 +868,119 @@ bool AicSearcher::analyze_event(Event &event) {
       }
     }
     return valid;
+  } else if (reason == ReasonId::AIC || reason == ReasonId::GroupedAIC) {
+    // identify named wing
+    std::string valueLocationString;   // LVL, VVL...
+    std::string digitsString;          // abba...
+    std::string cellSectorString;      // CSSC...
+    char digitToChar[10] = {0};
+    char charCounter = 'a';
+    int digitCounter = 0;
+    bool WANT_STRONG = true;
+
+    auto &sources = event.getSources();
+    for (int i = 0; i < sources.size()-1; ++i) {
+      const Source &current = sources[i];
+      const Source &next = sources[i+1];
+      if (current.cells == next.cells) {
+        // same cells, different digit
+        if (WANT_STRONG) {
+          valueLocationString += 'V';
+        }
+        cellSectorString += 'C';
+      } else {
+        // same digit, different cells
+        if (WANT_STRONG) {
+          valueLocationString += 'L';
+        }
+        cellSectorString += 'S';
+      }
+
+      Digit currentDigit = *current.mask.begin();
+      if (digitToChar[currentDigit] == 0) {
+        digitToChar[currentDigit] = charCounter++;
+        ++digitCounter;
+      }
+      digitsString += digitToChar[currentDigit];
+
+      WANT_STRONG = !WANT_STRONG;
+    }
+    // last digit
+    Digit lastDigit = *(*sources.rbegin()).mask.begin();
+    if (digitToChar[lastDigit] == 0) {
+      digitToChar[lastDigit] = charCounter++;
+      ++digitCounter;
+    }
+    digitsString += digitToChar[lastDigit];
+
+    std::string finalString = valueLocationString + '-' + std::to_string(digitCounter) + '-' + cellSectorString;
+    std::reverse(valueLocationString.begin(), valueLocationString.end());
+    std::reverse(cellSectorString.begin(), cellSectorString.end());
+    std::string revFinalString = valueLocationString + '-' + std::to_string(digitCounter) + '-' + cellSectorString;
+
+    const std::map<std::string, ReasonId> WING_TABLE = {
+      // wings
+      {"VVV-3-CSCSC", ReasonId::XYWing},
+      {"VLV-2-CSSSC", ReasonId::WWing},
+      {"LVL-2-SSCSS", ReasonId::SWing},
+      {"VLL-2-CSSCS", ReasonId::M2Wing},
+      {"VLL-3-CSSCS", ReasonId::M3Wing},
+      {"LLL-1-SSSSS", ReasonId::L1Wing},
+      {"LLL-2-SCSSS", ReasonId::L2Wing},
+      {"LLL-2-SCSCS", ReasonId::L2Wing},
+      {"LLL-3-SCSCS", ReasonId::L3Wing},
+      {"VLL-2-CSSSS", ReasonId::H1Wing},
+      {"VVL-2-CSCSS", ReasonId::H2Wing},
+      {"VVL-3-CSCSS", ReasonId::H3Wing},
+      {"LLLL-4-SCSCSCS", ReasonId::StrongWing},
+      {"LLLL-2-SCSSSCS", ReasonId::iWWing},
+      {"VLVL-2-CSSSCCS", ReasonId::DualWWing},
+      {"LLLL-3-SCSCSCS", ReasonId::iXYWing},
+      {"LLLL-2-SSSCSSS", ReasonId::iSWing},
+      {"LLVL-2-SCSSCSS", ReasonId::iM2Wing},
+      {"LLVL-3-SCSSCSS", ReasonId::iM3Wing},
+      {"LLLL-1-SSSSSSS", ReasonId::iL1Wing},
+      {"LVLL-2-SSCSSSS", ReasonId::iL2Wing},
+      {"LVVL-2-SSCSCSS", ReasonId::iL2Wing},
+      {"LVVL-3-SSCSCSS", ReasonId::iL3Wing},
+      {"LLLL-2-SCSSSSS", ReasonId::iH1Wing},
+      {"LLLL-2-SCSCSSS", ReasonId::iH2Wing},
+      {"LLLL-3-SCSCSSS", ReasonId::iH3Wing},
+      // rings
+      {"VLVL-2-CSSSCSSS", ReasonId::WRing},
+      {"LVLV-2-SSCSSSCS", ReasonId::WRing},
+      {"VLL-2-CSSCSS", ReasonId::M2Ring},
+      {"LLV-2-SCSSCS", ReasonId::M2Ring},
+      {"LVL-2-SSCSSC", ReasonId::M2Ring},
+      {"LLL-1-SSSSSS", ReasonId::L1Ring},
+      {"LLL-2-SCSCSS", ReasonId::L2Ring},
+      {"LLL-2-SCSSSC", ReasonId::L2Ring},
+      {"LLL-2-SCSCSS", ReasonId::L2Ring},
+      {"LVV-2-SSCSCS", ReasonId::H2Ring},
+      {"VLV-2-CSSSCS", ReasonId::H2Ring},
+      {"LLLL-4-SCSCSCSC", ReasonId::StrongRing},
+      {"VVVV-4-CSCSCSCS", ReasonId::StrongRing},
+      {"LLLL-2-SCSSSCSS", ReasonId::iWRing},
+      {"LLLL-3-SCSCSCS", ReasonId::iXYRing},
+      {"LLLL-2-SSSCSSSC", ReasonId::iSRing},
+      {"LLVL-2-SCSSCSSS", ReasonId::iM2Ring},
+      {"LLVL-3-SCSSCSSC", ReasonId::iM3Ring},
+      {"LLLL-1-SSSSSSSS", ReasonId::iL1Ring},
+      {"LVLL-2-SSCSSSSC", ReasonId::iL2Ring},
+      {"LVVL-2-SSCSCSSS", ReasonId::iL2Ring},
+      {"LVVL-3-SSCSCSSC", ReasonId::iL3Ring},
+      {"LLLL-2-SCSSSSSC", ReasonId::iH1Ring},
+      {"LLLL-2-SCSCSSSS", ReasonId::iH2Ring},
+      {"LLLL-3-SCSCSSSC", ReasonId::iH3Ring},
+    };
+
+    if (WING_TABLE.find(finalString) != WING_TABLE.end()) {
+      event.reason = WING_TABLE.at(finalString);
+    } else if (WING_TABLE.find(revFinalString) != WING_TABLE.end()) {
+      event.reason = WING_TABLE.at(revFinalString);
+    }
   }
+
   // any other type of event is valid
   return true;
 }
