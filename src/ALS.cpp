@@ -296,6 +296,36 @@ std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
                                        cur->depth + 1,
                                        cur);
 
+      // look immediately for possible rings
+      for (const AlsEdge &nc : graph.links[nb.to]) {
+        if (nc.to == cur->start) {
+          if (nb.rcc != 0 && nc.rcc == nb.rcc) {
+            continue;
+          }
+
+          // Ring detected, give priority
+          AlsSearchNode *grandchild = make_node(cur->start,
+                                                nc.to,
+                                                nc.rcc,
+                                                cur->depth + 2,
+                                                child);
+
+          std::optional<Event> event = execute_als_rules(graph, cur->start, nc.to, grandchild);
+          if (event) {
+            release(grandchild);
+            release(child);
+
+            while (!q.empty()) {
+              release(q.front());
+              q.pop_front();
+            }
+
+            release(cur);
+            return event;
+          }
+        }
+      }
+
       // Look for eliminations according to ALS rules
       std::optional<Event> event = execute_als_rules(graph, cur->start, nb.to, child);
       if (event) {

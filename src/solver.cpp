@@ -1379,12 +1379,80 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
   /* for each cell, register:
    * - its candidates
    * - which candidates are RCC for a given ALS
-   * - the corresponding ALS for each RCC
+   * - the corresponding ALS(s) for each RCC
    * */
   struct BlossomNode {
-    DigitSet candidates;
-    DigitSet RCCs;
-    AlsNodeID setByDigit[10];
+    DigitSet candidates;                     // candidates of this cell
+    DigitSet RCCs;                           // candidates that are RCC
+    std::vector<AlsNodeID> setsByDigit[10];  // the corresponding ALS(s) for each RCC
+  };
+
+  AlsGraphBuilder builder(board);
+  AlsSearcher searcher(board);
+  const AlsConfig &config = searcher.setConfigAndReturn(ReasonId::Solver);  // not important
+  AlsGraph &graph = board.getAlsGraph(config);
+
+  // syntax hell due to the function being recursive, can't use 'auto'
+  std::function<bool (BlossomNode &,
+                      int,
+                      Digit,
+                      DigitSet,
+                      std::vector<const AlsNode *> &)>
+    search_death_blossom = [&](BlossomNode &stem,
+                    int index,
+                    Digit RCC,
+                    DigitSet accumulator,
+                    std::vector<const AlsNode *> &petals) -> bool
+  {
+    if (RCC == 10) {
+      // final, non-recursive step: remove RCCs from potential eliminations
+      accumulator -= stem.candidates;
+      for (Digit elimination : accumulator) {
+        // common digit found, possible elimination ahead
+        CellSet source;
+        for (const AlsNode *petal : petals) {
+          source |= petal->cellSet.filter([&](Cell i){ return board.hasCandidate(i, elimination); });
+        }
+        CellSet target = board.getPeersContaining(source, elimination);
+        if (!target.empty()) {
+          // Death Blossom found
+          Event event(EventType::RemoveCandidate, ReasonId::DeathBlossom);
+          // the source is the stem and the petals
+          event.addSource(index, stem.candidates);
+          for (const AlsNode *petal : petals) {
+            event.addSource(petal->cellSet, petal->digitSet);
+          }
+          // eliminate the common digit
+          for (Cell idx : target) {
+            event.addOperation(idx, elimination);
+          }
+          if (eventQueue.enqueue(board, event)) return true;
+        }
+      }
+    } else {
+      // check if there are ALSs for the current RCC
+      if (stem.setsByDigit[RCC].empty()) {
+        // go on with the next RCC
+        return search_death_blossom(stem, index, RCC+1, accumulator, petals);
+      }
+      // for each ALS in the current RCC
+      for (AlsNodeID id : stem.setsByDigit[RCC]) {
+        const AlsNode &als = graph.nodes[id];
+        // check if the ALS of this RCC is already in the set of petals
+        bool already_present = false;
+        for (const AlsNode *petal : petals) {
+          if (petal->id == id) {
+            already_present = true;
+          }
+        }
+        // then add if new
+        std::vector<const AlsNode *> new_petals = petals;
+        if (!already_present) new_petals.push_back(&als);
+        // go on with the next RCC with updated accumulator and petals
+        if (search_death_blossom(stem, index, RCC+1, accumulator & als.digitSet, new_petals)) return true;
+      }
+    }
+    return false;
   };
 
   // initialize database
@@ -1392,15 +1460,9 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
   for (Cell idx = 0; idx < 81; ++idx) {
     database[idx] = {
       .candidates = board.getCandidates(idx),
-      .RCCs = DigitSet(0),
-      .setByDigit = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+      .RCCs = DigitSet(0)
     };
   }
-
-  AlsGraphBuilder builder(board);
-  AlsSearcher searcher(board);
-  const AlsConfig &config = searcher.setConfigAndReturn(ReasonId::Solver);  // not important
-  AlsGraph &graph = board.getAlsGraph(config);
 
   /* For each ALS:
    *   For each digit:
@@ -1415,58 +1477,22 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
       CellSet target = board.getPeersContaining(source, digit);
       for (Cell idx : target) {
         database[idx].RCCs.insert(digit);
-        database[idx].setByDigit[digit] = id;
+        database[idx].setsByDigit[digit].push_back(id);
       }
     }
   }
 
   // search for Death Blossom
   for (Cell i = 0; i < 81; ++i) {
-    const BlossomNode &stem = database[i];
+    BlossomNode &stem = database[i];
     // a cell where each candidate is an RCC
     if (stem.candidates.size() > 1 && stem.candidates.size() == stem.RCCs.size()) {
-      // get the corresponding ALSs and a digit that is common to all the sets
+      // since each RCC can have more than one ALS associated, we need a recursive function
+      int index = i;
       DigitSet accumulator = ALL_DIGITS;
+      Digit RCC = 0;
       std::vector<const AlsNode *> petals;
-      for (Digit RCC : stem.RCCs) {
-        // look for digits
-        AlsNodeID id = stem.setByDigit[RCC];
-        const AlsNode &als = graph.nodes[id];
-        accumulator &= als.digitSet;
-        // check if the ALS of this RCC is already in the set of petals
-        bool already_present = false;
-        for (const AlsNode *petal : petals) {
-          if (petal->id == id) {
-            already_present = true;
-          }
-        }
-        // then add if new
-        if (!already_present) petals.push_back(&als);
-      }
-      // remove RCCs from potential eliminations
-      accumulator -= stem.candidates;
-      for (Digit elimination : accumulator) {
-        // common digit found, possible elimination ahead
-        CellSet source;
-        for (const AlsNode *petal : petals) {
-          source |= petal->cellSet.filter([&](Cell i){ return board.hasCandidate(i, elimination); });
-        }
-        CellSet target = board.getPeersContaining(source, elimination);
-        if (!target.empty()) {
-          // Death Blossom found
-          Event event(EventType::RemoveCandidate, ReasonId::DeathBlossom);
-          // the source is the stem and the petals
-          event.addSource(i, stem.candidates);
-          for (const AlsNode *petal : petals) {
-            event.addSource(petal->cellSet, petal->digitSet);
-          }
-          // eliminate the common digit
-          for (Cell idx : target) {
-            event.addOperation(idx, elimination);
-          }
-          if (eventQueue.enqueue(board, event)) return;
-        }
-      }
+      search_death_blossom(stem, index, RCC, accumulator, petals);
     }
   }
 }
