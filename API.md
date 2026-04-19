@@ -37,7 +37,7 @@ Strukturo:
 
 * `out[0]` = type
 * `out[1]` = reasonId
-* `out[2]` = fromPrev
+* `out[2]` = detailedReasonId
 * `out[3]` = opCount
 * `out[4]` = srcCount
 
@@ -61,35 +61,37 @@ enum class EventType : uint8_t {
 };
 ```
 
-Valoroj por `reasonId`:
+Valoroj por `reasonId` kaj `detailedReasonId` (per aldona komento oni markas valorojn aplikeblajn ankaŭ al `reasonId`):
 
 ```
 enum class ReasonId : uint8_t {
     Solver = 0,
     // naked subsets
-    FullHouse,
-    NakedSingle,
-    NakedPair,
-    NakedTriple,
+    FullHouse,              // <---
+    NakedSingle,            // <---
+    NakedPair,              // <---
+    NakedTriple,            // <---
     NakedQuad,
     // hidden subsets
-    HiddenSingle,
-    HiddenPair,
-    HiddenTriple,
+    HiddenSingle,           // <---
+    HiddenPair,             // <---
+    HiddenTriple,           // <---
     HiddenQuad,
     // intersections
+    PointingSet,            // <---
     PointingPair,
     PointingTriple,
+    BoxLineReduction,       // <---
     ClaimingPair,
     ClaimingTriple,
     // basic fish
-    XWing,
-    Swordfish,
+    XWing,                  // <---
+    Swordfish,              // <---
     Jellyfish,
     // finned and sashimi fish
-    FinnedXWing,
-    FinnedSwordfish,
-    FinnedJellyfish,
+    FinnedXWing,            // <---
+    FinnedSwordfish,        // <---
+    FinnedJellyfish,        // <---
     SashimiXWing,
     SashimiSwordfish,
     SashimiJellyfish,
@@ -109,48 +111,48 @@ enum class ReasonId : uint8_t {
     SiameseFish,
     KrakenFish,
     // single digit patterns
-    SingleDigitPattern,
+    SingleDigitPattern,     // <---
     Skyscraper,
     TwoStringKite,
     Crane,
-    EmptyRectangle,
+    EmptyRectangle,         // <---
     // uniqueness
-    UniqueRectangle,
+    UniqueRectangle,        // <---
     UniqueRectangleType1,
     UniqueRectangleType2,
     UniqueRectangleType3,
     UniqueRectangleType4,
     UniqueRectangleType5,
     UniqueRectangleType6,
-    HiddenRectangle,
+    HiddenRectangle,        // <---
     AvoidableRectangle,
-    BUGPlusOne,
+    BUGPlusOne,             // <---
     // wings
-    XYWing,
-    XYZWing,
+    XYWing,                 // <---
+    XYZWing,                // <---
     WXYZWing,
-    WWing,
+    WWing,                  // <---
     // coloring
-    SimpleColoring,
+    SimpleColoring,         // <---
     SimpleColoringColorTrap,
     SimpleColoringColorWrap,
-    _3DMedusa,
+    _3DMedusa,              // <---
     _3DMedusaColorTrap,
     _3DMedusaColorWrap,
     _3DMedusaEmptiedCell,
     // chains
-    RemotePair,
-    XChain,
+    RemotePair,             // <---
+    XChain,                 // <---
     XRing,
-    XYChain,
+    XYChain,                // <---
     XYRing,
-    AIC,
+    AIC,                    // <---
     AICType1,
     AICType2,
     AICType3,
-    GroupedXChain,
+    GroupedXChain,          // <---
     GroupedXRing,
-    GroupedAIC,
+    GroupedAIC,             // <---
     GroupedAICType1,
     GroupedAICType2,
     GroupedAICType3,
@@ -201,11 +203,15 @@ enum class ReasonId : uint8_t {
     iH2Ring,
     iH3Ring,
     // almost locked sets
-    ALSXZ,
-    ALSXY,
-    ALSChain,
-    SueDeCoq,
-    DeathBlossom,
+    ALSXZ,                  // <---
+    ALSXZSinglyLinked,
+    ALSXZDoublyLinked,
+    ALSXYWing,              // <---
+    ALSXYRing,
+    ALSChain,               // <---
+    ALSRing,
+    SueDeCoq,               // <---
+    DeathBlossom,           // <---
 };
 ```
 
@@ -279,6 +285,16 @@ int sudorix_solver_hint(const uint8_t *values,
 ```
 
 Ricevas Sudokuon kiel tabelojn enhavantajn kaj la jam solvitajn ĉelojn kaj la kandidatojn por ĉiu ĉelo, kaj liveras unu solvopaŝon **sen ĝisdatigo de la interna stato**.
+
+---
+
+## sudorix_solver_set_enabled_techniques
+
+```
+int sudorix_solver_set_enabled_techniques(const uint32_t *reasons, uint32_t count);
+```
+
+Ricevas liston de ŝaltendaj teknikoj por la solvado.
 
 ---
 

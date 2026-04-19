@@ -268,7 +268,7 @@ static void techPointingSet(SudokuBoard &board, EventQueue &eventQueue) {
       }
 
       if (sameRow) {
-        Event event(EventType::RemoveCandidate, reasonId);
+        Event event(EventType::RemoveCandidate, ReasonId::PointingSet, reasonId);
         // the source is the cells containing the digit
         CellSet sourceSet = positions;
         event.addSource(sourceSet, digit);
@@ -290,7 +290,7 @@ static void techPointingSet(SudokuBoard &board, EventQueue &eventQueue) {
       }
 
       if (sameCol) {
-        Event event(EventType::RemoveCandidate, reasonId);
+        Event event(EventType::RemoveCandidate, ReasonId::PointingSet, reasonId);
         // the source is the cells containing the digit
         CellSet sourceSet = positions;
         event.addSource(sourceSet, digit);
@@ -332,7 +332,7 @@ static void techBoxLineReduction(SudokuBoard &board, EventQueue &eventQueue) {
 
       if (boxes.size() == 1) {
         Location boxIdx = *boxes.begin();
-        Event event(EventType::RemoveCandidate, reasonId);
+        Event event(EventType::RemoveCandidate, ReasonId::BoxLineReduction, reasonId);
         // the source is the cells containing the digit
         CellSet sourceSet = positions;
         event.addSource(sourceSet, digit);
@@ -532,7 +532,7 @@ static void techFinnedXWing(SudokuBoard &board, EventQueue &eventQueue) {
               CellSet set = ((coverA | coverB) - (baseA | baseB)) & finBox;
               if (!set.empty()) {
                 // Finned X-Wing spotted
-                Event event(EventType::RemoveCandidate, covered.size() == FISH_SIZE*FISH_SIZE ? ReasonId::FinnedXWing : ReasonId::SashimiXWing);
+                Event event(EventType::RemoveCandidate, ReasonId::FinnedXWing, covered.size() == FISH_SIZE*FISH_SIZE ? ReasonId::FinnedXWing : ReasonId::SashimiXWing);
                 // base sets without the fins
                 event.addSource(positionsA - fins, digit);
                 event.addSource(positionsB - fins, digit);
@@ -618,7 +618,7 @@ static void techFinnedSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
               CellSet set = ((coverA | coverB | coverC) - (baseA | baseB | baseC)) & finBox;
               if (!set.empty()) {
                 // Finned X-Wing spotted
-                Event event(EventType::RemoveCandidate, covered.size() == FISH_SIZE*FISH_SIZE ? ReasonId::FinnedSwordfish : ReasonId::SashimiSwordfish);
+                Event event(EventType::RemoveCandidate, ReasonId::FinnedSwordfish, covered.size() == FISH_SIZE*FISH_SIZE ? ReasonId::FinnedSwordfish : ReasonId::SashimiSwordfish);
                 // base sets without the fins
                 event.addSource(positionsA - fins, digit);
                 event.addSource(positionsB - fins, digit);
@@ -721,7 +721,7 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                 // UR types 1, 2, 3, 4
                 if (xy == lineVertexDigits || xy == oppositeVertexDigits) {
                   // Type 1
-                  Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType1);
+                  Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType1);
                   event.addSource(rectangleUpper, xy);
                   event.addSource(rectangleLower, xy);
                   // remove xy from the vertex with more candidates
@@ -731,7 +731,7 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                 if (lineVertexDigits.size() == 3 && lineVertexDigits == oppositeVertexDigits) {
                   // Type 2
                   Digit z = *(lineVertexDigits - xy).begin();
-                  Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType2);
+                  Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType2);
                   event.addSource(rectangleUpper, xy);
                   event.addSource(rectangleLower, xy);
                   event.addDelimiter();
@@ -755,7 +755,7 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   for (Cell idx : virtualSubset) seeEachOther &= board.sees(CellSet({idx}), virtualSubset - CellSet({idx}));
                   // let's go
                   if (virtualSubset.size() == extraDigits.size()-1 && foundDigits == extraDigits && seeEachOther) {
-                    Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType3);
+                    Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType3);
                     event.addSource(rectangleUpper, xy);
                     event.addSource(rectangleLower, xy);
                     event.addDelimiter();
@@ -770,7 +770,7 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   CellSet xPositions = board.getPositionsOfDigit(peers, x);
                   CellSet yPositions = board.getPositionsOfDigit(peers, y);
                   if (xPositions.empty()) {
-                    Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType4);
+                    Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType4);
                     event.addSource(rectangleUpper, xy);
                     event.addSource(rectangleLower, xy);
                     // remove the other digit from lineVertex and oppositeVertex
@@ -778,7 +778,7 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                     event.addOperation(oppositeVertex, y);
                     type4.push_back(event);
                   } else if (yPositions.empty()) {
-                    Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType4);
+                    Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType4);
                     event.addSource(rectangleUpper, xy);
                     event.addSource(rectangleLower, xy);
                     // remove the other digit from lineVertex and oppositeVertex
@@ -792,7 +792,7 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                 if (lineVertexDigits.size() == 3 && lineVertexDigits == boxVertexDigits) {
                   // Type 5 (two cells)
                   Digit z = *(lineVertexDigits - xy).begin();
-                  Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType5);
+                  Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType5);
                   event.addSource(rectangleUpper, xy);
                   event.addSource(rectangleLower, xy);
                   event.addDelimiter();
@@ -809,7 +809,7 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                       board.getPositionsOfDigit(rowMaxUnit, x).size() == 2 &&
                       board.getPositionsOfDigit(colMinUnit, x).size() == 2 &&
                       board.getPositionsOfDigit(colMaxUnit, x).size() == 2) {
-                    Event event(EventType::SetValue, ReasonId::UniqueRectangleType6);
+                    Event event(EventType::SetValue, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType6);
                     event.addSource(rectangleUpper, xy);
                     event.addSource(rectangleLower, xy);
                     // set the X-Wing digit in the bivalue cells of the UR
@@ -821,7 +821,7 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                       board.getPositionsOfDigit(rowMaxUnit, y).size() == 2 &&
                       board.getPositionsOfDigit(colMinUnit, y).size() == 2 &&
                       board.getPositionsOfDigit(colMaxUnit, y).size() == 2) {
-                    Event event(EventType::SetValue, ReasonId::UniqueRectangleType6);
+                    Event event(EventType::SetValue, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType6);
                     event.addSource(rectangleUpper, xy);
                     event.addSource(rectangleLower, xy);
                     // set the X-Wing digit in the bivalue cells of the UR
@@ -835,7 +835,7 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                 if (lineVertexDigits.size() == 3 && lineVertexDigits == boxVertexDigits && lineVertexDigits == oppositeVertexDigits) {
                   // Type 5 (three cells)
                   Digit z = *(lineVertexDigits - xy).begin();
-                  Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangleType5);
+                  Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType5);
                   event.addSource(rectangleUpper, xy);
                   event.addSource(rectangleLower, xy);
                   event.addDelimiter();
@@ -1407,6 +1407,16 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
     if (RCC == 10) {
       // final, non-recursive step: remove RCCs from potential eliminations
       accumulator -= stem.candidates;
+
+      // initialize the Death Blossom event
+      Event event(EventType::RemoveCandidate, ReasonId::DeathBlossom);
+      // the source is the stem and the petals
+      event.addSource(index, stem.candidates);
+      for (const AlsNode *petal : petals) {
+        event.addSource(petal->cellSet, petal->digitSet);
+      }
+
+      // search for eliminations
       for (Digit elimination : accumulator) {
         // common digit found, possible elimination ahead
         CellSet source;
@@ -1415,20 +1425,13 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
         }
         CellSet target = board.getPeersContaining(source, elimination);
         if (!target.empty()) {
-          // Death Blossom found
-          Event event(EventType::RemoveCandidate, ReasonId::DeathBlossom);
-          // the source is the stem and the petals
-          event.addSource(index, stem.candidates);
-          for (const AlsNode *petal : petals) {
-            event.addSource(petal->cellSet, petal->digitSet);
-          }
-          // eliminate the common digit
+          // Death Blossom found - eliminate the common digit
           for (Cell idx : target) {
             event.addOperation(idx, elimination);
           }
-          if (eventQueue.enqueue(board, event)) return true;
         }
       }
+      if (eventQueue.enqueue(board, event)) return true;
     } else {
       // check if there are ALSs for the current RCC
       if (stem.setsByDigit[RCC].empty()) {
@@ -1499,46 +1502,115 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
 
 typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);
 
+struct TechniqueEntry {
+  TechniqueFn fn;
+  ReasonId reason;
+};
+
+struct SolverConfig {
+  bool enabledTechniques[256] = {};
+};
+
+static SolverConfig g_solverConfig;
+
+static void set_default_solver_config() {
+  for (bool &enabled : g_solverConfig.enabledTechniques) {
+    enabled = false;
+  }
+
+  constexpr ReasonId defaults[] = {
+    ReasonId::FullHouse,
+    ReasonId::HiddenSingle,
+    ReasonId::PointingSet,
+    ReasonId::BoxLineReduction,
+    ReasonId::HiddenPair,
+    ReasonId::NakedSingle,
+    ReasonId::NakedPair,
+    ReasonId::NakedTriple,
+    ReasonId::HiddenTriple,
+    ReasonId::BUGPlusOne,
+    ReasonId::XWing,
+    ReasonId::XYWing,
+    ReasonId::Swordfish,
+    ReasonId::RemotePair,
+    ReasonId::UniqueRectangle,
+    ReasonId::WWing,
+    ReasonId::SingleDigitPattern,
+    ReasonId::FinnedXWing,
+    ReasonId::EmptyRectangle,
+    ReasonId::XYZWing,
+    ReasonId::SimpleColoring,
+    ReasonId::_3DMedusa,
+    ReasonId::XChain,
+    ReasonId::FinnedSwordfish,
+    ReasonId::XYChain,
+    ReasonId::GroupedXChain,
+    ReasonId::AIC,
+    ReasonId::GroupedAIC,
+    ReasonId::SueDeCoq,
+    ReasonId::ALSXZ,
+    ReasonId::ALSXYWing,
+    ReasonId::ALSChain,
+    ReasonId::DeathBlossom,
+  };
+
+  for (ReasonId reason : defaults) {
+    g_solverConfig.enabledTechniques[(uint8_t)reason] = true;
+  }
+}
+
+static void ensure_solver_config_initialized() {
+  static bool initialized = false;
+  if (!initialized) {
+    set_default_solver_config();
+    initialized = true;
+  }
+}
+
+static bool is_technique_enabled(ReasonId reason) {
+  return g_solverConfig.enabledTechniques[(uint8_t)reason];
+}
+
 // nCr(9, 2) = 36
 // nCr(9, 3) = 84
 // nCr(9, 4) = 126
 
-static constexpr TechniqueFn TECHNIQUES[] = {
-  techFullHouse,
-  techHiddenSinglesBox,
-  techPointingSet,
-  techBoxLineReduction,
-  techHiddenSinglesRowColumn,
-  techHiddenPairsBox,
-  techHiddenPairsRowColumn,
-  techNakedSingles,
-  techNakedPairs,
-  techNakedTriples,
-  techHiddenTriples,
-  techBUGPlusOne,
-  techXWing,
-  techXYWing,
-  techSwordfish,
-  techRemotePair,
-  techUniqueRectangle,
-  techWWing,
-  techSingleDigitPattern,
-  techFinnedXWing,
-  techEmptyRectangle,
-  techXYZWing,
-  techSimpleColoring,
-  tech3DMedusa,
-  techXChain,
-  techFinnedSwordfish,
-  techXYChain,
-  techGroupedXChain,
-  techAIC,
-  techGroupedAIC,
-  techSueDeCoq,
-  //techALSXZ,
-  //techALSXYWing,
-  techALSChain,
-  techDeathBlossom,
+static constexpr TechniqueEntry TECHNIQUES[] = {
+  {techFullHouse, ReasonId::FullHouse},
+  {techHiddenSinglesBox, ReasonId::HiddenSingle},
+  {techPointingSet, ReasonId::PointingSet},
+  {techBoxLineReduction, ReasonId::BoxLineReduction},
+  {techHiddenSinglesRowColumn, ReasonId::HiddenSingle},
+  {techHiddenPairsBox, ReasonId::HiddenPair},
+  {techHiddenPairsRowColumn, ReasonId::HiddenPair},
+  {techNakedSingles, ReasonId::NakedSingle},
+  {techNakedPairs, ReasonId::NakedPair},
+  {techNakedTriples, ReasonId::NakedTriple},
+  {techHiddenTriples, ReasonId::HiddenTriple},
+  {techBUGPlusOne, ReasonId::BUGPlusOne},
+  {techXWing, ReasonId::XWing},
+  {techXYWing, ReasonId::XYWing},
+  {techSwordfish, ReasonId::Swordfish},
+  {techRemotePair, ReasonId::RemotePair},
+  {techUniqueRectangle, ReasonId::UniqueRectangle},
+  {techWWing, ReasonId::WWing},
+  {techSingleDigitPattern, ReasonId::SingleDigitPattern},
+  {techFinnedXWing, ReasonId::FinnedXWing},
+  {techEmptyRectangle, ReasonId::EmptyRectangle},
+  {techXYZWing, ReasonId::XYZWing},
+  {techSimpleColoring, ReasonId::SimpleColoring},
+  {tech3DMedusa, ReasonId::_3DMedusa},
+  {techXChain, ReasonId::XChain},
+  {techFinnedSwordfish, ReasonId::FinnedSwordfish},
+  {techXYChain, ReasonId::XYChain},
+  {techGroupedXChain, ReasonId::GroupedXChain},
+  {techAIC, ReasonId::AIC},
+  {techGroupedAIC, ReasonId::GroupedAIC},
+  {techSueDeCoq, ReasonId::SueDeCoq},
+  {techALSXZ, ReasonId::ALSXZ},
+  {techALSXYWing, ReasonId::ALSXYWing},
+  {techALSChain, ReasonId::ALSChain},
+  {techDeathBlossom, ReasonId::DeathBlossom},
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Operation &op) {
@@ -1579,6 +1651,7 @@ static int drain_event(SudokuBoard &board,
 
   const EventType type = first.type;
   const ReasonId reason = first.reason;
+  const ReasonId detailedReason = first.detailedReason;
 
   uint32_t srcChunks = 0;
   for (const Source &src : first.getSources()) {
@@ -1599,7 +1672,7 @@ static int drain_event(SudokuBoard &board,
 
   out[0] = (uint32_t)type;
   out[1] = (uint32_t)reason;
-  out[2] = fromPrev;
+  out[2] = (uint32_t)detailedReason;
   out[3] = 0;
   out[4] = 0;
 
@@ -1667,10 +1740,13 @@ static int compute_next_event(SudokuBoard &board,
     return 1;
   }
 
-  // Run techniques in priority order; stop at the first technique that enqueues anything,
+  // Run enabled techniques in priority order; stop at the first technique that enqueues anything,
   // then verify, apply and return.
-  for (TechniqueFn tech : TECHNIQUES) {
-    tech(board, eventQueue);
+  for (const TechniqueEntry &tech : TECHNIQUES) {
+    if (!is_technique_enabled(tech.reason)) {
+      continue;
+    }
+    tech.fn(board, eventQueue);
     if (drain_event(board, eventQueue, out, out_words, 0u)) {
       return 1;
     }
@@ -1801,6 +1877,8 @@ extern "C"
   // Returns 0 in case of error, else 1.
   EMSCRIPTEN_KEEPALIVE
   int sudorix_solver_full(const char *in81, char *out81) {
+    ensure_solver_config_initialized();
+
     if (in81 == nullptr || out81 == nullptr) {
       return 0;
     }
@@ -1841,6 +1919,8 @@ extern "C"
   // Returns 0 in case of error, else 1.
   EMSCRIPTEN_KEEPALIVE
   int sudorix_solver_init_board(const char *in81) {
+    ensure_solver_config_initialized();
+
     if (in81 == nullptr) {
       return 0;
     }
@@ -1889,6 +1969,8 @@ extern "C"
   // Returns 0 in case of error or no event is produced, else 1.
   EMSCRIPTEN_KEEPALIVE
   int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out, uint32_t out_words) {
+    ensure_solver_config_initialized();
+
     if (values == nullptr || cands == nullptr || out == nullptr || out_words < 4) {
       return 0;
     }
@@ -1908,5 +1990,30 @@ extern "C"
 
     const int ok = compute_next_event(board, queue, out, out_words);
     return ok ? 1 : 0;
+  }
+
+  // Replaces the enabled-technique set with the provided macro-techniques.
+  // Each entry must be a ReasonId corresponding to a top-level technique.
+  // Returns 0 in case of error, else 1.
+  EMSCRIPTEN_KEEPALIVE
+  int sudorix_solver_set_enabled_techniques(const uint32_t *reasons, uint32_t count) {
+    ensure_solver_config_initialized();
+
+    for (bool &enabled : g_solverConfig.enabledTechniques) {
+      enabled = false;
+    }
+
+    if (reasons == nullptr && count > 0) {
+      return 0;
+    }
+
+    for (uint32_t i = 0; i < count; ++i) {
+      const uint32_t raw = reasons[i];
+      if (raw < 256u) {
+        g_solverConfig.enabledTechniques[raw] = true;
+      }
+    }
+
+    return 1;
   }
 } // extern "C"

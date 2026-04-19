@@ -829,17 +829,17 @@ bool AicSearcher::analyze_event(Event &event) {
 
     if ((aRow == bRow && cRow == dRow) ||
         (aCol == bCol && cCol == dCol)) {
-      event.reason = ReasonId::Skyscraper;
+      event.detailedReason = ReasonId::Skyscraper;
       return true;
     } else if ((aRow == bRow && cCol == dCol) ||
                (aCol == bCol && cRow == dRow)) {
-      event.reason = ReasonId::TwoStringKite;
+      event.detailedReason = ReasonId::TwoStringKite;
       return true;
     } else if ((aRow == bRow && bCol == cCol) ||
                (aCol == bCol && bRow == cRow) ||
                (bRow == cRow && cCol == dCol) ||
                (bCol == cCol && cRow == dRow)) {
-      event.reason = ReasonId::Crane;
+      event.detailedReason = ReasonId::Crane;
       return true;
     } else {
       return false;
@@ -975,9 +975,9 @@ bool AicSearcher::analyze_event(Event &event) {
     };
 
     if (WING_TABLE.find(finalString) != WING_TABLE.end()) {
-      event.reason = WING_TABLE.at(finalString);
+      event.detailedReason = WING_TABLE.at(finalString);
     } else if (WING_TABLE.find(revFinalString) != WING_TABLE.end()) {
-      event.reason = WING_TABLE.at(revFinalString);
+      event.detailedReason = WING_TABLE.at(revFinalString);
     }
   }
 
@@ -1037,7 +1037,8 @@ std::optional<Event> AicSearcher::execute_aic_rules(
     CellSet peers = board.getPeers(Start.cellSet | End.cellSet);
     AicPath path = reconstruct_path(graph, end_state);
 
-    Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType1 :
+    Event event(EventType::RemoveCandidate, reason,
+                                            reason == ReasonId::AIC ? ReasonId::AICType1 :
                                             reason == ReasonId::GroupedAIC ? ReasonId::GroupedAICType1 :
                                             reason);
     for (int i = 0; i < path.nodes.size(); ++i) {
@@ -1062,7 +1063,8 @@ std::optional<Event> AicSearcher::execute_aic_rules(
 
     if ((!Start.isGrouped && board.hasCandidate(start_cell, end_digit)) ||
         (!End.isGrouped && board.hasCandidate(end_cell, start_digit))) {
-      Event event(EventType::RemoveCandidate, reason == ReasonId::AIC ? ReasonId::AICType2 :
+      Event event(EventType::RemoveCandidate, reason,
+                                              reason == ReasonId::AIC ? ReasonId::AICType2 :
                                               reason == ReasonId::GroupedAIC ? ReasonId::GroupedAICType2 :
                                               reason);
       for (int i = 0; i < path.nodes.size(); ++i) {
@@ -1083,7 +1085,8 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   if (are_weakly_linked(Start, End)) {
     AicPath path = reconstruct_path(graph, end_state);
 
-    Event event(EventType::RemoveCandidate, reason == ReasonId::XChain ? ReasonId::XRing :
+    Event event(EventType::RemoveCandidate, reason,
+                                            reason == ReasonId::XChain ? ReasonId::XRing :
                                             reason == ReasonId::XYChain ? ReasonId::XYRing :
                                             reason == ReasonId::AIC ? ReasonId::AICType3 :
                                             reason == ReasonId::GroupedAIC ? ReasonId::GroupedAICType3 :
@@ -1273,7 +1276,7 @@ end_loop:
       // 'other' is the solution
       // source is: other || nodes || emptied cell (if applicable)
       // operation is: set value to 'other'
-      Event event(EventType::SetValue, detailedReason);
+      Event event(EventType::SetValue, reason, detailedReason);
       for (int i = 0; i < other.size(); ++i) {
         ColorNode node = other[i];
         event.addSource(node.cell, node.digit);
@@ -1312,7 +1315,7 @@ end_loop:
         if (!toRemove.empty()) {
           event.addOperation(a.cell, toRemove);
         }
-        event.reason = ReasonId::_3DMedusaColorWrap;
+        event.detailedReason = ReasonId::_3DMedusaColorWrap;
       }
       if (a.digit == b.digit) {
         // 3D Medusa Rule 4 : Two colours elsewhere (Color Wrap)
@@ -1324,9 +1327,9 @@ end_loop:
           }
         }
         if (reason == ReasonId::SimpleColoring) {
-          event.reason = ReasonId::SimpleColoringColorWrap;
+          event.detailedReason = ReasonId::SimpleColoringColorWrap;
         } else {
-          event.reason = ReasonId::_3DMedusaColorWrap;
+          event.detailedReason = ReasonId::_3DMedusaColorWrap;
         }
       }
       if (a.digit != b.digit && board.sees(a.cell, b.cell)) {
@@ -1337,7 +1340,7 @@ end_loop:
         if (board.hasCandidate(b.cell, a.digit)) {
           event.addOperation(b.cell, a.digit);
         }
-        event.reason = ReasonId::_3DMedusaColorWrap;
+        event.detailedReason = ReasonId::_3DMedusaColorWrap;
       }
     }
   }

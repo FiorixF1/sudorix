@@ -25,8 +25,10 @@ enum class ReasonId : uint8_t {
   HiddenTriple,
   HiddenQuad,
   // intersections
+  PointingSet,
   PointingPair,
   PointingTriple,
+  BoxLineReduction,
   ClaimingPair,
   ClaimingTriple,
   // basic fish
@@ -176,9 +178,11 @@ class Event
 public:
   Event();
   Event(EventType type, ReasonId reason);
+  Event(EventType type, ReasonId reason, ReasonId detailedReason);
 
   EventType type;
   ReasonId reason;
+  ReasonId detailedReason;
 
   std::vector<Operation> &getOperations();
   size_t getNumberOfOperations() const;

@@ -25,8 +25,8 @@
           <textarea id="importText" class="importTextSingle" placeholder="Algluu ĉenon de 81 ciferoj. Por indiki malplenajn ĉelojn uzu 0 aŭ '.'."></textarea>
 
           <div class="importBtns">
-            <button id="btnImport" class="ok">Enporti Sudokuon</button>
-            <button id="btnClear" class="danger">Reagordi kradon</button>
+            <button id="btnImport" class="ok">Enporti</button>
+            <button id="btnClear" class="danger">Reagordi</button>
             <button id="btnRecalc" class="secondary">Rekalkuli kandidatojn</button>
             <button id="btnCheck" class="secondary">Kontroli</button>
             <button id="btnExport" class="secondary">Eksporti</button>
@@ -49,14 +49,14 @@
 
     <div class="logBtnGrid">
       <button id="btnClearLog" class="secondary">Viŝi protokolon</button>
-      <button id="btnStep" class="secondary">Ruli 1 paŝon</button>
+      <button id="btnSolveWasmFull" class="secondary">WASM plen-solve</button>
+      <button id="btnCountSolutions" class="secondary">Kalkuli solvojn</button>
     </div>
 
     <div class="logBtnGrid logBtnGridWide" style="margin-top: 12px;">
       <button id="btnSolve" class="ok">Komenci solvadon</button>
       <button id="btnStop" class="danger">Halti</button>
-      <button id="btnSolveWasmFull" class="secondary">WASM plen-solve</button>
-      <button id="btnCountSolutions" class="secondary">Kalkuli solvojn</button>
+      <button id="btnStep" class="secondary">Ruli 1 paŝon</button>
     </div>
 
     <div class="optRow" style="margin-top: 12px;">
@@ -109,6 +109,16 @@
       - <b>Emfazo</b>: kun ŝaltita markobutono, alklaku solvitajn ĉelojn (en Valoro/Kandidato) por emfazi numeron<br/>
       - <b>Kolorigado</b>: alklaku ĉelon/kandidaton por ŝalti koloron
     </div>
+  </div>
+  <div class="panel techniquePanel">
+    <h2>Teknikoj</h2>
+    <div class="techniqueToolbar">
+      <button id="btnTechAll" class="secondary">Ĉiuj</button>
+      <button id="btnTechNone" class="secondary">Neniu</button>
+      <button id="btnTechDefaults" class="secondary">Defaŭltoj</button>
+    </div>
+    <div id="techniqueSummary" class="techniqueSummary">0 teknikoj aktivaj</div>
+    <div id="techniqueList" class="techniqueList" aria-label="Listo de teknikoj"></div>
   </div>
 </div>
 

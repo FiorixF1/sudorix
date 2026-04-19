@@ -11,6 +11,7 @@
 //   int sudorix_solver_init_board(const char *in81);
 //   int sudorix_solver_next_step(uint32_t *out, uint32_t out_words);
 //   int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out, uint32_t out_words);
+//   int sudorix_solver_set_enabled_techniques(const uint32_t *reasons, uint32_t count);
 //
 // Input contract:
 //   in81[81]   : char      ('.' or '0' = empty, '1'..'9' = digit)
@@ -23,10 +24,10 @@
 // Output buffer (uint32_t words, caller-allocated):
 //   Layout:
 //     out[0] = type      (0 = none, 1 = setValue, 2 = removeCandidate)
-//     out[1] = reasonId  (see Event.hpp)
-//     out[2] = fromPrev  (1 if it was already queued, 0 if generated in this iteration)
-//     out[3] = opCount   (#operations)
-//     out[4] = srcCount  (#sources)
+//     out[1] = reasonId         (macro technique, see Event.hpp)
+//     out[2] = detailedReasonId (specific sub-technique, see Event.hpp)
+//     out[3] = opCount          (#operations)
+//     out[4] = srcCount         (#sources)
 //     then srcCount pairs: (cells, mask)
 //     then opCount  pairs: (idx, mask)
 //
@@ -62,6 +63,8 @@ extern "C"
   int sudorix_solver_export_board(uint8_t *values, uint16_t *cands);
 
   int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out, uint32_t out_words);
+
+  int sudorix_solver_set_enabled_techniques(const uint32_t *reasons, uint32_t count);
 } // extern "C"
 
 #endif // SOLVER_H

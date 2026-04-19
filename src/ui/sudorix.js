@@ -29,6 +29,7 @@ var business_logic = (() => {
   let wasmSolveNextStep = null;  // cwrap'd function
   let wasmSolveHint = null;      // cwrap'd function
   let wasmCountSolutions = null; // cwrap'd function
+  let wasmSetEnabledTechniques = null; // cwrap'd function
   let wasmBufValues = 0;         // malloc'ed pointers in WASM heap
   let wasmBufCands  = 0;
   let wasmBufInStr  = 0;
@@ -47,8 +48,10 @@ var business_logic = (() => {
     "Hidden Pair",
     "Hidden Triple",
     "Hidden Quad",
+    "Pointing Set",
     "Pointing Pair",
     "Pointing Triple",
+    "Box/Line Reduction",
     "Claiming Pair",
     "Claiming Triple",
     "X-Wing",
@@ -171,72 +174,53 @@ var business_logic = (() => {
     "Death Blossom",
   ];
 
+  const TECHNIQUE_OPTIONS = [
+    { id: 1, label: "Full House" },
+    { id: 6, label: "Hidden Single" },
+    { id: 10, label: "Pointing Set" },
+    { id: 13, label: "Box/Line Reduction" },
+    { id: 7, label: "Hidden Pair" },
+    { id: 2, label: "Naked Single" },
+    { id: 3, label: "Naked Pair" },
+    { id: 4, label: "Naked Triple" },
+    { id: 8, label: "Hidden Triple" },
+    { id: 53, label: "BUG+1" },
+    { id: 16, label: "X-Wing" },
+    { id: 54, label: "XY-Wing" },
+    { id: 17, label: "Swordfish" },
+    { id: 65, label: "Remote Pair" },
+    { id: 44, label: "Unique Rectangle" },
+    { id: 57, label: "W-Wing" },
+    { id: 39, label: "Single Digit Pattern" },
+    { id: 19, label: "Finned X-Wing" },
+    { id: 43, label: "Empty Rectangle" },
+    { id: 55, label: "XYZ-Wing" },
+    { id: 58, label: "Simple Coloring" },
+    { id: 61, label: "3D Medusa" },
+    { id: 66, label: "X-Chain" },
+    { id: 20, label: "Finned Swordfish" },
+    { id: 68, label: "XY-Chain" },
+    { id: 74, label: "Grouped X-Chain" },
+    { id: 70, label: "Alternating Inference Chain" },
+    { id: 76, label: "Grouped Alternating Inference Chain" },
+    { id: 132, label: "Sue de Coq" },
+    { id: 125, label: "Almost Locked Set XZ" },
+    { id: 128, label: "Almost Locked Set XY-Wing" },
+    { id: 130, label: "Almost Locked Set Chain" },
+    { id: 133, label: "Death Blossom" },
+  ];
+
+  const DEFAULT_TECHNIQUE_IDS = TECHNIQUE_OPTIONS.map((entry) => entry.id);
+
   // techniques that require drawing of links
   const CHAINS = [
     "Single Digit Pattern",
-    "Skyscraper",
-    "Two-String Kite",
-    "Crane",
     "Empty Rectangle",
     "X-Chain",
-    "X-Ring",
     "XY-Chain",
-    "XY-Ring",
     "Alternating Inference Chain",
-    "Alternating Inference Chain (Type 1)",
-    "Alternating Inference Chain (Type 2)",
-    "Alternating Inference Chain (Type 3)",
     "Grouped X-Chain",
-    "Grouped X-Ring",
     "Grouped Alternating Inference Chain",
-    "Grouped Alternating Inference Chain (Type 1)",
-    "Grouped Alternating Inference Chain (Type 2)",
-    "Grouped Alternating Inference Chain (Type 3)",
-    "S-Wing",
-    "M2-Wing",
-    "M3-Wing",
-    "L(1)-Wing",
-    "L(2)-Wing",
-    "L(3)-Wing",
-    "H(1)-Wing",
-    "H(2)-Wing",
-    "H(3)-Wing",
-    "Strong Wing",
-    "Inverted W-Wing",
-    "Dual W-Wing",
-    "Inverted XY-Wing",
-    "Inverted S-Wing",
-    "Inverted M2-Wing",
-    "Inverted M3-Wing",
-    "Inverted L(1)-Wing",
-    "Inverted L(2)-Wing",
-    "Inverted L(3)-Wing",
-    "Inverted H(1)-Wing",
-    "Inverted H(2)-Wing",
-    "Inverted H(3)-Wing",
-    "W-Ring",
-    "S-Ring",
-    "M2-Ring",
-    "M3-Ring",
-    "L(1)-Ring",
-    "L(2)-Ring",
-    "L(3)-Ring",
-    "H(1)-Ring",
-    "H(2)-Ring",
-    "H(3)-Ring",
-    "Inverted Strong Ring",
-    "Inverted W-Ring",
-    "Inverted Dual W-Ring",
-    "Inverted XY-Ring",
-    "Inverted S-Ring",
-    "Inverted M2-Ring",
-    "Inverted M3-Ring",
-    "Inverted L(1)-Ring",
-    "Inverted L(2)-Ring",
-    "Inverted L(3)-Ring",
-    "Inverted H(1)-Ring",
-    "Inverted H(2)-Ring",
-    "Inverted H(3)-Ring",
   ];
 
   function initWasmSolver() {
@@ -255,11 +239,13 @@ var business_logic = (() => {
       wasmSolveNextStep = wasmModule.cwrap("sudorix_solver_next_step", "number", ["number", "number"]);
       wasmSolveHint = wasmModule.cwrap("sudorix_solver_hint", "number", ["number", "number", "number", "number"]);
       wasmCountSolutions = wasmModule.cwrap("sudorix_solver_count_solutions", "number", ["number"]);
+      wasmSetEnabledTechniques = wasmModule.cwrap("sudorix_solver_set_enabled_techniques", "number", ["number", "number"]);
 
       wasmBufValues = wasmModule._malloc(81);          // uint8_t[81]
       wasmBufCands  = wasmModule._malloc(81 * 2);      // uint16_t[81]
       wasmBufInStr  = wasmModule._malloc(82);          // char[81] + '\0'
       wasmBufOut    = wasmModule._malloc(WASM_OUT_WORDS * 4); // uint32_t[WASM_OUT_WORDS]
+      wasmBufTechniques = wasmModule._malloc(Math.max(TECHNIQUE_OPTIONS.length, 1) * 4);
 
       setSolverStatus(true, "WASM solvilo preta.");
       return Module;
@@ -270,6 +256,7 @@ var business_logic = (() => {
       wasmSolveInit = null;
       wasmSolveNextStep = null;
       wasmSolveHint = null;
+      wasmSetEnabledTechniques = null;
     });
   }
 
@@ -345,6 +332,19 @@ var business_logic = (() => {
     return null;
   }
 
+  function wasmApplyTechniqueSelection() {
+    if (!wasmModule || !wasmSetEnabledTechniques || !wasmBufTechniques) {
+      return false;
+    }
+
+    const ids = collectEnabledTechniqueIds();
+    if (ids.length > 0) {
+      wasmModule.HEAPU32.set(ids, wasmBufTechniques >> 2);
+    }
+
+    return !!wasmSetEnabledTechniques(wasmBufTechniques, ids.length);
+  }
+
   function wasmComputeNextStep() {
     if (!wasmModule || !wasmSolveNextStep) {
       return null;
@@ -359,7 +359,7 @@ var business_logic = (() => {
     const out = wasmModule.HEAPU32.subarray(wasmBufOut >> 2, (wasmBufOut >> 2) + WASM_OUT_WORDS);
     const typeN = out[0] >>> 0;
     const reasonId = out[1] >>> 0;
-    const fromPrev = (out[2] >>> 0) !== 0;
+    const detailedReasonId = out[2] >>> 0;
     const opCount = out[3] >>> 0;
     const srcCount = out[4] >>> 0;
 
@@ -370,7 +370,7 @@ var business_logic = (() => {
     const ev = {
       type: (typeN === 1) ? "setValue" : (typeN === 2) ? "removeCandidate" : "none",
       reason: WASM_REASON[reasonId] || "Solver",
-      fromPrev: fromPrev,
+      detailedReason: WASM_REASON[detailedReasonId] || "Solver",
       ops: [],
       sources: []
     };
@@ -417,7 +417,7 @@ var business_logic = (() => {
     const out = wasmModule.HEAPU32.subarray(wasmBufOut >> 2, (wasmBufOut >> 2) + WASM_OUT_WORDS);
     const typeN = out[0] >>> 0;
     const reasonId = out[1] >>> 0;
-    const fromPrev = (out[2] >>> 0) !== 0;
+    const detailedReasonId = out[2] >>> 0;
     const opCount = out[3] >>> 0;
     const srcCount = out[4] >>> 0;
 
@@ -428,7 +428,7 @@ var business_logic = (() => {
     const ev = {
       type: (typeN === 1) ? "setValue" : (typeN === 2) ? "removeCandidate" : "none",
       reason: WASM_REASON[reasonId] || "Solver",
-      fromPrev: fromPrev,
+      detailedReason: WASM_REASON[detailedReasonId] || "Solver",
       ops: [],
       sources: []
     };
@@ -1570,6 +1570,8 @@ var business_logic = (() => {
 
   const digitPadEl = $("digitPad");
   const colorPadEl = $("colorPad");
+  const techniqueListEl = $("techniqueList");
+  const techniqueSummaryEl = $("techniqueSummary");
 
   const timerTextEl = $("timerText");
   const btnPauseEl = $("btnPause");
@@ -1599,12 +1601,12 @@ var business_logic = (() => {
 
   let activeDigit = 0; // 0 means none (except keyboard)
   let activeColorIndex = 0;
+  let enabledTechniqueIds = new Set(DEFAULT_TECHNIQUE_IDS);
 
   /* Highlight digit selected by clicking solved cells (when optHighlight enabled) */
   let highlightDigit = 0;
 
   /* solver state */
-  let roundNumber = 0;
   let solveTimer = null;
   let pendingStepEvent = null;
   let undoStack = [];
@@ -1617,6 +1619,77 @@ var business_logic = (() => {
   let timerSecondsBeforePause = 0;
   let timerInterval = null;
   let resumeTimerAfterPause = false;
+
+  function collectEnabledTechniqueIds() {
+    return TECHNIQUE_OPTIONS
+      .filter((entry) => enabledTechniqueIds.has(entry.id))
+      .map((entry) => entry.id);
+  }
+
+  function updateTechniqueSummary() {
+    if (!techniqueSummaryEl) {
+      return;
+    }
+    const count = collectEnabledTechniqueIds().length;
+    techniqueSummaryEl.textContent = count + " teknikoj aktivaj";
+  }
+
+  function clearPendingStepPreview() {
+    pendingStepEvent = null;
+    clearAllEventHighlights();
+    clearCandidateLinks();
+  }
+
+  function setTechniqueSelection(ids) {
+    enabledTechniqueIds = new Set(ids);
+
+    if (techniqueListEl) {
+      const inputs = techniqueListEl.querySelectorAll("input[type=checkbox][data-technique-id]");
+      for (const input of inputs) {
+        const id = Number(input.dataset.techniqueId) | 0;
+        input.checked = enabledTechniqueIds.has(id);
+      }
+    }
+
+    updateTechniqueSummary();
+    clearPendingStepPreview();
+  }
+
+  function buildTechniquePanel() {
+    if (!techniqueListEl) {
+      return;
+    }
+
+    techniqueListEl.innerHTML = "";
+    for (const entry of TECHNIQUE_OPTIONS) {
+      const label = document.createElement("label");
+      label.className = "techniqueItem";
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = enabledTechniqueIds.has(entry.id);
+      input.dataset.techniqueId = String(entry.id);
+      input.addEventListener("change", () => {
+        if (input.checked) {
+          enabledTechniqueIds.add(entry.id);
+        } else {
+          enabledTechniqueIds.delete(entry.id);
+        }
+        updateTechniqueSummary();
+        clearPendingStepPreview();
+      });
+
+      const text = document.createElement("span");
+      text.className = "techniqueItemLabel";
+      text.textContent = entry.label;
+
+      label.appendChild(input);
+      label.appendChild(text);
+      techniqueListEl.appendChild(label);
+    }
+
+    updateTechniqueSummary();
+  }
 
   /* chain overlay state */
   let chainLinks = [];
@@ -2574,7 +2647,7 @@ var business_logic = (() => {
   }
 
   function ensureWasmReadyOrNotify() {
-    if (wasmModule && wasmSolveFull && wasmSolveNextStep && wasmSolveInit && wasmSolveHint) {
+    if (wasmModule && wasmSolveFull && wasmSolveNextStep && wasmSolveInit && wasmSolveHint && wasmSetEnabledTechniques) {
       return true;
     }
 
@@ -2596,10 +2669,6 @@ var business_logic = (() => {
     if (!ev) {
       callbackDone(false);
       return;
-    }
-
-    if (!ev.fromPrev) {
-      roundNumber++;
     }
 
     if (optFastSolveEl && optFastSolveEl.checked) {
@@ -2648,9 +2717,11 @@ var business_logic = (() => {
 
     board.recalcAllCandidatesFromValues();
     renderAll();
+    if (!wasmApplyTechniqueSelection()) {
+      openCheckModal("Ne eblis sendi la liston de teknikoj al la WASM-solvilo.");
+      return;
+    }
     wasmInitBoard(board);
-
-    roundNumber = 0;
 
     const loop = () => {
       if (!solveTimer) {
@@ -2685,6 +2756,11 @@ var business_logic = (() => {
       return;
     }
 
+    if (!wasmApplyTechniqueSelection()) {
+      openCheckModal("Ne eblis sendi la liston de teknikoj al la WASM-solvilo.");
+      return;
+    }
+
     const in81 = board.exportToString();
     const out81 = wasmRunFullSolve(in81);
 
@@ -2709,15 +2785,16 @@ var business_logic = (() => {
     //  - if no pending event: compute and PREVIEW (highlight only, do not apply)
     //  - if pending exists: APPLY it, then clear
     if (!pendingStepEvent) {
+      if (!wasmApplyTechniqueSelection()) {
+        openCheckModal("Ne eblis sendi la liston de teknikoj al la WASM-solvilo.");
+        return;
+      }
+
       // don't recalculate candidates, otherwise you could end up in an infinite loop
       const ev = wasmComputeHint(board);
       if (!ev) {
         appendInfo("Neniu plia evento.");
         return;
-      }
-
-      if (!ev.fromPrev) {
-        roundNumber++;
       }
 
       pendingStepEvent = ev;
@@ -2821,7 +2898,6 @@ var business_logic = (() => {
 
     board.resetAll();
 
-    roundNumber = 0;
     selectedIdx = -1;
     activeDigit = 0;
     activeColorIndex = 0;
@@ -2970,6 +3046,10 @@ var business_logic = (() => {
 
   $("btnClearLog").addEventListener("click", () => clearLog());
 
+  $("btnTechAll").addEventListener("click", () => setTechniqueSelection(DEFAULT_TECHNIQUE_IDS));
+  $("btnTechNone").addEventListener("click", () => setTechniqueSelection([]));
+  $("btnTechDefaults").addEventListener("click", () => setTechniqueSelection(DEFAULT_TECHNIQUE_IDS));
+
   $("btnStep").addEventListener("click", () => solveOneStep());
 
   $("btnUndo").addEventListener("click", () => doUndo());
@@ -2990,6 +3070,7 @@ var business_logic = (() => {
     buildDigitPad3x3();
     buildColorPad3x3();
     buildGridUI();
+    buildTechniquePanel();
 
     setSolverStatus(false, "WASM solvilo ne preta.");
 

@@ -97,8 +97,10 @@ static const char *reasonIdToString(ReasonId reason) {
     case ReasonId::HiddenPair: return "Hidden Pair";
     case ReasonId::HiddenTriple: return "Hidden Triple";
     case ReasonId::HiddenQuad: return "Hidden Quad";
+    case ReasonId::PointingSet: return "Pointing Set";
     case ReasonId::PointingPair: return "Pointing Pair";
     case ReasonId::PointingTriple: return "Pointing Triple";
+    case ReasonId::BoxLineReduction: return "Box/Line Reduction";
     case ReasonId::ClaimingPair: return "Claiming Pair";
     case ReasonId::ClaimingTriple: return "Claiming Triple";
     case ReasonId::XWing: return "X-Wing";
@@ -223,9 +225,12 @@ static const char *reasonIdToString(ReasonId reason) {
   return "Unknown Reason";
 }
 
-static void recordReasonId(uint32_t reasonIdRaw) {
+static void recordReasonId(uint32_t reasonIdRaw, uint32_t detailedReasonIdRaw) {
   if (reasonIdRaw < g_reasonCounts.size()) {
     g_reasonCounts[reasonIdRaw]++;
+  }
+  if (detailedReasonIdRaw != reasonIdRaw && detailedReasonIdRaw < g_reasonCounts.size()) {
+    g_reasonCounts[detailedReasonIdRaw]++;
   }
 }
 
@@ -409,7 +414,7 @@ static int runStepSolveOne(const std::string &in81, std::string *out81, std::str
     }
 
     if (out[0] != 0) {
-      recordReasonId(out[1]);
+      recordReasonId(out[1], out[2]);
     }
   }
 

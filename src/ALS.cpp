@@ -401,7 +401,7 @@ std::optional<Event> AlsSearcher::build_circular_elimination_event(AlsPath &path
     return {};
   }
 
-  Event event(EventType::RemoveCandidate, detailedReason);
+  Event event(EventType::RemoveCandidate, reason, detailedReason);
 
   // sources: list of ALSs
   for (size_t i = 0; i < path.nodes.size(); ++i) {
@@ -500,7 +500,7 @@ std::optional<Event> AlsSearcher::build_endpoint_elimination_event(AlsPath &path
   }
 
   if (!validVictims.empty()) {
-    Event event(EventType::RemoveCandidate, detailedReason);
+    Event event(EventType::RemoveCandidate, reason, detailedReason);
 
     // sources: list of ALSs
     for (size_t i = 0; i < path.nodes.size(); ++i) {

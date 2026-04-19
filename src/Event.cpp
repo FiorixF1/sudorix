@@ -6,7 +6,11 @@
 
 Event::Event() { }
 
-Event::Event(EventType type, ReasonId reason) : type(type), reason(reason) { }
+Event::Event(EventType type, ReasonId reason)
+  : type(type), reason(reason), detailedReason(reason) { }
+
+Event::Event(EventType type, ReasonId reason, ReasonId detailedReason)
+  : type(type), reason(reason), detailedReason(detailedReason) { }
 
 std::vector<Operation> &Event::getOperations() {
   return this->ops;

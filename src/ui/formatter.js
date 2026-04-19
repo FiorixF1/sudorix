@@ -12,7 +12,7 @@
 
       defaultOperationsFormatter(ctx, ev, parts);
 
-      return { title: ev.reason, bodyHtml: parts.join("") };
+      return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
     getSourceCategory(ev, source, sourceIndex, groupIndex) {
       return (groupIndex % 2) + 1;
@@ -47,7 +47,7 @@
 
       defaultOperationsFormatter(ctx, ev, parts);
 
-      return { title: ev.reason, bodyHtml: parts.join("") };
+      return { title: ev.detailedReason, bodyHtml: parts.join("") };
     }
   };
   REGISTRY["X-Wing"] = fishFormatter;
@@ -56,9 +56,6 @@
   REGISTRY["Finned X-Wing"] = fishFormatter;
   REGISTRY["Finned Swordfish"] = fishFormatter;
   REGISTRY["Finned Jellyfish"] = fishFormatter;
-  REGISTRY["Sashimi X-Wing"] = fishFormatter;
-  REGISTRY["Sashimi Swordfish"] = fishFormatter;
-  REGISTRY["Sashimi Jellyfish"] = fishFormatter;
   REGISTRY["Franken X-Wing"] = fishFormatter;
   REGISTRY["Franken Swordfish"] = fishFormatter;
   REGISTRY["Franken Jellyfish"] = fishFormatter;
@@ -89,16 +86,10 @@
 
       defaultOperationsFormatter(ctx, ev, parts);
 
-      return { title: ev.reason, bodyHtml: parts.join("") };
+      return { title: ev.detailedReason, bodyHtml: parts.join("") };
     }
   };
   REGISTRY["Unique Rectangle"] = rectangleFormatter;
-  REGISTRY["Unique Rectangle (Type 1)"] = rectangleFormatter;
-  REGISTRY["Unique Rectangle (Type 2)"] = rectangleFormatter;
-  REGISTRY["Unique Rectangle (Type 3)"] = rectangleFormatter;
-  REGISTRY["Unique Rectangle (Type 4)"] = rectangleFormatter;
-  REGISTRY["Unique Rectangle (Type 5)"] = rectangleFormatter;
-  REGISTRY["Unique Rectangle (Type 6)"] = rectangleFormatter;
   REGISTRY["Hidden Rectangle"] = rectangleFormatter;
 
   const wingFormatter = {
@@ -118,7 +109,7 @@
 
       defaultOperationsFormatter(ctx, ev, parts);
 
-      return { title: ev.reason, bodyHtml: parts.join("") };
+      return { title: ev.detailedReason, bodyHtml: parts.join("") };
     }
   };
   REGISTRY["XY-Wing"] = wingFormatter;
@@ -132,7 +123,7 @@
 
       defaultOperationsFormatter(ctx, ev, parts);
 
-      return { title: ev.reason, bodyHtml: parts.join("") };
+      return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
     getSourceCategory(ev, source, sourceIndex, groupIndex) {
       if (groupIndex == 0) {
@@ -154,12 +145,7 @@
   };
   REGISTRY["Remote Pair"] = colorFormatter;
   REGISTRY["Simple Coloring"] = colorFormatter;
-  REGISTRY["Simple Coloring (Color Trap)"] = colorFormatter;
-  REGISTRY["Simple Coloring (Color Wrap)"] = colorFormatter;
   REGISTRY["3D Medusa"] = colorFormatter;
-  REGISTRY["3D Medusa (Color Trap)"] = colorFormatter;
-  REGISTRY["3D Medusa (Color Wrap)"] = colorFormatter;
-  REGISTRY["3D Medusa (Emptied Cell)"] = colorFormatter;
 
   const chainFormatter = {
     formatLog(ev, ctx) {
@@ -234,76 +220,19 @@
 
       defaultOperationsFormatter(ctx, ev, parts);
 
-      return { title: ev.reason, bodyHtml: parts.join("") };
+      return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
     getSourceCategory(ev, source, sourceIndex, groupIndex) {
       return (sourceIndex % 2) + 1;
     }
   };
   REGISTRY["Single Digit Pattern"] = chainFormatter;
-  REGISTRY["Skyscraper"] = chainFormatter;
-  REGISTRY["Two-String Kite"] = chainFormatter;
-  REGISTRY["Crane"] = chainFormatter;
   REGISTRY["Empty Rectangle"] = chainFormatter;
   REGISTRY["X-Chain"] = chainFormatter;
-  REGISTRY["X-Ring"] = chainFormatter;
   REGISTRY["XY-Chain"] = chainFormatter;
-  REGISTRY["XY-Ring"] = chainFormatter;
   REGISTRY["Alternating Inference Chain"] = chainFormatter;
-  REGISTRY["Alternating Inference Chain (Type 1)"] = chainFormatter;
-  REGISTRY["Alternating Inference Chain (Type 2)"] = chainFormatter;
-  REGISTRY["Alternating Inference Chain (Type 3)"] = chainFormatter;
   REGISTRY["Grouped X-Chain"] = chainFormatter;
-  REGISTRY["Grouped X-Ring"] = chainFormatter;
   REGISTRY["Grouped Alternating Inference Chain"] = chainFormatter;
-  REGISTRY["Grouped Alternating Inference Chain (Type 1)"] = chainFormatter;
-  REGISTRY["Grouped Alternating Inference Chain (Type 2)"] = chainFormatter;
-  REGISTRY["Grouped Alternating Inference Chain (Type 3)"] = chainFormatter;
-  REGISTRY["S-Wing"] = chainFormatter;
-  REGISTRY["M2-Wing"] = chainFormatter;
-  REGISTRY["M3-Wing"] = chainFormatter;
-  REGISTRY["L(1)-Wing"] = chainFormatter;
-  REGISTRY["L(2)-Wing"] = chainFormatter;
-  REGISTRY["L(3)-Wing"] = chainFormatter;
-  REGISTRY["H(1)-Wing"] = chainFormatter;
-  REGISTRY["H(2)-Wing"] = chainFormatter;
-  REGISTRY["H(3)-Wing"] = chainFormatter;
-  REGISTRY["Strong Wing"] = chainFormatter;
-  REGISTRY["Inverted W-Wing"] = chainFormatter;
-  REGISTRY["Dual W-Wing"] = chainFormatter;
-  REGISTRY["Inverted XY-Wing"] = chainFormatter;
-  REGISTRY["Inverted S-Wing"] = chainFormatter;
-  REGISTRY["Inverted M2-Wing"] = chainFormatter;
-  REGISTRY["Inverted M3-Wing"] = chainFormatter;
-  REGISTRY["Inverted L(1)-Wing"] = chainFormatter;
-  REGISTRY["Inverted L(2)-Wing"] = chainFormatter;
-  REGISTRY["Inverted L(3)-Wing"] = chainFormatter;
-  REGISTRY["Inverted H(1)-Wing"] = chainFormatter;
-  REGISTRY["Inverted H(2)-Wing"] = chainFormatter;
-  REGISTRY["Inverted H(3)-Wing"] = chainFormatter;
-  REGISTRY["W-Ring"] = chainFormatter;
-  REGISTRY["S-Ring"] = chainFormatter;
-  REGISTRY["M2-Ring"] = chainFormatter;
-  REGISTRY["M3-Ring"] = chainFormatter;
-  REGISTRY["L(1)-Ring"] = chainFormatter;
-  REGISTRY["L(2)-Ring"] = chainFormatter;
-  REGISTRY["L(3)-Ring"] = chainFormatter;
-  REGISTRY["H(1)-Ring"] = chainFormatter;
-  REGISTRY["H(2)-Ring"] = chainFormatter;
-  REGISTRY["H(3)-Ring"] = chainFormatter;
-  REGISTRY["Inverted Strong Ring"] = chainFormatter;
-  REGISTRY["Inverted W-Ring"] = chainFormatter;
-  REGISTRY["Inverted Dual W-Ring"] = chainFormatter;
-  REGISTRY["Inverted XY-Ring"] = chainFormatter;
-  REGISTRY["Inverted S-Ring"] = chainFormatter;
-  REGISTRY["Inverted M2-Ring"] = chainFormatter;
-  REGISTRY["Inverted M3-Ring"] = chainFormatter;
-  REGISTRY["Inverted L(1)-Ring"] = chainFormatter;
-  REGISTRY["Inverted L(2)-Ring"] = chainFormatter;
-  REGISTRY["Inverted L(3)-Ring"] = chainFormatter;
-  REGISTRY["Inverted H(1)-Ring"] = chainFormatter;
-  REGISTRY["Inverted H(2)-Ring"] = chainFormatter;
-  REGISTRY["Inverted H(3)-Ring"] = chainFormatter;
 
   const alsFormatter = {
     formatLog(ev, ctx) {
@@ -348,7 +277,7 @@
 
       defaultOperationsFormatter(ctx, ev, parts);
 
-      return { title: ev.reason, bodyHtml: parts.join("") };
+      return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
     getSourceCategory(ev, source, sourceIndex, groupIndex) {
       if (groupIndex == 0) {
@@ -364,12 +293,8 @@
     }
   };
   REGISTRY["Almost Locked Set XZ"] = alsFormatter;
-  REGISTRY["Almost Locked Set XZ Singly Linked"] = alsFormatter;
-  REGISTRY["Almost Locked Set XZ Doubly Linked"] = alsFormatter;
   REGISTRY["Almost Locked Set XY-Wing"] = alsFormatter;
-  REGISTRY["Almost Locked Set XY-Ring"] = alsFormatter;
   REGISTRY["Almost Locked Set Chain"] = alsFormatter;
-  REGISTRY["Almost Locked Set Ring"] = alsFormatter;
 
   const sdcFormatter = {
     formatLog(ev, ctx) {
@@ -394,7 +319,7 @@
 
       defaultOperationsFormatter(ctx, ev, parts);
 
-      return { title: ev.reason, bodyHtml: parts.join("") };
+      return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
     getSourceCategory(ev, source, sourceIndex, groupIndex) {
       if (groupIndex == 0) {
@@ -442,7 +367,7 @@
 
       defaultOperationsFormatter(ctx, ev, parts);
 
-      return { title: ev.reason, bodyHtml: parts.join("") };
+      return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
     getSourceCategory(ev, source, sourceIndex, groupIndex) {
       if (groupIndex == 0) {
@@ -478,7 +403,7 @@
     defaultSourcesFormatter(ctx, ev, parts, groups);
     defaultOperationsFormatter(ctx, ev, parts);
 
-    return { title: ev.reason || "Solver", bodyHtml: parts.join("") };
+    return { title: ev.detailedReason || "Solver", bodyHtml: parts.join("") };
   }
 
   // works well for basic techniques (naked/hidden sets and intersections)

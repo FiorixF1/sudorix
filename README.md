@@ -100,7 +100,7 @@ Nuntempe Sudorix povas solvi:
 
 * **31512** enigmojn el **31512** el `Just17.txt`
 
-* **46732** enigmojn el **50000** el `top50000.txt`
+* **47039** enigmojn el **50000** el `top50000.txt`
 
 ## Etendado de teknikoj
 
@@ -117,7 +117,7 @@ Eventoj estas priskribataj per `uint32_t out[1024]`:
 
 - `out[0]` = tipo (`EventType::SetValue` aŭ `EventType::RemoveCandidate`)
 - `out[1]` = reasonId (ekzemple `ReasonId::NakedSingle`)
-- `out[2]` = 1 se la evento estis produktita en antaŭa iteracio
+- `out[2]` = detailedReasonId (ekzemple `ReasonId::SimpleColoringColorTrap` kiam reasonId estas `ReasonId::SimpleColoring`)
 - `out[3]` = nombro da operacioj
 - `out[4]` = nombro da fontoj
 - listo de fontoj esprimitaj kiel duopo **(ĉelaro, cifermasko)**
