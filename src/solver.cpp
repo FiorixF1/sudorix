@@ -483,6 +483,78 @@ static void techSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
   }
 }
 
+static void techJellyfish(SudokuBoard &board, EventQueue &eventQueue) {
+  auto scanDigit = [&](Digit digit) -> void
+  {
+    const int FISH_SIZE = 4;
+
+    auto fishSearcher = [&](const std::vector<Unit> &units,
+                            const Unit &(*getBaseByLocation)(Location),
+                            const Unit &(*getCoverByLocation)(Location),
+                            Location (*getCoverLocation)(Cell)) -> void
+    {
+      LocationSet possibleUnits;
+      for (Location i = 0; i < 9; ++i) {
+        const Unit &unit = units[i];
+        if (!board.getPositionsOfDigit(unit, digit).empty()) {
+          possibleUnits.insert(i);
+        }
+      }
+
+      const std::vector<LocationSet> allBaseSets = possibleUnits.generate_power_set_of_size(FISH_SIZE);
+      for (const LocationSet &baseSets : allBaseSets) {
+        std::vector<int> baseSetsList = baseSets.to_vector();
+
+        const Unit &baseA = getBaseByLocation(baseSetsList[0]);
+        const Unit &baseB = getBaseByLocation(baseSetsList[1]);
+        const Unit &baseC = getBaseByLocation(baseSetsList[2]);
+        const Unit &baseD = getBaseByLocation(baseSetsList[3]);
+        CellSet positionsA = board.getPositionsOfDigit(baseA, digit);
+        CellSet positionsB = board.getPositionsOfDigit(baseB, digit);
+        CellSet positionsC = board.getPositionsOfDigit(baseC, digit);
+        CellSet positionsD = board.getPositionsOfDigit(baseD, digit);
+
+        if (positionsA.size() <= FISH_SIZE && positionsB.size() <= FISH_SIZE && positionsC.size() <= FISH_SIZE && positionsD.size() <= FISH_SIZE) {
+          LocationSet locationsA; for (Cell idx : positionsA) { locationsA.insert(getCoverLocation(idx)); }
+          LocationSet locationsB; for (Cell idx : positionsB) { locationsB.insert(getCoverLocation(idx)); }
+          LocationSet locationsC; for (Cell idx : positionsC) { locationsC.insert(getCoverLocation(idx)); }
+          LocationSet locationsD; for (Cell idx : positionsD) { locationsD.insert(getCoverLocation(idx)); }
+          LocationSet coverSets = locationsA | locationsB | locationsC | locationsD;
+          if (coverSets.size() == FISH_SIZE) {
+            // Jellyfish spotted
+            std::vector<int> coverSetsList = coverSets.to_vector();
+            const Unit &coverA = getCoverByLocation(coverSetsList[0]);
+            const Unit &coverB = getCoverByLocation(coverSetsList[1]);
+            const Unit &coverC = getCoverByLocation(coverSetsList[2]);
+            const Unit &coverD = getCoverByLocation(coverSetsList[3]);
+            Event event(EventType::RemoveCandidate, ReasonId::Jellyfish);
+            // the source is the base sets forming the Jellyfish
+            event.addSource(positionsA, digit);
+            event.addSource(positionsB, digit);
+            event.addSource(positionsC, digit);
+            event.addSource(positionsD, digit);
+            // remove instances of the digit from cover sets, excluding the base sets
+            CellSet set = (coverA | coverB | coverC | coverD) - (baseA | baseB | baseC | baseD);
+            for (Cell idx : set) {
+              event.addOperation(idx, digit);
+            }
+            if (eventQueue.enqueue(board, event)) return;
+          }
+        }
+      }
+    };
+
+    // base sets: rows | cover sets: columns
+    fishSearcher(board.getRows(), SudokuBoard::getRowByLocation, SudokuBoard::getColumnByLocation, SudokuBoard::getColumnLocation);
+    // base sets: columns | cover sets: rows
+    fishSearcher(board.getColumns(), SudokuBoard::getColumnByLocation, SudokuBoard::getRowByLocation, SudokuBoard::getRowLocation);
+  };
+
+  for (Digit digit : board.getUnsolvedDigits()) {
+    scanDigit(digit);
+  }
+}
+
 static void techFinnedXWing(SudokuBoard &board, EventQueue &eventQueue) {
   auto scanDigit = [&](Digit digit) -> void
   {
@@ -633,6 +705,103 @@ static void techFinnedSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
                 event.addSource(positionsA - fins, digit);
                 event.addSource(positionsB - fins, digit);
                 event.addSource(positionsC - fins, digit);
+                // fins
+                event.addDelimiter();
+                for (Cell idx : fins) {
+                  event.addSource(idx, digit);
+                }
+                // eliminations
+                for (Cell idx : set) {
+                  event.addOperation(idx, digit);
+                }
+                if (eventQueue.enqueue(board, event)) return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    };
+
+    // base sets: rows | cover sets: columns
+    if (fishSearcher(board.getRows(), SudokuBoard::getRowByLocation, SudokuBoard::getColumnByLocation, SudokuBoard::getColumnLocation)) return;
+    // base sets: columns | cover sets: rows
+    if (fishSearcher(board.getColumns(), SudokuBoard::getColumnByLocation, SudokuBoard::getRowByLocation, SudokuBoard::getRowLocation)) return;
+  };
+
+  for (Digit digit : board.getUnsolvedDigits()) {
+    scanDigit(digit);
+  }
+}
+
+static void techFinnedJellyfish(SudokuBoard &board, EventQueue &eventQueue) {
+  auto scanDigit = [&](Digit digit) -> void
+  {
+    const int FISH_SIZE = 4;
+
+    auto fishSearcher = [&](const std::vector<Unit> &units,
+                            const Unit &(*getBaseByLocation)(Location),
+                            const Unit &(*getCoverByLocation)(Location),
+                            Location (*getCoverLocation)(Cell)) -> bool
+    {
+      LocationSet possibleUnits;
+      for (Location i = 0; i < 9; ++i) {
+        const Unit &unit = units[i];
+        if (!board.getPositionsOfDigit(unit, digit).empty()) {
+          possibleUnits.insert(i);
+        }
+      }
+
+      const std::vector<LocationSet> allBaseSets = possibleUnits.generate_power_set_of_size(FISH_SIZE);
+      for (const LocationSet &baseSets : allBaseSets) {
+        std::vector<int> baseSetsList = baseSets.to_vector();
+
+        const Unit &baseA = getBaseByLocation(baseSetsList[0]);
+        const Unit &baseB = getBaseByLocation(baseSetsList[1]);
+        const Unit &baseC = getBaseByLocation(baseSetsList[2]);
+        const Unit &baseD = getBaseByLocation(baseSetsList[3]);
+        CellSet positionsA = board.getPositionsOfDigit(baseA, digit);
+        CellSet positionsB = board.getPositionsOfDigit(baseB, digit);
+        CellSet positionsC = board.getPositionsOfDigit(baseC, digit);
+        CellSet positionsD = board.getPositionsOfDigit(baseD, digit);
+        CellSet vertices = positionsA | positionsB | positionsC | positionsD;
+
+        LocationSet locationsA; for (Cell idx : positionsA) { locationsA.insert(getCoverLocation(idx)); }
+        LocationSet locationsB; for (Cell idx : positionsB) { locationsB.insert(getCoverLocation(idx)); }
+        LocationSet locationsC; for (Cell idx : positionsC) { locationsC.insert(getCoverLocation(idx)); }
+        LocationSet locationsD; for (Cell idx : positionsD) { locationsD.insert(getCoverLocation(idx)); }
+        LocationSet coverSets = locationsA | locationsB | locationsC | locationsD;
+
+        if (coverSets.size() <= FISH_SIZE+2) {
+          for (const LocationSet &coverSet : coverSets.generate_power_set_of_size(FISH_SIZE)) {
+            // look for the real cover sets
+            std::vector<int> coverSetList = coverSet.to_vector();
+            const Unit &coverA = getCoverByLocation(coverSetList[0]);
+            const Unit &coverB = getCoverByLocation(coverSetList[1]);
+            const Unit &coverC = getCoverByLocation(coverSetList[2]);
+            const Unit &coverD = getCoverByLocation(coverSetList[3]);
+            CellSet covered = vertices & (coverA | coverB | coverC | coverD);
+            CellSet fins = vertices - covered;
+            // verify sashiminess
+            bool sashiminess = false;
+            if ((baseA - fins).size() == 1 || (baseB - fins).size() == 1 || (baseC - fins).size() == 1 || (baseD - fins).size() == 1) {
+              sashiminess = true;
+            }
+            // look for fins and check they belong to a single box
+            LocationSet boxes;
+            for (Cell fin : fins) { boxes.insert(SudokuBoard::getBoxLocation(fin)); }
+            if (boxes.size() == 1) {
+              // check for possible eliminations
+              const Unit &finBox = SudokuBoard::getBoxByLocation(*boxes.begin());
+              CellSet set = ((coverA | coverB | coverC | coverD) - (baseA | baseB | baseC | baseD)) & finBox;
+              if (!set.empty()) {
+                // Finned Jellyfish spotted
+                Event event(EventType::RemoveCandidate, ReasonId::FinnedJellyfish, sashiminess ? ReasonId::SashimiJellyfish : ReasonId::FinnedSwordfish);
+                // base sets without the fins
+                event.addSource(positionsA - fins, digit);
+                event.addSource(positionsB - fins, digit);
+                event.addSource(positionsC - fins, digit);
+                event.addSource(positionsD - fins, digit);
                 // fins
                 event.addDelimiter();
                 for (Cell idx : fins) {
@@ -1087,13 +1256,17 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
               }
 
               if (common_unit) {
-                if (board.getPositionsOfDigit(*common_unit, x) == bilocationCandidates) {
+                // trick to find grouped W-Wings
+                CellSet xInUnit = board.getPositionsOfDigit(*common_unit, x);
+                CellSet yInUnit = board.getPositionsOfDigit(*common_unit, y);
+
+                if (xInUnit.is_subset_of(peers_of_a | peers_of_b) && !(xInUnit & peers_of_a).empty() && !(xInUnit & peers_of_b).empty()) {
                   // W-Wing spotted on digit x
                   Event event(EventType::RemoveCandidate, ReasonId::WWing);
-                  // the source is the four cells forming the W-Wing
+                  // the source is the four (or more) cells forming the W-Wing
                   event.addSource(a, DigitSet({x, y}));
-                  event.addSource(peer_of_a, DigitSet({x}));
-                  event.addSource(peer_of_b, DigitSet({x}));
+                  event.addSource(xInUnit & peers_of_a, DigitSet({x}));
+                  event.addSource(xInUnit & peers_of_b, DigitSet({x}));
                   event.addSource(b, DigitSet({x, y}));
                   event.addDelimiter();
                   event.addSource(a, DigitSet({y}));
@@ -1104,13 +1277,13 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
                     event.addOperation(idx, y);
                   }
                   if (eventQueue.enqueue(board, event)) return;
-                } else if (board.getPositionsOfDigit(*common_unit, y) == bilocationCandidates) {
+                } else if (yInUnit.is_subset_of(peers_of_a | peers_of_b) && !(yInUnit & peers_of_a).empty() && !(yInUnit & peers_of_b).empty()) 
                   // W-Wing spotted on digit y
                   Event event(EventType::RemoveCandidate, ReasonId::WWing);
-                  // the source is the four cells forming the W-Wing
+                  // the source is the four (or more) cells forming the W-Wing
                   event.addSource(a, DigitSet({x, y}));
-                  event.addSource(peer_of_a, DigitSet({y}));
-                  event.addSource(peer_of_b, DigitSet({y}));
+                  event.addSource(yInUnit & peers_of_a, DigitSet({y}));
+                  event.addSource(yInUnit & peers_of_b, DigitSet({y}));
                   event.addSource(b, DigitSet({x, y}));
                   event.addDelimiter();
                   event.addSource(a, DigitSet({x}));
