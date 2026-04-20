@@ -523,6 +523,11 @@ static void techFinnedXWing(SudokuBoard &board, EventQueue &eventQueue) {
             const Unit &coverB = getCoverByLocation(coverSetList[1]);
             CellSet covered = vertices & (coverA | coverB);
             CellSet fins = vertices - covered;
+            // verify sashiminess
+            bool sashiminess = false;
+            if ((baseA - fins).size() == 1 || (baseB - fins).size() == 1) {
+              sashiminess = true;
+            }
             // look for fins and check they belong to a single box
             LocationSet boxes;
             for (Cell fin : fins) { boxes.insert(SudokuBoard::getBoxLocation(fin)); }
@@ -532,7 +537,7 @@ static void techFinnedXWing(SudokuBoard &board, EventQueue &eventQueue) {
               CellSet set = ((coverA | coverB) - (baseA | baseB)) & finBox;
               if (!set.empty()) {
                 // Finned X-Wing spotted
-                Event event(EventType::RemoveCandidate, ReasonId::FinnedXWing, covered.size() == FISH_SIZE*FISH_SIZE ? ReasonId::FinnedXWing : ReasonId::SashimiXWing);
+                Event event(EventType::RemoveCandidate, ReasonId::FinnedXWing, sashiminess ? ReasonId::SashimiXWing : ReasonId::FinnedXWing);
                 // base sets without the fins
                 event.addSource(positionsA - fins, digit);
                 event.addSource(positionsB - fins, digit);
@@ -609,6 +614,11 @@ static void techFinnedSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
             const Unit &coverC = getCoverByLocation(coverSetList[2]);
             CellSet covered = vertices & (coverA | coverB | coverC);
             CellSet fins = vertices - covered;
+            // verify sashiminess
+            bool sashiminess = false;
+            if ((baseA - fins).size() == 1 || (baseB - fins).size() == 1 || (baseC - fins).size() == 1) {
+              sashiminess = true;
+            }
             // look for fins and check they belong to a single box
             LocationSet boxes;
             for (Cell fin : fins) { boxes.insert(SudokuBoard::getBoxLocation(fin)); }
@@ -617,8 +627,8 @@ static void techFinnedSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
               const Unit &finBox = SudokuBoard::getBoxByLocation(*boxes.begin());
               CellSet set = ((coverA | coverB | coverC) - (baseA | baseB | baseC)) & finBox;
               if (!set.empty()) {
-                // Finned X-Wing spotted
-                Event event(EventType::RemoveCandidate, ReasonId::FinnedSwordfish, covered.size() == FISH_SIZE*FISH_SIZE ? ReasonId::FinnedSwordfish : ReasonId::SashimiSwordfish);
+                // Finned Swordfish spotted
+                Event event(EventType::RemoveCandidate, ReasonId::FinnedSwordfish, sashiminess ? ReasonId::SashimiSwordfish : ReasonId::FinnedSwordfish);
                 // base sets without the fins
                 event.addSource(positionsA - fins, digit);
                 event.addSource(positionsB - fins, digit);
@@ -1408,7 +1418,7 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
       // final, non-recursive step: remove RCCs from potential eliminations
       accumulator -= stem.candidates;
 
-      // initialize the Death Blossom event
+      // initialize Death Blossom event
       Event event(EventType::RemoveCandidate, ReasonId::DeathBlossom);
       // the source is the stem and the petals
       event.addSource(index, stem.candidates);
@@ -1416,7 +1426,7 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
         event.addSource(petal->cellSet, petal->digitSet);
       }
 
-      // search for eliminations
+      // look for eliminations
       for (Digit elimination : accumulator) {
         // common digit found, possible elimination ahead
         CellSet source;

@@ -877,6 +877,7 @@ bool AicSearcher::analyze_event(Event &event) {
     char charCounter = 'a';
     int digitCounter = 0;
     bool WANT_STRONG = true;
+    bool IS_GROUPED = false;
 
     auto &sources = event.getSources();
     for (int i = 0; i < sources.size()-1; ++i) {
@@ -894,6 +895,9 @@ bool AicSearcher::analyze_event(Event &event) {
           valueLocationString += 'L';
         }
         cellSectorString += 'S';
+      }
+      if (current.cells.size() > 1 || next.cells.size() > 1) {
+        IS_GROUPED = true;
       }
 
       Digit currentDigit = *current.mask.begin();
@@ -917,6 +921,11 @@ bool AicSearcher::analyze_event(Event &event) {
     std::reverse(valueLocationString.begin(), valueLocationString.end());
     std::reverse(cellSectorString.begin(), cellSectorString.end());
     std::string revFinalString = valueLocationString + '-' + std::to_string(digitCounter) + '-' + cellSectorString;
+
+    if (IS_GROUPED) {
+      finalString += '+';
+      revFinalString += '+';
+    }
 
     const std::map<std::string, ReasonId> WING_TABLE = {
       // wings
@@ -972,6 +981,59 @@ bool AicSearcher::analyze_event(Event &event) {
       {"LLLL-2-SCSSSSSC", ReasonId::iH1Ring},
       {"LLLL-2-SCSCSSSS", ReasonId::iH2Ring},
       {"LLLL-3-SCSCSSSC", ReasonId::iH3Ring},
+      // grouped wings
+      {"VVV-3-CSCSC+", ReasonId::GroupedXYWing},
+      {"VLV-2-CSSSC+", ReasonId::GroupedWWing},
+      {"LVL-2-SSCSS+", ReasonId::GroupedSWing},
+      {"VLL-2-CSSCS+", ReasonId::GroupedM2Wing},
+      {"VLL-3-CSSCS+", ReasonId::GroupedM3Wing},
+      {"LLL-1-SSSSS+", ReasonId::GroupedL1Wing},
+      {"LLL-2-SCSSS+", ReasonId::GroupedL2Wing},
+      {"LLL-2-SCSCS+", ReasonId::GroupedL2Wing},
+      {"LLL-3-SCSCS+", ReasonId::GroupedL3Wing},
+      {"VLL-2-CSSSS+", ReasonId::GroupedH1Wing},
+      {"VVL-2-CSCSS+", ReasonId::GroupedH2Wing},
+      {"VVL-3-CSCSS+", ReasonId::GroupedH3Wing},
+      {"LLLL-4-SCSCSCS+", ReasonId::GroupedStrongWing},
+      {"LLLL-2-SCSSSCS+", ReasonId::GroupediWWing},
+      {"VLVL-2-CSSSCCS+", ReasonId::GroupedDualWWing},
+      {"LLLL-3-SCSCSCS+", ReasonId::GroupediXYWing},
+      {"LLLL-2-SSSCSSS+", ReasonId::GroupediSWing},
+      {"LLVL-2-SCSSCSS+", ReasonId::GroupediM2Wing},
+      {"LLVL-3-SCSSCSS+", ReasonId::GroupediM3Wing},
+      {"LLLL-1-SSSSSSS+", ReasonId::GroupediL1Wing},
+      {"LVLL-2-SSCSSSS+", ReasonId::GroupediL2Wing},
+      {"LVVL-2-SSCSCSS+", ReasonId::GroupediL2Wing},
+      {"LVVL-3-SSCSCSS+", ReasonId::GroupediL3Wing},
+      {"LLLL-2-SCSSSSS+", ReasonId::GroupediH1Wing},
+      {"LLLL-2-SCSCSSS+", ReasonId::GroupediH2Wing},
+      {"LLLL-3-SCSCSSS+", ReasonId::GroupediH3Wing},
+      // grouped rings
+      {"VLVL-2-CSSSCSSS+", ReasonId::GroupedWRing},
+      {"LVLV-2-SSCSSSCS+", ReasonId::GroupedWRing},
+      {"VLL-2-CSSCSS+", ReasonId::GroupedM2Ring},
+      {"LLV-2-SCSSCS+", ReasonId::GroupedM2Ring},
+      {"LVL-2-SSCSSC+", ReasonId::GroupedM2Ring},
+      {"LLL-1-SSSSSS+", ReasonId::GroupedL1Ring},
+      {"LLL-2-SCSCSS+", ReasonId::GroupedL2Ring},
+      {"LLL-2-SCSSSC+", ReasonId::GroupedL2Ring},
+      {"LLL-2-SCSCSS+", ReasonId::GroupedL2Ring},
+      {"LVV-2-SSCSCS+", ReasonId::GroupedH2Ring},
+      {"VLV-2-CSSSCS+", ReasonId::GroupedH2Ring},
+      {"LLLL-4-SCSCSCSC+", ReasonId::GroupedStrongRing},
+      {"VVVV-4-CSCSCSCS+", ReasonId::GroupedStrongRing},
+      {"LLLL-2-SCSSSCSS+", ReasonId::GroupediWRing},
+      {"LLLL-3-SCSCSCS+", ReasonId::GroupediXYRing},
+      {"LLLL-2-SSSCSSSC+", ReasonId::GroupediSRing},
+      {"LLVL-2-SCSSCSSS+", ReasonId::GroupediM2Ring},
+      {"LLVL-3-SCSSCSSC+", ReasonId::GroupediM3Ring},
+      {"LLLL-1-SSSSSSSS+", ReasonId::GroupediL1Ring},
+      {"LVLL-2-SSCSSSSC+", ReasonId::GroupediL2Ring},
+      {"LVVL-2-SSCSCSSS+", ReasonId::GroupediL2Ring},
+      {"LVVL-3-SSCSCSSC+", ReasonId::GroupediL3Ring},
+      {"LLLL-2-SCSSSSSC+", ReasonId::GroupediH1Ring},
+      {"LLLL-2-SCSCSSSS+", ReasonId::GroupediH2Ring},
+      {"LLLL-3-SCSCSSSC+", ReasonId::GroupediH3Ring},
     };
 
     if (WING_TABLE.find(finalString) != WING_TABLE.end()) {
