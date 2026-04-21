@@ -597,13 +597,13 @@ static void techFinnedXWing(SudokuBoard &board, EventQueue &eventQueue) {
             CellSet fins = vertices - covered;
             // verify sashiminess
             bool sashiminess = false;
-            if ((baseA - fins).size() == 1 || (baseB - fins).size() == 1) {
+            if ((positionsA - fins).size() <= 1 || (positionsB - fins).size() <= 1) {
               sashiminess = true;
             }
             // look for fins and check they belong to a single box
             LocationSet boxes;
             for (Cell fin : fins) { boxes.insert(SudokuBoard::getBoxLocation(fin)); }
-            if (boxes.size() == 1) {
+            if (boxes.size() == 1 && fins.size() <= 2) {
               // check for possible eliminations
               const Unit &finBox = SudokuBoard::getBoxByLocation(*boxes.begin());
               CellSet set = ((coverA | coverB) - (baseA | baseB)) & finBox;
@@ -688,13 +688,13 @@ static void techFinnedSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
             CellSet fins = vertices - covered;
             // verify sashiminess
             bool sashiminess = false;
-            if ((baseA - fins).size() == 1 || (baseB - fins).size() == 1 || (baseC - fins).size() == 1) {
+            if ((positionsA - fins).size() <= 1 || (positionsB - fins).size() <= 1 || (positionsC - fins).size() <= 1) {
               sashiminess = true;
             }
             // look for fins and check they belong to a single box
             LocationSet boxes;
             for (Cell fin : fins) { boxes.insert(SudokuBoard::getBoxLocation(fin)); }
-            if (boxes.size() == 1) {
+            if (boxes.size() == 1 && fins.size() <= 2) {
               // check for possible eliminations
               const Unit &finBox = SudokuBoard::getBoxByLocation(*boxes.begin());
               CellSet set = ((coverA | coverB | coverC) - (baseA | baseB | baseC)) & finBox;
@@ -784,19 +784,19 @@ static void techFinnedJellyfish(SudokuBoard &board, EventQueue &eventQueue) {
             CellSet fins = vertices - covered;
             // verify sashiminess
             bool sashiminess = false;
-            if ((baseA - fins).size() == 1 || (baseB - fins).size() == 1 || (baseC - fins).size() == 1 || (baseD - fins).size() == 1) {
+            if ((positionsA - fins).size() <= 1 || (positionsB - fins).size() <= 1 || (positionsC - fins).size() <= 1 || (positionsD - fins).size() <= 1) {
               sashiminess = true;
             }
             // look for fins and check they belong to a single box
             LocationSet boxes;
             for (Cell fin : fins) { boxes.insert(SudokuBoard::getBoxLocation(fin)); }
-            if (boxes.size() == 1) {
+            if (boxes.size() == 1 && fins.size() <= 2) {
               // check for possible eliminations
               const Unit &finBox = SudokuBoard::getBoxByLocation(*boxes.begin());
               CellSet set = ((coverA | coverB | coverC | coverD) - (baseA | baseB | baseC | baseD)) & finBox;
               if (!set.empty()) {
                 // Finned Jellyfish spotted
-                Event event(EventType::RemoveCandidate, ReasonId::FinnedJellyfish, sashiminess ? ReasonId::SashimiJellyfish : ReasonId::FinnedSwordfish);
+                Event event(EventType::RemoveCandidate, ReasonId::FinnedJellyfish, sashiminess ? ReasonId::SashimiJellyfish : ReasonId::FinnedJellyfish);
                 // base sets without the fins
                 event.addSource(positionsA - fins, digit);
                 event.addSource(positionsB - fins, digit);
@@ -1277,7 +1277,7 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
                     event.addOperation(idx, y);
                   }
                   if (eventQueue.enqueue(board, event)) return;
-                } else if (yInUnit.is_subset_of(peers_of_a | peers_of_b) && !(yInUnit & peers_of_a).empty() && !(yInUnit & peers_of_b).empty()) 
+                } else if (yInUnit.is_subset_of(peers_of_a | peers_of_b) && !(yInUnit & peers_of_a).empty() && !(yInUnit & peers_of_b).empty()) {
                   // W-Wing spotted on digit y
                   Event event(EventType::RemoveCandidate, ReasonId::WWing);
                   // the source is the four (or more) cells forming the W-Wing
@@ -1726,8 +1726,10 @@ static void set_default_solver_config() {
     ReasonId::_3DMedusa,
     ReasonId::XChain,
     ReasonId::FinnedSwordfish,
+    ReasonId::Jellyfish,
     ReasonId::XYChain,
     ReasonId::GroupedXChain,
+    ReasonId::FinnedJellyfish,
     ReasonId::AIC,
     ReasonId::GroupedAIC,
     ReasonId::SueDeCoq,
@@ -1785,8 +1787,10 @@ static constexpr TechniqueEntry TECHNIQUES[] = {
   {tech3DMedusa, ReasonId::_3DMedusa},
   {techXChain, ReasonId::XChain},
   {techFinnedSwordfish, ReasonId::FinnedSwordfish},
+  {techJellyfish, ReasonId::Jellyfish},
   {techXYChain, ReasonId::XYChain},
   {techGroupedXChain, ReasonId::GroupedXChain},
+  {techFinnedJellyfish, ReasonId::FinnedJellyfish},
   {techAIC, ReasonId::AIC},
   {techGroupedAIC, ReasonId::GroupedAIC},
   {techSueDeCoq, ReasonId::SueDeCoq},
