@@ -152,70 +152,72 @@
       const groups = ctx.splitSourceGroups(ev.sources || []);
       const parts = [];
 
-      let totalMask = 0;
-      let nodes = [];
-      let digits = [];
-      for (let node of groups[0]) {
-        totalMask |= node.mask;
-        nodes.push(ctx.formatEurekaCellCode(node.cells));
-        digits.push(ctx.maskToSingleDigit(node.mask));
-      }
-      let digitCounter = ctx.maskToDigits(totalMask);
+      for (let group of groups) {
+        let totalMask = 0;
+        let nodes = [];
+        let digits = [];
+        for (let node of group) {
+          totalMask |= node.mask;
+          nodes.push(ctx.formatEurekaCellCode(node.cells));
+          digits.push(ctx.maskToSingleDigit(node.mask));
+        }
+        let digitCounter = ctx.maskToDigits(totalMask);
 
-      // stringify chain (Eureka notation)
-      if (digitCounter.length == 1) {
-        // single digit chain
-        let chainString = "";
-        let WANT_STRONG = true;
-        for (let node of nodes) {
-          if (chainString != "") {
-            if (WANT_STRONG) {
-              chainString += "=";
-            } else {
-              chainString += "-";
+        // stringify chain (Eureka notation)
+        if (digitCounter.length == 1) {
+          // single digit chain
+          let chainString = "";
+          let WANT_STRONG = true;
+          for (let node of nodes) {
+            if (chainString != "") {
+              if (WANT_STRONG) {
+                chainString += "=";
+              } else {
+                chainString += "-";
+              }
+              WANT_STRONG = !WANT_STRONG;
             }
-            WANT_STRONG = !WANT_STRONG;
+            chainString += node;
           }
-          chainString += node;
-        }
-        parts.push(`<div>(${digits[0]}): <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(chainString)}</span> => </div>`);
-      } else {
-        // multi digit chain
-        let chainString = "";
-        let WANT_STRONG = true;
-        let i = 0;
-        while (i < nodes.length) {
-          let node = nodes[i];
-          let digit = digits[i];
-          let next_node = nodes[i+1];
-          let next_digit = digits[i+1];
-          let link_type = WANT_STRONG ? "=" : "-";
+          parts.push(`<div>(${digits[0]}): <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(chainString)}</span> => </div>`);
+        } else {
+          // multi digit chain
+          let chainString = "";
+          let WANT_STRONG = true;
+          let i = 0;
+          while (i < nodes.length) {
+            let node = nodes[i];
+            let digit = digits[i];
+            let next_node = nodes[i+1];
+            let next_digit = digits[i+1];
+            let link_type = WANT_STRONG ? "=" : "-";
 
-          if (!next_digit) {
-            // last node
-            chainString += "(" + digit + ")" + node;
-            WANT_STRONG = !WANT_STRONG;
-            ++i;
-          } else if (digit == next_digit) {
-            // digit is not going to change in next node
-            chainString += "(" + digit + ")" + node + link_type;
-            WANT_STRONG = !WANT_STRONG;
-            ++i;
-          } else {
-            // a new digit is coming in the next node, include it here
-            chainString += "(" + digit + link_type + next_digit + ")" + node;
-            WANT_STRONG = !WANT_STRONG;
-            ++i;
-            chainString += WANT_STRONG ? "=" : "-";
-            WANT_STRONG = !WANT_STRONG;
-            ++i;
+            if (!next_digit) {
+              // last node
+              chainString += "(" + digit + ")" + node;
+              WANT_STRONG = !WANT_STRONG;
+              ++i;
+            } else if (digit == next_digit) {
+              // digit is not going to change in next node
+              chainString += "(" + digit + ")" + node + link_type;
+              WANT_STRONG = !WANT_STRONG;
+              ++i;
+            } else {
+              // a new digit is coming in the next node, include it here
+              chainString += "(" + digit + link_type + next_digit + ")" + node;
+              WANT_STRONG = !WANT_STRONG;
+              ++i;
+              chainString += WANT_STRONG ? "=" : "-";
+              WANT_STRONG = !WANT_STRONG;
+              ++i;
+            }
           }
+          // remove trailing -/=
+          if (chainString.endsWith("=") || chainString.endsWith("-")) {
+            chainString = chainString.slice(0, -1);
+          }
+          parts.push(`<div><span class="logCellRef logSourceCategory1">${ctx.escapeHtml(chainString)}</span> => </div>`);
         }
-        // remove trailing -/=
-        if (chainString.endsWith("=") || chainString.endsWith("-")) {
-          chainString = chainString.slice(0, -1);
-        }
-        parts.push(`<div><span class="logCellRef logSourceCategory1">${ctx.escapeHtml(chainString)}</span> => </div>`);
       }
 
       defaultOperationsFormatter(ctx, ev, parts);
@@ -233,6 +235,65 @@
   REGISTRY["Alternating Inference Chain"] = chainFormatter;
   REGISTRY["Grouped X-Chain"] = chainFormatter;
   REGISTRY["Grouped Alternating Inference Chain"] = chainFormatter;
+
+  const forcingFormatter = {
+    formatLog(ev, ctx) {
+      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const parts = [];
+      const detailedReason = ev.detailedReason;
+
+      for (let idx in groups) {
+        let group = groups[idx];
+        let totalMask = 0;
+        let nodes = [];
+        let digits = [];
+        for (let node of group) {
+          totalMask |= node.mask;
+          nodes.push(ctx.formatEurekaCellCode(node.cells));
+          digits.push(ctx.maskToSingleDigit(node.mask));
+        }
+        let digitCounter = ctx.maskToDigits(totalMask);
+
+        // stringify chain (Eureka notation) - use only multi digit formatting
+        let chainString = "";
+        let WANT_STRONG = false;  // FC generally starts from a weak link
+        if (detailedReason == "Digit Forcing Chain" && idx == 1) {
+          // unless you are reading the second chain of a Digit Forcing Chain
+          WANT_STRONG = true;
+        }
+        let i = 0;
+        while (i < nodes.length) {
+          let node = nodes[i];
+          let digit = digits[i];
+          let next_node = nodes[i+1];
+          let next_digit = digits[i+1];
+          let link_type = WANT_STRONG ? "=" : "-";
+
+          if (WANT_STRONG) {
+            chainString += node + "<>" + digit + " ";
+          } else {
+            chainString += node + "=" + digit + " ";
+          }
+          WANT_STRONG = !WANT_STRONG;
+          ++i;
+        }
+        // remove trailing space
+        if (chainString.endsWith(" ")) {
+            chainString = chainString.slice(0, -1);
+          }
+        parts.push(`<div><span class="logCellRef logSourceCategory1">${ctx.escapeHtml(chainString)}</span> => </div>`);
+      }
+
+      defaultOperationsFormatter(ctx, ev, parts);
+
+      return { title: ev.detailedReason, bodyHtml: parts.join("") };
+    },
+    getSourceCategory(ev, source, sourceIndex, groupIndex) {
+      return (sourceIndex % 2) + 1;
+    }
+  };
+  REGISTRY["Forcing Chain"] = forcingFormatter;
+  REGISTRY["Forcing Net"] = forcingFormatter;
 
   const alsFormatter = {
     formatLog(ev, ctx) {

@@ -10,6 +10,7 @@
 #include "EventQueue.hpp"
 #include "AIC.hpp"
 #include "ALS.hpp"
+#include "Forcing.hpp"
 #include "encoder.hpp"
 #include "types.hpp"
 
@@ -1683,6 +1684,16 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
   }
 }
 
+void techForcingChain(SudokuBoard &board, EventQueue &eventQueue) {
+  ForcingChainBuilder builder(board);
+  builder.build();
+
+  Event event;
+  if (builder.find(event)) {
+    eventQueue.enqueue(board, event);
+  }
+}
+
 typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);
 
 struct TechniqueEntry {
@@ -1698,49 +1709,7 @@ static SolverConfig g_solverConfig;
 
 static void set_default_solver_config() {
   for (bool &enabled : g_solverConfig.enabledTechniques) {
-    enabled = false;
-  }
-
-  constexpr ReasonId defaults[] = {
-    ReasonId::FullHouse,
-    ReasonId::HiddenSingle,
-    ReasonId::PointingSet,
-    ReasonId::BoxLineReduction,
-    ReasonId::HiddenPair,
-    ReasonId::NakedSingle,
-    ReasonId::NakedPair,
-    ReasonId::NakedTriple,
-    ReasonId::HiddenTriple,
-    ReasonId::BUGPlusOne,
-    ReasonId::XWing,
-    ReasonId::XYWing,
-    ReasonId::Swordfish,
-    ReasonId::RemotePair,
-    ReasonId::UniqueRectangle,
-    ReasonId::WWing,
-    ReasonId::SingleDigitPattern,
-    ReasonId::FinnedXWing,
-    ReasonId::EmptyRectangle,
-    ReasonId::XYZWing,
-    ReasonId::SimpleColoring,
-    ReasonId::_3DMedusa,
-    ReasonId::XChain,
-    ReasonId::FinnedSwordfish,
-    ReasonId::Jellyfish,
-    ReasonId::XYChain,
-    ReasonId::GroupedXChain,
-    ReasonId::FinnedJellyfish,
-    ReasonId::AIC,
-    ReasonId::GroupedAIC,
-    ReasonId::SueDeCoq,
-    ReasonId::ALSXZ,
-    ReasonId::ALSXYWing,
-    ReasonId::ALSChain,
-    ReasonId::DeathBlossom,
-  };
-
-  for (ReasonId reason : defaults) {
-    g_solverConfig.enabledTechniques[(uint8_t)reason] = true;
+    enabled = true;
   }
 }
 
@@ -1798,6 +1767,7 @@ static constexpr TechniqueEntry TECHNIQUES[] = {
   {techALSXYWing, ReasonId::ALSXYWing},
   {techALSChain, ReasonId::ALSChain},
   {techDeathBlossom, ReasonId::DeathBlossom},
+  {techForcingChain, ReasonId::ForcingChain},
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Operation &op) {

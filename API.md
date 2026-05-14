@@ -253,6 +253,13 @@ enum class ReasonId : uint8_t {
     ALSRing,
     SueDeCoq,               // <---
     DeathBlossom,           // <---
+    // forcing
+    ForcingChain,           // <---
+    DigitForcingChain,
+    NishioForcingChain,
+    CellForcingChain,
+    UnitForcingChain,
+    ForcingNet,             // <---
 };
 ```
 

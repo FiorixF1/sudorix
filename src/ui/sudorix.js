@@ -16,6 +16,12 @@ var business_logic = (() => {
     "#2B6BFF"  /* blue */
   ];
 
+  const FORCING_PALETTE = [
+    "#7AA2FF", /* theme color */
+    "#FF2BD6", /* magenta */
+    "#7CFF00", /* neon green */
+  ];
+
   /* =========================================================
    * WASM solver bridge (C++/Emscripten)
    *
@@ -213,6 +219,12 @@ var business_logic = (() => {
     "Almost Locked Set Ring",
     "Sue de Coq",
     "Death Blossom",
+    "Forcing Chain",
+    "Digit Forcing Chain",
+    "Nishio Forcing Chain",
+    "Cell Forcing Chain",
+    "Unit Forcing Chain",
+    "Forcing Net",
   ];
 
   const TECHNIQUE_OPTIONS = [
@@ -246,11 +258,13 @@ var business_logic = (() => {
     { id: 21, label: "Finned Jellyfish" },
     { id: 70, label: "Alternating Inference Chain" },
     { id: 76, label: "Grouped Alternating Inference Chain" },
-    { id: 132, label: "Sue de Coq" },
-    { id: 125, label: "Almost Locked Set XZ" },
-    { id: 128, label: "Almost Locked Set XY-Wing" },
-    { id: 130, label: "Almost Locked Set Chain" },
-    { id: 133, label: "Death Blossom" },
+    { id: 173, label: "Sue de Coq" },
+    { id: 166, label: "Almost Locked Set XZ" },
+    { id: 169, label: "Almost Locked Set XY-Wing" },
+    { id: 171, label: "Almost Locked Set Chain" },
+    { id: 174, label: "Death Blossom" },
+    { id: 175, label: "Forcing Chain" },
+    { id: 180, label: "Forcing Net" },
   ];
 
   const DEFAULT_TECHNIQUE_IDS = TECHNIQUE_OPTIONS.map((entry) => entry.id);
@@ -920,26 +934,28 @@ var business_logic = (() => {
       const groups = splitSourceGroups(ev.sources || []);
 
       // Draw chain from sources
-      let i = 0;
-      let WANT_STRONG = true;
-      while (i < groups[0].length) {
-        const s = groups[0][i];
-        const t = groups[0][i+1];
-        if (s && s.cells && s.cells.idxs && s.cells.idxs.length > 0 &&
-            t && t.cells && t.cells.idxs && t.cells.idxs.length > 0) {
-          addCandidateLink(s.cells.idxs[0],
-                           maskToSingleDigit(s.mask),
-                           t.cells.idxs[0],
-                           maskToSingleDigit(t.mask),
-                           {
-                             dashed: !WANT_STRONG,
-                             bold: WANT_STRONG,
-                             color: null,
-                           }
-          );
-          WANT_STRONG = !WANT_STRONG;
+      for (let group of groups) {
+        let i = 0;
+        let WANT_STRONG = true;
+        while (i < group.length) {
+          const s = group[i];
+          const t = group[i+1];
+          if (s && s.cells && s.cells.idxs && s.cells.idxs.length > 0 &&
+              t && t.cells && t.cells.idxs && t.cells.idxs.length > 0) {
+            addCandidateLink(s.cells.idxs[0],
+                             maskToSingleDigit(s.mask),
+                             t.cells.idxs[0],
+                             maskToSingleDigit(t.mask),
+                             {
+                               dashed: !WANT_STRONG,
+                               bold: WANT_STRONG,
+                               color: null,
+                             }
+            );
+            WANT_STRONG = !WANT_STRONG;
+          }
+          ++i;
         }
-        ++i;
       }
     } else if (ev.reason.indexOf("Almost Locked Set") != -1) {
       // ALS
@@ -964,6 +980,39 @@ var business_logic = (() => {
           );
         }
         i += 2;
+      }
+    } else if (ev.reason.indexOf("Forcing") != -1) {
+      // FC
+      const groups = splitSourceGroups(ev.sources || []);
+
+      // Draw chain from sources
+      for (let idx in groups) {
+        let group = groups[idx];
+        let i = 0;
+        let WANT_STRONG = false;  // FC generally starts from a weak link
+        if (ev.detailedReason == "Digit Forcing Chain" && idx == 1) {
+          // unless you are reading the second chain of a Digit Forcing Chain
+          WANT_STRONG = true;
+        }
+        while (i < group.length) {
+          const s = group[i];
+          const t = group[i+1];
+          if (s && s.cells && s.cells.idxs && s.cells.idxs.length > 0 &&
+              t && t.cells && t.cells.idxs && t.cells.idxs.length > 0) {
+            addCandidateLink(s.cells.idxs[0],
+                             maskToSingleDigit(s.mask),
+                             t.cells.idxs[0],
+                             maskToSingleDigit(t.mask),
+                             {
+                               dashed: !WANT_STRONG,
+                               bold: WANT_STRONG,
+                               color: FORCING_PALETTE[idx],
+                             }
+            );
+            WANT_STRONG = !WANT_STRONG;
+          }
+          ++i;
+        }
       }
     }
   }
