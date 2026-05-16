@@ -450,6 +450,10 @@ Unu fonto povas enteni pli ol unu ĉelon se ĝi prezentas nodon kun grupigitaj �
 
 Tio aplikiĝas al: **Skyscraper**, **Two-String Kite**, **Crane**, **Empty Rectangle**, **X-Chain**, **XY-Chain**, **Alternating Inference Chain**, **Grouped Alternating Inference Chain**.
 
+Kaze de devigantaj ĉenoj, pli ol unu ĉeno aperos kun disigilo inter ili. La ĉeno ĉiam komenciĝas per vera hipotezo, escepte de ciferaj devigantaj ĉenoj: tie la unua ĉeno komenciĝas per vera hipotezo, kaj la dua per malvera hipotezo.
+
+Tio aplikiĝas al: **Forcing Chain**.
+
 ---
 
 ## ALS

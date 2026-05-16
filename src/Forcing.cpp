@@ -226,20 +226,26 @@ bool ForcingChainBuilder::find(Event &outEvent) const {
 }
 
 bool ForcingChainBuilder::findContradiction(Event &outEvent) const {
+  return false;
+
   // Nishio Forcing Chain
   // Supported cases:
   // - The assumption is false because it leads a candidate being both ON and OFF.
   // Not yet supported:
   // - The assumption is false because it leads to a bi-value cell being emptied.
   // - The assumption is false because it leads to the last remaining candidates in a unit to be both ON.
-  // - The assumption in false because it leads to the test remaining candidates in a unit to be both OFF.
+  // - The assumption in false because it leads to the last remaining candidates in a unit to be both OFF.
+  //
+  // WARNING: the current implementation gives the exact same results of a Digit Forcing Chain
+  // but they harder to visualize on the grid, so Nishio is currently disabled.
+  //
   for (Cell assumptionCell = 0; assumptionCell < 81; ++assumptionCell) {
     for (Digit assumptionDigit = 1; assumptionDigit <= 9; ++assumptionDigit) {
       if (!candidateExists(assumptionCell, assumptionDigit)) {
         continue;
       }
 
-      // store the initial implications: the candidate is ON
+      // store the initial implication: the candidate is ON
       const ForcingLiteral rootOn{assumptionCell, assumptionDigit, true};
 
       // find the reachable consequences from the assumption
@@ -252,20 +258,20 @@ bool ForcingChainBuilder::findContradiction(Event &outEvent) const {
             continue;
           }
 
-          if (cell == assumptionCell || digit == assumptionDigit) {
+          if (cell == assumptionCell) {
             continue;
           }
 
           const ForcingLiteral onConsequence{cell, digit, true};
           const ForcingLiteral offConsequence{cell, digit, false};
 
-          // corner case: the consequence is not reachable by every assumption
+          // a consequence is both true and false -> the assumption is false
           const int onIdx = literalIndex(onConsequence);
           const int offIdx = literalIndex(offConsequence);
           if (reach[onIdx] != -1 && reach[offIdx] != -1) {
             auto pathA = findPath(rootOn, onConsequence);
             auto pathB = findPath(rootOn, offConsequence);
-            if (!pathA && !pathB) {
+            if (pathA && pathB) {
               // Nishio Forcing Chain spotted: source is the two chains starting from the assumption
               Event event(EventType::RemoveCandidate, ReasonId::ForcingChain, ReasonId::NishioForcingChain);
               addPathSources(event, *pathA);
@@ -539,4 +545,3 @@ void ForcingChainBuilder::addPathSources(Event &event, const ForcingPath &path) 
     event.addSource(node.cell, node.digit);
   }
 }
-

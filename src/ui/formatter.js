@@ -14,7 +14,7 @@
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex) {
+    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
       return (groupIndex % 2) + 1;
     }
   };
@@ -125,7 +125,7 @@
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex) {
+    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
       if (groupIndex == 0) {
         // green for first color
         return 1;
@@ -224,7 +224,7 @@
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex) {
+    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
       return (sourceIndex % 2) + 1;
     }
   };
@@ -288,8 +288,20 @@
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex) {
-      return (sourceIndex % 2) + 1;
+    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
+      if (ev.detailedReason == "Digit Forcing Chain" && sourceIndexInGroup == 0) {
+        // in the very first digit of a Digit Forcing Chain
+        // use yellow since that value is both true and false
+        return 4;
+      } else if (ev.detailedReason == "Digit Forcing Chain" && groupIndex == 1) {
+        // in the second chain of a Digit Forcing Chain
+        // start from blue and alternate with green
+        return (sourceIndexInGroup + 1) % 2 + 1;
+      } else {
+        // default
+        // start from green and alternate with blue
+        return (sourceIndexInGroup % 2) + 1;
+      }
     }
   };
   REGISTRY["Forcing Chain"] = forcingFormatter;
@@ -340,7 +352,7 @@
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex) {
+    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
       if (groupIndex == 0) {
         // use a different color for each ALS
         return (sourceIndex % 9) + 4;
@@ -382,7 +394,7 @@
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex) {
+    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
       if (groupIndex == 0) {
         if (sourceIndex == 0) {
           // blue
@@ -430,7 +442,7 @@
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex) {
+    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
       if (groupIndex == 0) {
         return sourceIndex + 2;
       }
