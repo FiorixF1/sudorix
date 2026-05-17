@@ -9,7 +9,7 @@ AicGraph AicGraphBuilder::build() {
   build_singleton_nodes(g.nodes);
   build_grouped_nodes(g.nodes);
 
-  build_strong_links(g.nodes, g.strong_links);
+  build_links(g.nodes, g.strong_links, g.weak_links);
 
   return g;
 }
@@ -17,7 +17,7 @@ AicGraph AicGraphBuilder::build() {
 AicGraph AicGraphBuilder::prune(AicGraph &graph, const AicConfig &config) {
   AicGraph prunedGraph;
 
-  // build edges according to config
+  // build strong edges according to config
   for (auto it = graph.strong_links.begin(); it != graph.strong_links.end(); ++it) {
     AicNode &source = graph.nodes[it->first];
 
@@ -56,12 +56,41 @@ AicGraph AicGraphBuilder::prune(AicGraph &graph, const AicConfig &config) {
       if (config.useRemotePairs && (target.isGrouped || targetRemotePair != remotePair || target.digitSet != source.digitSet)) {
         continue;
       }
-      add_strong_edge(prunedGraph.strong_links, source.id, target.id);
+      add_edge(prunedGraph.strong_links, source.id, target.id);
+    }
+  }
+
+  // build weak edges according to config
+  if (config.useWeakLinks) {
+    for (auto it = graph.weak_links.begin(); it != graph.weak_links.end(); ++it) {
+      AicNode &source = graph.nodes[it->first];
+
+      if (source.isGrouped && !config.useGroupedCells) {
+        continue;
+      }
+
+      auto &edges = it->second;
+      for (AicNodeID edge : edges) {
+        AicNode &target = graph.nodes[edge];
+        if (target.isGrouped && !config.useGroupedCells) {
+          continue;
+        }
+        if (target.digitSet != source.digitSet && (!config.multiDigit || !config.useWeakInCell)) {
+          continue;
+        }
+        if (target.cellSet != source.cellSet && !config.useWeakInUnit) {
+          continue;
+        }
+        add_edge(prunedGraph.weak_links, source.id, target.id);
+      }
     }
   }
 
   // build nodes from filtered edges
   for (auto it = prunedGraph.strong_links.begin(); it != prunedGraph.strong_links.end(); ++it) {
+    prunedGraph.nodes[it->first] = graph.nodes[it->first];
+  }
+  for (auto it = prunedGraph.weak_links.begin(); it != prunedGraph.weak_links.end(); ++it) {
     prunedGraph.nodes[it->first] = graph.nodes[it->first];
   }
 
@@ -195,7 +224,7 @@ AicNodeID AicGraphBuilder::get_node_id(const DigitSet &digits, const CellSet &ce
   return shiftedDigits | code;
 }
 
-void AicGraphBuilder::add_strong_edge(AicGraphEdges &adj, AicNodeID a, AicNodeID b) {
+void AicGraphBuilder::add_edge(AicGraphEdges &adj, AicNodeID a, AicNodeID b) {
   if (a == b) {
     return;
   }
@@ -211,77 +240,91 @@ void AicGraphBuilder::add_strong_edge(AicGraphEdges &adj, AicNodeID a, AicNodeID
   add_one_way(b, a);
 }
 
-void AicGraphBuilder::build_strong_links(AicGraphNodes &nodes,
-                                         AicGraphEdges &strong_links) {
-  // Bilocations
-  for (Digit d = 1; d <= 9; ++d) {
-    build_strong_links_in_units(nodes, strong_links, SudokuBoard::getRows(), d);
-    build_strong_links_in_units(nodes, strong_links, SudokuBoard::getColumns(), d);
-    build_strong_links_in_units(nodes, strong_links, SudokuBoard::getBoxes(), d);
+void AicGraphBuilder::build_links(AicGraphNodes &nodes,
+                                  AicGraphEdges &strong_links,
+                                  AicGraphEdges &weak_links) {
+  // Bilocations (strong) and positions (weak)
+  for (Digit digit = 1; digit <= 9; ++digit) {
+    build_links_in_units(nodes, strong_links, weak_links, SudokuBoard::getRows(), digit);
+    build_links_in_units(nodes, strong_links, weak_links, SudokuBoard::getColumns(), digit);
+    build_links_in_units(nodes, strong_links, weak_links, SudokuBoard::getBoxes(), digit);
   }
 
-  // Bivalues
+  // Bivalues (strong) and candidates (weak)
   for (Cell cell = 0; cell < 81; ++cell) {
-    build_strong_links_in_cells(nodes, strong_links, cell);
+    build_links_in_cells(nodes, strong_links, weak_links, cell);
   }
 
   // Grouped cells (including empty rectangle intersection)
-  for (Digit d = 1; d <= 9; ++d) {
+  for (Digit digit = 1; digit <= 9; ++digit) {
     // singletons and groups in a row
-    build_grouped_strong_row_box(nodes, strong_links, d);
+    build_grouped_row_box(nodes, strong_links, weak_links, digit);
     // singletons and groups in a column
-    build_grouped_strong_col_box(nodes, strong_links, d);
+    build_grouped_col_box(nodes, strong_links, weak_links, digit);
     // minirows in a box
-    //build_grouped_strong_box_row(nodes, strong_links, d);
+    //build_grouped_box_row(nodes, strong_links, weak_links, digit);
     // minicolumns in a box
-    //build_grouped_strong_box_col(nodes, strong_links, d);
+    //build_grouped_box_col(nodes, strong_links, weak_links, digit);
     // empty rectangle intersection
-    build_grouped_strong_eri(nodes, strong_links, d);
+    build_grouped_eri(nodes, strong_links, weak_links, digit);
   }
 }
 
-void AicGraphBuilder::build_strong_links_in_units(const AicGraphNodes &nodes,
-                                                  AicGraphEdges &strong_links,
-                                                  const std::vector<Unit> &units,
-                                                  Digit d) {
+void AicGraphBuilder::build_links_in_units(const AicGraphNodes &nodes,
+                                           AicGraphEdges &strong_links,
+                                           AicGraphEdges &weak_links,
+                                           const std::vector<Unit> &units,
+                                           Digit digit) {
   for (const Unit &unit : units) {
-    CellSet pos = board.getPositionsOfDigit(unit, d);
-    if (pos.size() != 2) {
-      continue;
-    }
+    CellSet pos = board.getPositionsOfDigit(unit, digit);
+    bool is_strong_link = pos.size() == 2;
 
     std::vector<int> v = pos.to_vector();
-    Cell c1 = v[0];
-    Cell c2 = v[1];
+    for (int i = 0; i < v.size(); ++i) {
+      for (int j = i+1; j < v.size(); ++j) {
+        Cell c1 = v[i];
+        Cell c2 = v[j];
 
-    AicNodeID n1 = get_node_id(d, c1);
-    AicNodeID n2 = get_node_id(d, c2);
-    if (n1 && n2) add_strong_edge(strong_links, n1, n2);
+        AicNodeID n1 = get_node_id(digit, c1);
+        AicNodeID n2 = get_node_id(digit, c2);
+        if (n1 && n2) {
+          if (is_strong_link) add_edge(strong_links, n1, n2);
+          add_edge(weak_links, n1, n2);
+        }
+      }
+    }
   }
 }
 
-void AicGraphBuilder::build_strong_links_in_cells(const AicGraphNodes &nodes,
-                                                  AicGraphEdges &strong_links,
-                                                  Cell cell) {
+void AicGraphBuilder::build_links_in_cells(const AicGraphNodes &nodes,
+                                           AicGraphEdges &strong_links,
+                                           AicGraphEdges &weak_links,
+                                           Cell cell) {
   DigitSet candidates = board.getCandidates(cell);
-  if (candidates.size() != 2) {
-    return;
-  }
+  bool is_strong_link = candidates.size() == 2;
 
   std::vector<int> v = candidates.to_vector();
-  Digit d1 = v[0];
-  Digit d2 = v[1];
+  for (int i = 0; i < v.size(); ++i) {
+    for (int j = i+1; j < v.size(); ++j) {
+      Digit d1 = v[i];
+      Digit d2 = v[j];
 
-  AicNodeID n1 = get_node_id(d1, cell);
-  AicNodeID n2 = get_node_id(d2, cell);
-  if (n1 && n2) add_strong_edge(strong_links, n1, n2);
+      AicNodeID n1 = get_node_id(d1, cell);
+      AicNodeID n2 = get_node_id(d2, cell);
+      if (n1 && n2) {
+        if (is_strong_link) add_edge(strong_links, n1, n2);
+        add_edge(weak_links, n1, n2);
+      }
+    }
+  }
 }
 
-void AicGraphBuilder::build_grouped_strong_row_box(const AicGraphNodes &nodes,
-                                                   AicGraphEdges &strong_links,
-                                                   Digit d) {
+void AicGraphBuilder::build_grouped_row_box(const AicGraphNodes &nodes,
+                                            AicGraphEdges &strong_links,
+                                            AicGraphEdges &weak_links,
+                                            Digit digit) {
   for (const Unit &r : SudokuBoard::getRows()) {
-    CellSet pos = board.getPositionsOfDigit(r, d);
+    CellSet pos = board.getPositionsOfDigit(r, digit);
     if (pos.size() < 3) {
       continue;
     }
@@ -293,18 +336,22 @@ void AicGraphBuilder::build_grouped_strong_row_box(const AicGraphNodes &nodes,
     }
 
     if (parts.size() == 2) {
-      AicNodeID a = get_node_id(d, parts[0]);
-      AicNodeID b = get_node_id(d, parts[1]);
-      if (a && b) add_strong_edge(strong_links, a, b);
+      AicNodeID a = get_node_id(digit, parts[0]);
+      AicNodeID b = get_node_id(digit, parts[1]);
+      if (a && b) {
+        add_edge(strong_links, a, b);
+        add_edge(weak_links, a, b);
+      }
     }
   }
 }
 
-void AicGraphBuilder::build_grouped_strong_col_box(const AicGraphNodes &nodes,
-                                                   AicGraphEdges &strong_links,
-                                                   Digit d) {
+void AicGraphBuilder::build_grouped_col_box(const AicGraphNodes &nodes,
+                                            AicGraphEdges &strong_links,
+                                            AicGraphEdges &weak_links,
+                                            Digit digit) {
   for (const Unit &c : SudokuBoard::getColumns()) {
-    CellSet pos = board.getPositionsOfDigit(c, d);
+    CellSet pos = board.getPositionsOfDigit(c, digit);
     if (pos.size() < 3) {
       continue;
     }
@@ -316,18 +363,22 @@ void AicGraphBuilder::build_grouped_strong_col_box(const AicGraphNodes &nodes,
     }
 
     if (parts.size() == 2) {
-      AicNodeID a = get_node_id(d, parts[0]);
-      AicNodeID b = get_node_id(d, parts[1]);
-      if (a && b) add_strong_edge(strong_links, a, b);
+      AicNodeID a = get_node_id(digit, parts[0]);
+      AicNodeID b = get_node_id(digit, parts[1]);
+      if (a && b) {
+        add_edge(strong_links, a, b);
+        add_edge(weak_links, a, b);
+      }
     }
   }
 }
 
-void AicGraphBuilder::build_grouped_strong_box_row(const AicGraphNodes &nodes,
-                                                   AicGraphEdges &strong_links,
-                                                   Digit d) {
+void AicGraphBuilder::build_grouped_box_row(const AicGraphNodes &nodes,
+                                            AicGraphEdges &strong_links,
+                                            AicGraphEdges &weak_links,
+                                            Digit digit) {
   for (const Unit &b : SudokuBoard::getBoxes()) {
-    CellSet pos = board.getPositionsOfDigit(b, d);
+    CellSet pos = board.getPositionsOfDigit(b, digit);
     if (pos.size() < 3) {
       continue;
     }
@@ -339,18 +390,22 @@ void AicGraphBuilder::build_grouped_strong_box_row(const AicGraphNodes &nodes,
     }
 
     if (parts.size() == 2) {
-      AicNodeID a = get_node_id(d, parts[0]);
-      AicNodeID b = get_node_id(d, parts[1]);
-      if (a && b) add_strong_edge(strong_links, a, b);
+      AicNodeID a = get_node_id(digit, parts[0]);
+      AicNodeID b = get_node_id(digit, parts[1]);
+      if (a && b) {
+        add_edge(strong_links, a, b);
+        add_edge(weak_links, a, b);
+      }
     }
   }
 }
 
-void AicGraphBuilder::build_grouped_strong_box_col(const AicGraphNodes &nodes,
-                                                   AicGraphEdges &strong_links,
-                                                   Digit d) {
+void AicGraphBuilder::build_grouped_box_col(const AicGraphNodes &nodes,
+                                            AicGraphEdges &strong_links,
+                                            AicGraphEdges &weak_links,
+                                            Digit digit) {
   for (const Unit &b : SudokuBoard::getBoxes()) {
-    CellSet pos = board.getPositionsOfDigit(b, d);
+    CellSet pos = board.getPositionsOfDigit(b, digit);
     if (pos.size() < 3) {
       continue;
     }
@@ -362,18 +417,22 @@ void AicGraphBuilder::build_grouped_strong_box_col(const AicGraphNodes &nodes,
     }
 
     if (parts.size() == 2) {
-      AicNodeID a = get_node_id(d, parts[0]);
-      AicNodeID b = get_node_id(d, parts[1]);
-      if (a && b) add_strong_edge(strong_links, a, b);
+      AicNodeID a = get_node_id(digit, parts[0]);
+      AicNodeID b = get_node_id(digit, parts[1]);
+      if (a && b) {
+        add_edge(strong_links, a, b);
+        add_edge(weak_links, a, b);
+      }
     }
   }
 }
 
-void AicGraphBuilder::build_grouped_strong_eri(AicGraphNodes &nodes,
-                                               AicGraphEdges &strong_links,
-                                               Digit d) {
+void AicGraphBuilder::build_grouped_eri(AicGraphNodes &nodes,
+                                        AicGraphEdges &strong_links,
+                                        AicGraphEdges &weak_links,
+                                        Digit digit) {
   for (const Unit &b : SudokuBoard::getBoxes()) {
-    CellSet pos = board.getPositionsOfDigit(b, d);
+    CellSet pos = board.getPositionsOfDigit(b, digit);
     if (pos.size() < 3) {
       continue;
     }
@@ -399,23 +458,32 @@ void AicGraphBuilder::build_grouped_strong_eri(AicGraphNodes &nodes,
         CellSet intersection = row_part & col_part;
         if (intersection.empty()) {
           // the cell in the intersection does not contain the candidate
-          AicNodeID r = get_node_id(d, row_part);
-          AicNodeID c = get_node_id(d, col_part);
-          if (r && c) add_strong_edge(strong_links, r, c);
+          AicNodeID r = get_node_id(digit, row_part);
+          AicNodeID c = get_node_id(digit, col_part);
+          if (r && c) {
+            add_edge(strong_links, r, c);
+            add_edge(weak_links, r, c);
+          }
         } else {
           // the intersecting cell contains the candidate: split the ERI in two parts
           // a new node could be necessary in some cases
           {
-            add_group_if_new(nodes, d, row_part - intersection);
-            AicNodeID r = get_node_id(d, row_part - intersection);
-            AicNodeID c = get_node_id(d, col_part);
-            if (r && c) add_strong_edge(strong_links, r, c);
+            add_group_if_new(nodes, digit, row_part - intersection);
+            AicNodeID r = get_node_id(digit, row_part - intersection);
+            AicNodeID c = get_node_id(digit, col_part);
+            if (r && c) {
+              add_edge(strong_links, r, c);
+              add_edge(weak_links, r, c);
+            }
           }
           {
-            add_group_if_new(nodes, d, col_part - intersection);
-            AicNodeID r = get_node_id(d, row_part);
-            AicNodeID c = get_node_id(d, col_part - intersection);
-            if (r && c) add_strong_edge(strong_links, r, c);
+            add_group_if_new(nodes, digit, col_part - intersection);
+            AicNodeID r = get_node_id(digit, row_part);
+            AicNodeID c = get_node_id(digit, col_part - intersection);
+            if (r && c) {
+              add_edge(strong_links, r, c);
+              add_edge(weak_links, r, c);
+            }
           }
         }
       }
@@ -723,15 +791,8 @@ std::optional<Event> AicSearcher::aic_search_from(AicGraph &graph) {
         q.push_back(child);
       }
     } else {
-      for (auto it = graph.strong_links.begin(); it != graph.strong_links.end(); ++it) {
-        AicNodeID nb = it->first;
-        if (nb == cur->node) {
-          continue;
-        }
+      for (AicNodeID nb : graph.weak_links[cur->node]) {
         if (path_contains_node(cur->start, cur, nb)) {
-          continue;
-        }
-        if (!are_weakly_linked(graph.nodes[cur->node], graph.nodes[nb])) {
           continue;
         }
 
@@ -1095,7 +1156,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   Cell end_cell = *End.cellSet.begin();
 
   // AIC Type 1
-  if (start_digit == end_digit && !are_weakly_linked(Start, End)) {
+  if (start_digit == end_digit && !are_weakly_linked(graph, start, end)) {
     CellSet peers = board.getPeers(Start.cellSet | End.cellSet);
     AicPath path = reconstruct_path(graph, end_state);
 
@@ -1144,7 +1205,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   }
 
   // AIC Type 3 (Ring)
-  if (are_weakly_linked(Start, End)) {
+  if (are_weakly_linked(graph, start, end)) {
     AicPath path = reconstruct_path(graph, end_state);
 
     Event event(EventType::RemoveCandidate, reason,
@@ -1423,24 +1484,9 @@ end_loop:
   return {};
 }
 
-bool AicSearcher::are_weakly_linked(AicNode &a, AicNode &b) const {
-  Digit aDigit = *a.digitSet.begin();
-  Digit bDigit = *b.digitSet.begin();
-
-  if ((a.isGrouped || b.isGrouped) && !config.useGroupedCells) {
-    return false;
-  }
-
-  // candidates inside a cell
-  if (!a.isGrouped && !b.isGrouped && a.cellSet == b.cellSet && aDigit != bDigit) {
-    if (config.multiDigit && config.useWeakInCell) {
-      return true;
-    }
-  }
-
-  // cells (or group of) that can see each other
-  if (aDigit == bDigit && board.sees(a.cellSet, b.cellSet)) {
-    if (config.useWeakInUnit) {
+bool AicSearcher::are_weakly_linked(AicGraph &graph, AicNodeID a, AicNodeID b) const {
+  for (const AicNodeID &node : graph.weak_links[a]) {
+    if (node == b) {
       return true;
     }
   }

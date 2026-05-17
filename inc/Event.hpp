@@ -292,8 +292,8 @@ inline const char *reasonIdToString(ReasonId reason) {
     case ReasonId::GroupedAICType2: return "Grouped AIC (Type 2)";
     case ReasonId::GroupedAICType3: return "Grouped AIC (Type 3)";
     case ReasonId::SWing: return "S-Wing";
-    case ReasonId::M2Wing: return "M2-Wing";
-    case ReasonId::M3Wing: return "M3-Wing";
+    case ReasonId::M2Wing: return "M(2)-Wing";
+    case ReasonId::M3Wing: return "M(3)-Wing";
     case ReasonId::L1Wing: return "L(1)-Wing";
     case ReasonId::L2Wing: return "L(2)-Wing";
     case ReasonId::L3Wing: return "L(3)-Wing";
@@ -305,8 +305,8 @@ inline const char *reasonIdToString(ReasonId reason) {
     case ReasonId::DualWWing: return "Dual W-Wing";
     case ReasonId::iXYWing: return "Inverted XY-Wing";
     case ReasonId::iSWing: return "Inverted S-Wing";
-    case ReasonId::iM2Wing: return "Inverted M2-Wing";
-    case ReasonId::iM3Wing: return "Inverted M3-Wing";
+    case ReasonId::iM2Wing: return "Inverted M(2)-Wing";
+    case ReasonId::iM3Wing: return "Inverted M(3)-Wing";
     case ReasonId::iL1Wing: return "Inverted L(1)-Wing";
     case ReasonId::iL2Wing: return "Inverted L(2)-Wing";
     case ReasonId::iL3Wing: return "Inverted L(3)-Wing";
@@ -315,8 +315,8 @@ inline const char *reasonIdToString(ReasonId reason) {
     case ReasonId::iH3Wing: return "Inverted H(3)-Wing";
     case ReasonId::WRing: return "W-Ring";
     case ReasonId::SRing: return "S-Ring";
-    case ReasonId::M2Ring: return "M2-Ring";
-    case ReasonId::M3Ring: return "M3-Ring";
+    case ReasonId::M2Ring: return "M(2)-Ring";
+    case ReasonId::M3Ring: return "M(3)-Ring";
     case ReasonId::L1Ring: return "L(1)-Ring";
     case ReasonId::L2Ring: return "L(2)-Ring";
     case ReasonId::L3Ring: return "L(3)-Ring";
@@ -328,8 +328,8 @@ inline const char *reasonIdToString(ReasonId reason) {
     case ReasonId::DualWRing: return "Inverted Dual W-Ring";
     case ReasonId::iXYRing: return "Inverted XY-Ring";
     case ReasonId::iSRing: return "Inverted S-Ring";
-    case ReasonId::iM2Ring: return "Inverted M2-Ring";
-    case ReasonId::iM3Ring: return "Inverted M3-Ring";
+    case ReasonId::iM2Ring: return "Inverted M(2)-Ring";
+    case ReasonId::iM3Ring: return "Inverted M(3)-Ring";
     case ReasonId::iL1Ring: return "Inverted L(1)-Ring";
     case ReasonId::iL2Ring: return "Inverted L(2)-Ring";
     case ReasonId::iL3Ring: return "Inverted L(3)-Ring";
@@ -339,8 +339,8 @@ inline const char *reasonIdToString(ReasonId reason) {
     case ReasonId::GroupedXYWing: return "Grouped XY-Wing";
     case ReasonId::GroupedWWing: return "Grouped W-Wing";
     case ReasonId::GroupedSWing: return "Grouped S-Wing";
-    case ReasonId::GroupedM2Wing: return "Grouped M2-Wing";
-    case ReasonId::GroupedM3Wing: return "Grouped M3-Wing";
+    case ReasonId::GroupedM2Wing: return "Grouped M(2)-Wing";
+    case ReasonId::GroupedM3Wing: return "Grouped M(3)-Wing";
     case ReasonId::GroupedL1Wing: return "Grouped L(1)-Wing";
     case ReasonId::GroupedL2Wing: return "Grouped L(2)-Wing";
     case ReasonId::GroupedL3Wing: return "Grouped L(3)-Wing";
@@ -352,8 +352,8 @@ inline const char *reasonIdToString(ReasonId reason) {
     case ReasonId::GroupedDualWWing: return "Grouped Dual W-Wing";
     case ReasonId::GroupediXYWing: return "Grouped Inverted XY-Wing";
     case ReasonId::GroupediSWing: return "Grouped Inverted S-Wing";
-    case ReasonId::GroupediM2Wing: return "Grouped Inverted M2-Wing";
-    case ReasonId::GroupediM3Wing: return "Grouped Inverted M3-Wing";
+    case ReasonId::GroupediM2Wing: return "Grouped Inverted M(2)-Wing";
+    case ReasonId::GroupediM3Wing: return "Grouped Inverted M(3)-Wing";
     case ReasonId::GroupediL1Wing: return "Grouped Inverted L(1)-Wing";
     case ReasonId::GroupediL2Wing: return "Grouped Inverted L(2)-Wing";
     case ReasonId::GroupediL3Wing: return "Grouped Inverted L(3)-Wing";
@@ -361,7 +361,7 @@ inline const char *reasonIdToString(ReasonId reason) {
     case ReasonId::GroupediH2Wing: return "Grouped Inverted H(2)-Wing";
     case ReasonId::GroupediH3Wing: return "Grouped Inverted H(3)-Wing";
     case ReasonId::GroupedWRing: return "Grouped W-Ring";
-    case ReasonId::GroupedM2Ring: return "Grouped M2-Ring";
+    case ReasonId::GroupedM2Ring: return "Grouped M(2)-Ring";
     case ReasonId::GroupedL1Ring: return "Grouped L(1)-Ring";
     case ReasonId::GroupedL2Ring: return "Grouped L(2)-Ring";
     case ReasonId::GroupedH2Ring: return "Grouped H(2)-Ring";
@@ -369,8 +369,8 @@ inline const char *reasonIdToString(ReasonId reason) {
     case ReasonId::GroupediWRing: return "Grouped Inverted W-Ring";
     case ReasonId::GroupediXYRing: return "Grouped Inverted XY-Ring";
     case ReasonId::GroupediSRing: return "Grouped Inverted S-Ring";
-    case ReasonId::GroupediM2Ring: return "Grouped Inverted M2-Ring";
-    case ReasonId::GroupediM3Ring: return "Grouped Inverted M3-Ring";
+    case ReasonId::GroupediM2Ring: return "Grouped Inverted M(2)-Ring";
+    case ReasonId::GroupediM3Ring: return "Grouped Inverted M(3)-Ring";
     case ReasonId::GroupediL1Ring: return "Grouped Inverted L(1)-Ring";
     case ReasonId::GroupediL2Ring: return "Grouped Inverted L(2)-Ring";
     case ReasonId::GroupediL3Ring: return "Grouped Inverted L(3)-Ring";

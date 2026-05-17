@@ -59,7 +59,7 @@ using AicGraphEdges = std::map<AicNodeID, std::vector<AicNodeID>>;
 struct AicGraph {
   AicGraphNodes nodes;
   AicGraphEdges strong_links;
-  // weak non lo materializziamo tutto: lo calcoliamo on-demand
+  AicGraphEdges weak_links;
 };
 
 struct AicConfig {
@@ -90,9 +90,9 @@ private:
 
   void build_singleton_nodes(AicGraphNodes &nodes);
 
-  void add_group_if_new(AicGraphNodes &nodes, Digit digit, const CellSet &cells);
-
   void build_grouped_nodes(AicGraphNodes &nodes);
+
+  void add_group_if_new(AicGraphNodes &nodes, Digit digit, const CellSet &cells);
 
   AicNodeID get_node_id(Digit digit, Cell cell) const;
 
@@ -102,39 +102,47 @@ private:
 
   AicNodeID get_node_id(const DigitSet &digits, const CellSet &cells) const;
 
-  void add_strong_edge(AicGraphEdges &adj, AicNodeID a, AicNodeID b);
+  void add_edge(AicGraphEdges &adj, AicNodeID a, AicNodeID b);
 
-  void build_strong_links(AicGraphNodes &nodes,
-                          AicGraphEdges &strong_links);
+  void build_links(AicGraphNodes &nodes,
+                   AicGraphEdges &strong_links,
+                   AicGraphEdges &weak_links);
 
-  void build_strong_links_in_units(const AicGraphNodes &nodes,
-                                   AicGraphEdges &strong_links,
-                                   const std::vector<Unit> &units,
-                                   Digit d);
+  void build_links_in_units(const AicGraphNodes &nodes,
+                            AicGraphEdges &strong_links,
+                            AicGraphEdges &weak_links,
+                            const std::vector<Unit> &units,
+                            Digit digit);
 
-  void build_strong_links_in_cells(const AicGraphNodes &nodes,
-                                   AicGraphEdges &strong_links,
-                                   Cell cell);
+  void build_links_in_cells(const AicGraphNodes &nodes,
+                            AicGraphEdges &strong_links,
+                            AicGraphEdges &weak_links,
+                            Cell cell);
 
-  void build_grouped_strong_row_box(const AicGraphNodes &nodes,
-                                    AicGraphEdges &strong_links,
-                                    Digit d);
+  void build_grouped_row_box(const AicGraphNodes &nodes,
+                             AicGraphEdges &strong_links,
+                             AicGraphEdges &weak_links,
+                             Digit digit);
 
-  void build_grouped_strong_col_box(const AicGraphNodes &nodes,
-                                    AicGraphEdges &strong_links,
-                                    Digit d);
+  void build_grouped_col_box(const AicGraphNodes &nodes,
+                             AicGraphEdges &strong_links,
+                             AicGraphEdges &weak_links,
+                             Digit digit);
 
-  void build_grouped_strong_box_row(const AicGraphNodes &nodes,
-                                    AicGraphEdges &strong_links,
-                                    Digit d);
+  void build_grouped_box_row(const AicGraphNodes &nodes,
+                             AicGraphEdges &strong_links,
+                             AicGraphEdges &weak_links,
+                             Digit digit);
 
-  void build_grouped_strong_box_col(const AicGraphNodes &nodes,
-                                    AicGraphEdges &strong_links,
-                                    Digit d);
+  void build_grouped_box_col(const AicGraphNodes &nodes,
+                             AicGraphEdges &strong_links,
+                             AicGraphEdges &weak_links,
+                             Digit digit);
 
-  void build_grouped_strong_eri(AicGraphNodes &nodes,
-                                AicGraphEdges &strong_links,
-                                Digit d);
+  void build_grouped_eri(AicGraphNodes &nodes,
+                         AicGraphEdges &strong_links,
+                         AicGraphEdges &weak_links,
+                         Digit digit);
 };
 
 /* ---------------------------------------------------------------------- */
@@ -190,7 +198,7 @@ private:
     AicNodeID start,
     const std::vector<ColorSearchState> &states) const;
 
-  bool are_weakly_linked(AicNode &a, AicNode &b) const;
+  bool are_weakly_linked(AicGraph &graph, AicNodeID a, AicNodeID b) const;
 };
 
 #endif // AIC_HPP
