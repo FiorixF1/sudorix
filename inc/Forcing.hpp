@@ -20,7 +20,7 @@ struct ForcingLiteral {
 };
 
 struct ForcingConfig {
-  int maxChainDepth = 32;
+  int maxChainDepth = 25;
 };
 
 struct ForcingPath {

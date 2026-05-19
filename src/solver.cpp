@@ -10,7 +10,6 @@
 #include "EventQueue.hpp"
 #include "AIC.hpp"
 #include "ALS.hpp"
-#include "Forcing.hpp"
 #include "encoder.hpp"
 #include "types.hpp"
 
@@ -1306,14 +1305,13 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
 }
 
 /* -------------------- AIC WORLD -------------------- */
-
 static void techGenericAIC(SudokuBoard &board,
                            EventQueue &eventQueue,
                            ReasonId reason) {
   AicSearcher searcher(board);
   const AicConfig &config = searcher.setConfigAndReturn(reason);
   AicGraph prunedGraph = board.getPrunedAicGraph(config);
-  std::optional<Event> event = searcher.runSearch(prunedGraph);
+  std::optional<Event> event = searcher.runSearch(prunedGraph, reason);
 
   if (event) {
     eventQueue.enqueue(board, *event);
@@ -1359,10 +1357,13 @@ static void techGroupedXChain(SudokuBoard &board, EventQueue &eventQueue) {
 static void techGroupedAIC(SudokuBoard &board, EventQueue &eventQueue) {
   techGenericAIC(board, eventQueue, ReasonId::GroupedAIC);
 }
+
+static void techForcingChain(SudokuBoard &board, EventQueue &eventQueue) {
+  techGenericAIC(board, eventQueue, ReasonId::ForcingChain);
+}
 /* ------------------ END AIC WORLD ------------------ */
 
 /* -------------------- ALS WORLD -------------------- */
-
 static void techGenericALS(SudokuBoard &board,
                            EventQueue &eventQueue,
                            ReasonId reason) {
@@ -1681,16 +1682,6 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
       std::vector<const AlsNode *> petals;
       search_death_blossom(stem, index, RCC, accumulator, petals);
     }
-  }
-}
-
-void techForcingChain(SudokuBoard &board, EventQueue &eventQueue) {
-  ForcingChainBuilder builder(board);
-  builder.build();
-
-  Event event;
-  if (builder.find(event)) {
-    eventQueue.enqueue(board, event);
   }
 }
 
