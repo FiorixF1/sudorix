@@ -20,6 +20,7 @@ var business_logic = (() => {
     "#7AA2FF", /* theme color */
     "#FF2BD6", /* magenta */
     "#7CFF00", /* neon green */
+    "#FFD400", /* yellow */
   ];
 
   /* =========================================================
@@ -268,9 +269,36 @@ var business_logic = (() => {
   ];
 
   const DEFAULT_TECHNIQUE_IDS = TECHNIQUE_OPTIONS.map((entry) => entry.id);
+  const TECHNIQUE_STORAGE_KEY = "sudorix.enabledTechniques.v1";
 
-  // techniques that require drawing of links
-  const CHAINS = [
+  function loadStoredTechniqueIds() {
+    try {
+      const raw = window.localStorage.getItem(TECHNIQUE_STORAGE_KEY);
+      if (!raw) {
+        return DEFAULT_TECHNIQUE_IDS;
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return DEFAULT_TECHNIQUE_IDS;
+      }
+      const validIds = new Set(TECHNIQUE_OPTIONS.map((entry) => entry.id));
+      return parsed
+        .map((x) => Number(x) | 0)
+        .filter((id) => validIds.has(id));
+    } catch (_) {
+      return DEFAULT_TECHNIQUE_IDS;
+    }
+  }
+
+  function saveStoredTechniqueIds(ids) {
+    try {
+      window.localStorage.setItem(TECHNIQUE_STORAGE_KEY, JSON.stringify(Array.from(ids)));
+    } catch (_) {
+      /* localStorage unavailable: keep the in-memory setting only */
+    }
+  }
+
+  const AIC_TECHNIQUES = [
     "Single Digit Pattern",
     "Empty Rectangle",
     "X-Chain",
@@ -929,7 +957,7 @@ var business_logic = (() => {
       return;
     }
 
-    if (CHAINS.indexOf(ev.reason) != -1) {
+    if (AIC_TECHNIQUES.indexOf(ev.reason) != -1) {
       // AIC
       const groups = splitSourceGroups(ev.sources || []);
 
@@ -1051,11 +1079,17 @@ var business_logic = (() => {
       if (!a || !b) {
         continue;
       }
-      const path = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      path.setAttribute("x1", String(a.x));
-      path.setAttribute("y1", String(a.y));
-      path.setAttribute("x2", String(b.x));
-      path.setAttribute("y2", String(b.y));
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const bend = Number.isFinite(link.bend) ? link.bend : 0;
+      const cx = (a.x + b.x) / 2 + nx * bend;
+      const cy = (a.y + b.y) / 2 + ny * bend;
+
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} Q ${cx.toFixed(2)} ${cy.toFixed(2)} ${b.x.toFixed(2)} ${b.y.toFixed(2)}`);
       path.setAttribute("stroke", link.color || "var(--accent)");
       path.setAttribute("class", `chainLink ${link.dashed ? "chainLinkDashed" : ""} ${link.bold ? "chainLinkBold" : "chainLinkNormal"}`.trim());
       overlay.appendChild(path);
@@ -1076,7 +1110,8 @@ var business_logic = (() => {
       to: { idx: toIdx, digit: toDigit },
       dashed: !!options.dashed,
       bold: !!options.bold,
-      color: options.color || null
+      color: options.color || null,
+      bend: Number.isFinite(options.bend) ? options.bend : ((Math.random() < 0.5 ? -1 : 1) * (10 + Math.random() * 18))
     });
     renderChainLinks();
   }
@@ -1599,6 +1634,31 @@ var business_logic = (() => {
     }
 
     /* ---- check ---- */
+    findContradictoryValueCells() {
+      const bad = new Set();
+      const scanUnit = (indices) => {
+        const byDigit = Array.from({ length: 10 }, () => []);
+        for (const idx of indices) {
+          const v = this.getValue(idx);
+          if (v >= 1 && v <= 9) {
+            byDigit[v].push(idx);
+          }
+        }
+        for (let d = 1; d <= 9; d++) {
+          if (byDigit[d].length > 1) {
+            for (const idx of byDigit[d]) {
+              bad.add(idx);
+            }
+          }
+        }
+      };
+
+      for (let r = 0; r < 9; r++) { scanUnit(UNITS.rows[r]); }
+      for (let c = 0; c < 9; c++) { scanUnit(UNITS.cols[c]); }
+      for (let b = 0; b < 9; b++) { scanUnit(UNITS.boxs[b]); }
+      return bad;
+    }
+
     checkSolvedGrid() {
       // 1) Must be complete
       for (let i = 0; i < 81; i++) {
@@ -1693,10 +1753,15 @@ var business_logic = (() => {
 
   let activeDigit = 0; // 0 means none (except keyboard)
   let activeColorIndex = 0;
-  let enabledTechniqueIds = new Set(DEFAULT_TECHNIQUE_IDS);
+  let enabledTechniqueIds = new Set(loadStoredTechniqueIds());
 
   /* Highlight digit selected by clicking solved cells (when optHighlight enabled) */
   let highlightDigit = 0;
+  let contradictionIdxs = new Set();
+
+  function updateContradictionHighlights() {
+    contradictionIdxs = board.findContradictoryValueCells();
+  }
 
   /* solver state */
   let solveTimer = null;
@@ -1726,10 +1791,20 @@ var business_logic = (() => {
     techniqueSummaryEl.textContent = count + " teknikoj aktivaj";
   }
 
+  function updateStepButtonLabel() {
+    const btn = $("btnStep");
+    if (btn) {
+      btn.textContent = pendingStepEvent ? "Apliki" : "Ruli 1 paŝon";
+      btn.classList.toggle("ok", !!pendingStepEvent);
+      btn.classList.toggle("secondary", !pendingStepEvent);
+    }
+  }
+
   function clearPendingStepPreview() {
     pendingStepEvent = null;
     clearAllEventHighlights();
     clearCandidateLinks();
+    updateStepButtonLabel();
   }
 
   function setTechniqueSelection(ids) {
@@ -1744,6 +1819,7 @@ var business_logic = (() => {
     }
 
     updateTechniqueSummary();
+    saveStoredTechniqueIds(enabledTechniqueIds);
     clearPendingStepPreview();
   }
 
@@ -1768,6 +1844,7 @@ var business_logic = (() => {
           enabledTechniqueIds.delete(entry.id);
         }
         updateTechniqueSummary();
+        saveStoredTechniqueIds(enabledTechniqueIds);
         clearPendingStepPreview();
       });
 
@@ -2193,10 +2270,20 @@ var business_logic = (() => {
     $("modeColor").classList.toggle("secondary", newMode !== "color");
 
     digitPadEl.classList.toggle("hidden", newMode === "color");
+    digitPadEl.classList.toggle("digitPadValueMode", newMode === "value");
+    digitPadEl.classList.toggle("digitPadCandidateMode", newMode === "cand");
     colorPadEl.classList.toggle("hidden", newMode !== "color");
     const colorActionsEl = $("colorActions");
     if (colorActionsEl) {
       colorActionsEl.classList.toggle("hidden", newMode !== "color");
+    }
+
+    for (const btn of digitPadEl.querySelectorAll(".digitBtnBig")) {
+      const d = btn.dataset.digit || btn.textContent.trim();
+      const main = btn.querySelector(".digitBtnMain");
+      const sub = btn.querySelector(".digitBtnSub");
+      if (main) { main.textContent = d; }
+      if (sub) { sub.textContent = newMode === "cand" ? "Kandidato" : "Valoro"; }
     }
 
     /* candidates clickable only in Kolorigado */
@@ -2299,6 +2386,7 @@ var business_logic = (() => {
 
     el.classList.toggle("selected", idx === selectedIdx);
     el.classList.toggle("given", board.isGiven(idx));
+    el.classList.toggle("contradiction", contradictionIdxs.has(idx));
     applyCellFlashClasses(el, idx);
 
     applyCellBaseBackground(el, idx);
@@ -2439,6 +2527,7 @@ var business_logic = (() => {
 
       el.classList.toggle("selected", idx === selectedIdx);
       el.classList.toggle("given", board.isGiven(selectedIdx));
+      el.classList.toggle("contradiction", contradictionIdxs.has(selectedIdx));
 
       applyCellBaseBackground(el, selectedIdx);
     }
@@ -2451,6 +2540,7 @@ var business_logic = (() => {
 
     el.classList.toggle("selected", idx === selectedIdx);
     el.classList.toggle("given", board.isGiven(idx));
+    el.classList.toggle("contradiction", contradictionIdxs.has(idx));
     applyCellFlashClasses(el, idx);
 
     applyCellBaseBackground(el, idx);
@@ -2886,10 +2976,12 @@ var business_logic = (() => {
       const ev = wasmComputeHint(board);
       if (!ev) {
         appendInfo("Neniu plia evento.");
+        updateStepButtonLabel();
         return;
       }
 
       pendingStepEvent = ev;
+      updateStepButtonLabel();
 
       renderAll();
       clearAllEventHighlights();
@@ -2903,6 +2995,7 @@ var business_logic = (() => {
     // apply pending
     const ev = pendingStepEvent;
     pendingStepEvent = null;
+    updateStepButtonLabel();
 
     clearAllEventHighlights();
     clearCandidateLinks();
@@ -2934,7 +3027,8 @@ var business_logic = (() => {
     for (const d of order) {
       const b = document.createElement("button");
       b.className = "digitBtnBig";
-      b.textContent = String(d);
+      b.dataset.digit = String(d);
+      b.innerHTML = `<span class="digitBtnMain">${d}</span>`;
       b.addEventListener("click", () => {
         activeDigit = d;
 
@@ -2955,7 +3049,7 @@ var business_logic = (() => {
       const b = document.createElement("button");
       b.className = "colorBtn";
       b.style.setProperty("--swatch", PALETTE[i]);
-      b.title = `Colore ${i + 1}`;
+      b.title = `Koloro ${i + 1}`;
       b.addEventListener("click", () => {
         activeColorIndex = i;
         refreshColorSelectionUI();
@@ -3001,6 +3095,8 @@ var business_logic = (() => {
     clearCandidateLinks();
     clearHistory();
     clearLog();
+    contradictionIdxs = new Set();
+    clearPendingStepPreview();
 
     /* Timer: reset and STOP */
     resetTimer(true);
@@ -3025,6 +3121,7 @@ var business_logic = (() => {
       board.recalcAllCandidatesFromValues();
     }
 
+    updateContradictionHighlights();
     renderAll();
 
     /* Timer: reset and START */
@@ -3169,6 +3266,7 @@ var business_logic = (() => {
     initWasmSolver();
 
     setMode("value");
+    updateStepButtonLabel();
 
     appendInfo("La solvilo skribos ĉi tie la paŝojn.");
     window.addEventListener("resize", () => renderChainLinks());

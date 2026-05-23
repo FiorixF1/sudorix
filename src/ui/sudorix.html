@@ -51,15 +51,12 @@
       <button id="btnClearLog" class="secondary">Viŝi protokolon</button>
       <button id="btnSolveWasmFull" class="secondary">WASM plen-solve</button>
       <button id="btnCountSolutions" class="secondary">Kalkuli solvojn</button>
-    </div>
-
-    <div class="logBtnGrid logBtnGridWide" style="margin-top: 12px;">
       <button id="btnSolve" class="ok">Komenci solvadon</button>
       <button id="btnStop" class="danger">Halti</button>
       <button id="btnStep" class="secondary">Ruli 1 paŝon</button>
     </div>
 
-    <div class="optRow" style="margin-top: 12px;">
+    <div class="logBtnGrid optRow" style="margin-top: 12px;">
       <label><input type="checkbox" id="optPrefill" /> Antaŭplenigo</label>
       <label><input type="checkbox" id="optAutoClear" /> Aŭtomata forigo</label>
       <label><input type="checkbox" id="optHighlight" /> Emfazo</label>
@@ -87,8 +84,8 @@
   </div>
 
   <div class="panel">
-    <h2>Enigo / Kolorigado</h2>
-    <div class="modeBar">
+    <h2>Enigo</h2>
+    <div class="logBtnGrid modeBar">
       <button id="modeValue" class="toggled">Valoro</button>
       <button id="modeCand" class="secondary">Kandidato</button>
       <button id="modeColor" class="secondary">Kolorigado</button>
@@ -144,7 +141,7 @@
   </div>
 </div>
 
-<!-- Modalo: eksportita ĉeno -->
+<!-- Modalo: eksportita sudokuo -->
 <div class="modalOverlay" id="modalOverlayExport" role="dialog" aria-modal="true" aria-labelledby="modalTitleExport">
   <div class="modal">
     <h3 id="modalTitleExport">Eksportita Sudokuo</h3>
