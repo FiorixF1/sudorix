@@ -353,188 +353,196 @@ bool ForcingChainBuilder::findCommonConsequences(Event &outEvent) const {
     }
   }
 
-  // Cell Forcing Chain
-  // Supported cases:
-  // - One candidate is ON for each possible solution of the starting cell. It must be the solution.
-  // - One candidate is OFF for each possible solution of the starting cell. It can be removed.
-  // Not yet supported:
-  // - Two candidates in a cell are both ON, all other numbers can be removed.
-  // - All candidates that can see all ends of the chain can be removed.
-  for (Cell assumptionCell = 0; assumptionCell < 81; ++assumptionCell) {
-    if (!base.isSolved(assumptionCell)) {
-      std::vector<int> assumptionDigits = base.getCandidates(assumptionCell).to_vector();
-      if (assumptionDigits.size() >= 2 && assumptionDigits.size() <= 4) {
-        // store the initial implications: each candidate in the cell is true
-        std::vector<ForcingLiteral> rootOnList;
-        for (int i = 0; i < assumptionDigits.size(); ++i) {
-          Digit digit = assumptionDigits[i];
-          rootOnList.push_back(ForcingLiteral{assumptionCell, digit, true});
-        }
+  auto multiForcingChain = [&](int size) -> bool {
+    // Cell Forcing Chain
+    // Supported cases:
+    // - One candidate is ON for each possible solution of the starting cell. It must be the solution.
+    // - One candidate is OFF for each possible solution of the starting cell. It can be removed.
+    // Not yet supported:
+    // - Two candidates in a cell are both ON, all other numbers can be removed.
+    // - All candidates that can see all ends of the chain can be removed.
+    for (Cell assumptionCell = 0; assumptionCell < 81; ++assumptionCell) {
+      if (!base.isSolved(assumptionCell)) {
+        std::vector<int> assumptionDigits = base.getCandidates(assumptionCell).to_vector();
+        if (assumptionDigits.size() == size) {
+          // store the initial implications: each candidate in the cell is true
+          std::vector<ForcingLiteral> rootOnList;
+          for (int i = 0; i < assumptionDigits.size(); ++i) {
+            Digit digit = assumptionDigits[i];
+            rootOnList.push_back(ForcingLiteral{assumptionCell, digit, true});
+          }
 
-        // find the reachable consequences from each assumption
-        std::vector<std::vector<int>> onReachList;
-        for (const ForcingLiteral &assumption : rootOnList) {
-          onReachList.push_back(reachableFrom(assumption));
-        }
+          // find the reachable consequences from each assumption
+          std::vector<std::vector<int>> onReachList;
+          for (const ForcingLiteral &assumption : rootOnList) {
+            onReachList.push_back(reachableFrom(assumption));
+          }
 
-        // look for consequences that are common for all assumptions
-        for (Cell cell = 0; cell < 81; ++cell) {
-          for (Digit digit = 1; digit <= 9; ++digit) {
-            if (!candidateExists(cell, digit)) {
-              continue;
-            }
-
-            for (bool on : {true, false}) {
-              // corner case: a consequence is an initial assumption
-              const ForcingLiteral consequence{cell, digit, on};
-              bool consequence_equals_assumption = false;
-              for (const ForcingLiteral &assumption : rootOnList) {
-                if (sameCandidate(consequence, assumption)) {
-                  consequence_equals_assumption = true;
-                }
-              }
-              if (consequence_equals_assumption) {
+          // look for consequences that are common for all assumptions
+          for (Cell cell = 0; cell < 81; ++cell) {
+            for (Digit digit = 1; digit <= 9; ++digit) {
+              if (!candidateExists(cell, digit)) {
                 continue;
               }
 
-              // corner case: the consequence is not reachable by every assumption
-              const int idx = literalIndex(consequence);
-              bool consequence_not_reachable = false;
-              for (auto &consequences : onReachList) {
-                if (consequences[idx] == -1) {
-                  consequence_not_reachable = true;
+              for (bool on : {true, false}) {
+                // corner case: a consequence is an initial assumption
+                const ForcingLiteral consequence{cell, digit, on};
+                bool consequence_equals_assumption = false;
+                for (const ForcingLiteral &assumption : rootOnList) {
+                  if (sameCandidate(consequence, assumption)) {
+                    consequence_equals_assumption = true;
+                  }
                 }
-              }
-              if (consequence_not_reachable) {
-                continue;
-              }
-
-              // corner case: there is no path for the desired consequence
-              std::vector<std::optional<ForcingPath>> pathList;
-              bool path_not_found = false;
-              for (const ForcingLiteral &assumption : rootOnList) {
-                auto path = findPath(assumption, consequence);
-                pathList.push_back(path);
-                if (!path) {
-                  path_not_found = true;
+                if (consequence_equals_assumption) {
+                  continue;
                 }
-              }
-              if (path_not_found) {
-                continue;
-              }
 
-              // Cell Forcing Chain spotted: source is the list of chains
-              Event event(on ? EventType::SetValue : EventType::RemoveCandidate, ReasonId::ForcingChain, ReasonId::CellForcingChain);
-              for (auto &path : pathList) {
-                addPathSources(event, *path);
-                event.addDelimiter();
+                // corner case: the consequence is not reachable by every assumption
+                const int idx = literalIndex(consequence);
+                bool consequence_not_reachable = false;
+                for (auto &consequences : onReachList) {
+                  if (consequences[idx] == -1) {
+                    consequence_not_reachable = true;
+                  }
+                }
+                if (consequence_not_reachable) {
+                  continue;
+                }
+
+                // corner case: there is no path for the desired consequence
+                std::vector<std::optional<ForcingPath>> pathList;
+                bool path_not_found = false;
+                for (const ForcingLiteral &assumption : rootOnList) {
+                  auto path = findPath(assumption, consequence);
+                  pathList.push_back(path);
+                  if (!path) {
+                    path_not_found = true;
+                  }
+                }
+                if (path_not_found) {
+                  continue;
+                }
+
+                // Cell Forcing Chain spotted: source is the list of chains
+                Event event(on ? EventType::SetValue : EventType::RemoveCandidate, ReasonId::ForcingChain, ReasonId::CellForcingChain);
+                for (auto &path : pathList) {
+                  addPathSources(event, *path);
+                  event.addDelimiter();
+                }
+                event.addOperation(cell, digit);
+                outEvent = event;
+                return true;
               }
-              event.addOperation(cell, digit);
-              outEvent = event;
-              return true;
             }
           }
         }
       }
     }
-  }
 
-  // Unit Forcing Chain
-  // Supported cases:
-  // - One candidate is ON for each possible position of starting unit. It must be the solution.
-  // - One candidate is OFF for each possible position of the starting unit. It can be removed.
-  // Not yet supported:
-  // - Two candidates in a cell are both ON, all other numbers can be removed.
-  // - All candidates that can see all ends of the chain can be removed.
-  auto unitForcingChain = [&](const Unit &unit) -> bool
-  {
-    for (Digit assumptionDigit = 1; assumptionDigit <= 9; ++assumptionDigit) {
-      std::vector<int> assumptionCells = base.getPositionsOfDigit(unit, assumptionDigit).to_vector();
-      if (assumptionCells.size() >= 2 && assumptionCells.size() <= 4) {
-        // store the initial implications: each candidate in the unit is true
-        std::vector<ForcingLiteral> rootOnList;
-        for (int i = 0; i < assumptionCells.size(); ++i) {
-          Cell cell = assumptionCells[i];
-          rootOnList.push_back(ForcingLiteral{cell, assumptionDigit, true});
-        }
+    // Unit Forcing Chain
+    // Supported cases:
+    // - One candidate is ON for each possible position of the starting unit. It must be the solution.
+    // - One candidate is OFF for each possible position of the starting unit. It can be removed.
+    // Not yet supported:
+    // - Two candidates in a cell are both ON, all other numbers can be removed.
+    // - All candidates that can see all ends of the chain can be removed.
+    auto unitForcingChain = [&](const Unit &unit) -> bool
+    {
+      for (Digit assumptionDigit = 1; assumptionDigit <= 9; ++assumptionDigit) {
+        std::vector<int> assumptionCells = base.getPositionsOfDigit(unit, assumptionDigit).to_vector();
+        if (assumptionCells.size() == size) {
+          // store the initial implications: each candidate in the unit is true
+          std::vector<ForcingLiteral> rootOnList;
+          for (int i = 0; i < assumptionCells.size(); ++i) {
+            Cell cell = assumptionCells[i];
+            rootOnList.push_back(ForcingLiteral{cell, assumptionDigit, true});
+          }
 
-        // find the reachable consequences from each assumption
-        std::vector<std::vector<int>> onReachList;
-        for (const ForcingLiteral &assumption : rootOnList) {
-          onReachList.push_back(reachableFrom(assumption));
-        }
+          // find the reachable consequences from each assumption
+          std::vector<std::vector<int>> onReachList;
+          for (const ForcingLiteral &assumption : rootOnList) {
+            onReachList.push_back(reachableFrom(assumption));
+          }
 
-        // look for consequences that are common for all assumptions
-        for (Cell cell = 0; cell < 81; ++cell) {
-          for (Digit digit = 1; digit <= 9; ++digit) {
-            if (!candidateExists(cell, digit)) {
-              continue;
-            }
-
-            for (bool on : {true, false}) {
-              // corner case: a consequence is an initial assumption
-              const ForcingLiteral consequence{cell, digit, on};
-              bool consequence_equals_assumption = false;
-              for (const ForcingLiteral &assumption : rootOnList) {
-                if (sameCandidate(consequence, assumption)) {
-                  consequence_equals_assumption = true;
-                }
-              }
-              if (consequence_equals_assumption) {
+          // look for consequences that are common for all assumptions
+          for (Cell cell = 0; cell < 81; ++cell) {
+            for (Digit digit = 1; digit <= 9; ++digit) {
+              if (!candidateExists(cell, digit)) {
                 continue;
               }
 
-              // corner case: the consequence is not reachable by every assumption
-              const int idx = literalIndex(consequence);
-              bool consequence_not_reachable = false;
-              for (auto &consequences : onReachList) {
-                if (consequences[idx] == -1) {
-                  consequence_not_reachable = true;
+              for (bool on : {true, false}) {
+                // corner case: a consequence is an initial assumption
+                const ForcingLiteral consequence{cell, digit, on};
+                bool consequence_equals_assumption = false;
+                for (const ForcingLiteral &assumption : rootOnList) {
+                  if (sameCandidate(consequence, assumption)) {
+                    consequence_equals_assumption = true;
+                  }
                 }
-              }
-              if (consequence_not_reachable) {
-                continue;
-              }
-
-              // corner case: there is no path for the desired consequence
-              std::vector<std::optional<ForcingPath>> pathList;
-              bool path_not_found = false;
-              for (const ForcingLiteral &assumption : rootOnList) {
-                auto path = findPath(assumption, consequence);
-                pathList.push_back(path);
-                if (!path) {
-                  path_not_found = true;
+                if (consequence_equals_assumption) {
+                  continue;
                 }
-              }
-              if (path_not_found) {
-                continue;
-              }
 
-              // Unit Forcing Chain spotted: source is the list of chains
-              Event event(on ? EventType::SetValue : EventType::RemoveCandidate, ReasonId::ForcingChain, ReasonId::UnitForcingChain);
-              for (auto &path : pathList) {
-                addPathSources(event, *path);
-                event.addDelimiter();
+                // corner case: the consequence is not reachable by every assumption
+                const int idx = literalIndex(consequence);
+                bool consequence_not_reachable = false;
+                for (auto &consequences : onReachList) {
+                  if (consequences[idx] == -1) {
+                    consequence_not_reachable = true;
+                  }
+                }
+                if (consequence_not_reachable) {
+                  continue;
+                }
+
+                // corner case: there is no path for the desired consequence
+                std::vector<std::optional<ForcingPath>> pathList;
+                bool path_not_found = false;
+                for (const ForcingLiteral &assumption : rootOnList) {
+                  auto path = findPath(assumption, consequence);
+                  pathList.push_back(path);
+                  if (!path) {
+                    path_not_found = true;
+                  }
+                }
+                if (path_not_found) {
+                  continue;
+                }
+
+                // Unit Forcing Chain spotted: source is the list of chains
+                Event event(on ? EventType::SetValue : EventType::RemoveCandidate, ReasonId::ForcingChain, ReasonId::UnitForcingChain);
+                for (auto &path : pathList) {
+                  addPathSources(event, *path);
+                  event.addDelimiter();
+                }
+                event.addOperation(cell, digit);
+                outEvent = event;
+                return true;
               }
-              event.addOperation(cell, digit);
-              outEvent = event;
-              return true;
             }
           }
         }
       }
+      return false;
+    };
+
+    for (const Unit &row : base.getRows()) {
+      if (unitForcingChain(row)) return true;
     }
+    for (const Unit &column: base.getColumns()) {
+      if (unitForcingChain(column)) return true;
+    }
+    for (const Unit &box : base.getBoxes()) {
+      if (unitForcingChain(box)) return true;
+    }
+
     return false;
   };
 
-  for (const Unit &row : base.getRows()) {
-    if (unitForcingChain(row)) return true;
-  }
-  for (const Unit &column: base.getColumns()) {
-    if (unitForcingChain(column)) return true;
-  }
-  for (const Unit &box : base.getBoxes()) {
-    if (unitForcingChain(box)) return true;
+  for (int size = 2; size <= 4; ++size) {
+    if (multiForcingChain(size)) return true;
   }
 
   return false;

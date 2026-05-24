@@ -444,6 +444,11 @@ int main(int argc, char **argv) {
   std::vector<uint64_t> solveTimesUs(cases.size(), 0);
   std::atomic<size_t> nextIndex{0};
 
+  // set allowed techniques - default all
+  uint32_t techniques[256];
+  for (int i = 0; i < 256; ++i) techniques[i] = i;
+  sudorix_solver_set_enabled_techniques(techniques, 256);
+
   auto worker = [&]() {
     while (true) {
       size_t i = nextIndex.fetch_add(1);

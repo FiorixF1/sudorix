@@ -27,8 +27,8 @@
           <div class="importBtns">
             <button id="btnImport" class="ok">Enporti</button>
             <button id="btnClear" class="danger">Reagordi</button>
-            <button id="btnRecalc" class="secondary">Rekalkuli kandidatojn</button>
-            <button id="btnCheck" class="secondary">Kontroli</button>
+            <button id="btnRecalc" class="secondary" hidden>Rekalkuli kandidatojn</button>
+            <button id="btnCheck" class="secondary" hidden>Kontroli</button>
             <button id="btnExport" class="secondary">Eksporti</button>
           </div>
         </div>
@@ -48,19 +48,21 @@
     </div>
 
     <div class="logBtnGrid">
-      <button id="btnClearLog" class="secondary">Viŝi protokolon</button>
-      <button id="btnSolveWasmFull" class="secondary">WASM plen-solve</button>
-      <button id="btnCountSolutions" class="secondary">Kalkuli solvojn</button>
+      <button id="btnClearLog" class="danger">Viŝi protokolon</button>
+      <button id="btnSolveWasmFull" class="secondary" hidden>WASM plen-solve</button>
+      <button id="btnCountSolutions" class="secondary">Nombri solvojn</button>
+      <button id="btnMiNeScias" class="secondary disabled">Io</button>
       <button id="btnSolve" class="ok">Komenci solvadon</button>
-      <button id="btnStop" class="danger">Halti</button>
       <button id="btnStep" class="secondary">Ruli 1 paŝon</button>
+      <button id="btnStep" class="secondary disabled">Ĉiuj eblaj paŝoj</button>
     </div>
 
     <div class="logBtnGrid optRow" style="margin-top: 12px;">
       <label><input type="checkbox" id="optPrefill" /> Antaŭplenigo</label>
       <label><input type="checkbox" id="optAutoClear" /> Aŭtomata forigo</label>
-      <label><input type="checkbox" id="optHighlight" /> Emfazo</label>
       <label><input type="checkbox" id="optFastSolve" /> Rapida solvado</label>
+      <!--<label><input type="checkbox" id="optHighlight" /> Emfazo</label>-->
+      <input type="checkbox" id="optHighlight" checked hidden />
     </div>
   </div>
 

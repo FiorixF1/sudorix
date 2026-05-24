@@ -1800,6 +1800,39 @@ var business_logic = (() => {
     }
   }
 
+  function updateSolveButtonState() {
+    const btn = $("btnSolve");
+    if (!btn) {
+      return;
+    }
+
+    const running = !!solveTimer;
+    btn.textContent = running ? "Halti" : "Komenci solvadon";
+    btn.classList.toggle("danger", running);
+    btn.classList.toggle("ok", !running);
+    btn.classList.remove("secondary");
+    btn.title = running ? "Haltigi la nunan solvadon" : "Komenci aŭtomatan solvadon";
+  }
+
+  function hasAnyCandidateInUnsolvedCell() {
+    for (let i = 0; i < 81; i++) {
+      if (!board.isSolved(i) && (board.getCandidateMask(i) & 0x1FF) !== 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function ensureCandidatesBeforeStep() {
+    if (hasAnyCandidateInUnsolvedCell()) {
+      return false;
+    }
+
+    board.recalcAllCandidatesFromValues();
+    renderAll();
+    return true;
+  }
+
   function clearPendingStepPreview() {
     pendingStepEvent = null;
     clearAllEventHighlights();
@@ -1891,7 +1924,7 @@ var business_logic = (() => {
   }
 
   function setControlsDuringPreview(disabled) {
-    const ids = ["btnStep", "btnSolve", "btnStop", "btnSolveWasmFull"];
+    const ids = ["btnStep", "btnSolve", "btnSolveWasmFull"];
     for (const id of ids) {
       const b = $(id);
       if (b) {
@@ -2764,6 +2797,7 @@ var business_logic = (() => {
     if (solveTimer) {
       solveTimer = null;
     }
+    updateSolveButtonState();
   }
 
   /* =========================================================
@@ -2928,7 +2962,17 @@ var business_logic = (() => {
 
     // solveTimer used as "running flag"
     solveTimer = 1;
+    updateSolveButtonState();
     loop();
+  }
+
+  function toggleSolving() {
+    if (solveTimer) {
+      stopSolving();
+      return;
+    }
+
+    startSolving();
   }
 
   function solveWasmFull() {
@@ -2972,7 +3016,14 @@ var business_logic = (() => {
         return;
       }
 
-      // don't recalculate candidates, otherwise you could end up in an infinite loop
+      // If the user imported only values and no candidates are present in unsolved cells,
+      // prepare candidates automatically. If at least one unsolved cell already has
+      // candidates, keep the board exactly as the user configured it.
+      const candidatesWereGenerated = ensureCandidatesBeforeStep();
+      if (candidatesWereGenerated) {
+        // ...
+      }
+
       const ev = wasmComputeHint(board);
       if (!ev) {
         appendInfo("Neniu plia evento.");
@@ -2997,15 +3048,10 @@ var business_logic = (() => {
     pendingStepEvent = null;
     updateStepButtonLabel();
 
-    clearAllEventHighlights();
-    clearCandidateLinks();
     saveUndoSnapshot();
     const did = applyEvent(ev);
     renderAll();
-    clearAllEventHighlights();
-    highlightSourcesAndOps(ev);
-    clearCandidateLinks();
-    drawCandidateLinks(ev);
+    // no need to redraw sources and links
 
     setTimeout(() => {
       clearAllEventHighlights();
@@ -3229,9 +3275,8 @@ var business_logic = (() => {
     }
   });
 
-  $("btnSolve").addEventListener("click", () => startSolving());
+  $("btnSolve").addEventListener("click", () => toggleSolving());
   $("btnSolveWasmFull").addEventListener("click", () => solveWasmFull());
-  $("btnStop").addEventListener("click", () => stopSolving());
 
   $("btnClearLog").addEventListener("click", () => clearLog());
 
@@ -3272,6 +3317,7 @@ var business_logic = (() => {
     window.addEventListener("resize", () => renderChainLinks());
     renderTimer();
     updatePauseButtonState();
+    updateSolveButtonState();
   }
 
   init();
