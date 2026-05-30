@@ -1362,7 +1362,7 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
     return {};
   }
 
-  // Color Trap test
+  // Color Wrap test
   auto scanColor = [&](const std::vector<ColorNode> &nodes, const std::vector<ColorNode> &other) -> std::optional<Event>
   {
     bool found = false;
@@ -1375,17 +1375,17 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
         if (a.digit != b.digit && a.cell == b.cell) {
           // 3D Medusa Rule 1 : Twice in a Cell
           found = true;
-          detailedReason = ReasonId::_3DMedusaColorTrap;
+          detailedReason = ReasonId::_3DMedusaColorWrap;
           goto end_loop;
         }
         if (a.digit == b.digit && board.sees(a.cell, b.cell)) {
-          // 3D Medusa Rule 2 : Twice in a Unit (Color Trap)
-          // Simple Coloring : Color Trap
+          // 3D Medusa Rule 2 : Twice in a Unit (Color Wrap)
+          // Simple Coloring : Color Wrap
           found = true;
           if (reason == ReasonId::SimpleColoring) {
-            detailedReason = ReasonId::SimpleColoringColorTrap;
+            detailedReason = ReasonId::SimpleColoringColorWrap;
           } else {
-            detailedReason = ReasonId::_3DMedusaColorTrap;
+            detailedReason = ReasonId::_3DMedusaColorWrap;
           }
           goto end_loop;
         }
@@ -1461,7 +1461,7 @@ end_loop:
   std::optional<Event> second = scanColor(secondColorNodes, firstColorNodes);
   if (second) return *second;
 
-  // Color Wrap test
+  // Color Trap test
   Event event(EventType::RemoveCandidate, reason);
   for (int i = 0; i < firstColorNodes.size(); ++i) {
     for (int j = 0; j < secondColorNodes.size(); ++j) {
@@ -1473,11 +1473,11 @@ end_loop:
         if (!toRemove.empty()) {
           event.addOperation(a.cell, toRemove);
         }
-        event.detailedReason = ReasonId::_3DMedusaColorWrap;
+        event.detailedReason = ReasonId::_3DMedusaColorTrap;
       }
       if (a.digit == b.digit) {
-        // 3D Medusa Rule 4 : Two colours elsewhere (Color Wrap)
-        // Simple Coloring : Color Wrap
+        // 3D Medusa Rule 4 : Two colours elsewhere (Color Trap)
+        // Simple Coloring : Color Trap
         CellSet toRemove = board.getPeersContaining({a.cell, b.cell}, a.digit);
         if (!toRemove.empty()) {
           for (Cell idx : toRemove) {
@@ -1485,9 +1485,9 @@ end_loop:
           }
         }
         if (reason == ReasonId::SimpleColoring) {
-          event.detailedReason = ReasonId::SimpleColoringColorWrap;
+          event.detailedReason = ReasonId::SimpleColoringColorTrap;
         } else {
-          event.detailedReason = ReasonId::_3DMedusaColorWrap;
+          event.detailedReason = ReasonId::_3DMedusaColorTrap;
         }
       }
       if (a.digit != b.digit && board.sees(a.cell, b.cell)) {
@@ -1498,7 +1498,7 @@ end_loop:
         if (board.hasCandidate(b.cell, a.digit)) {
           event.addOperation(b.cell, a.digit);
         }
-        event.detailedReason = ReasonId::_3DMedusaColorWrap;
+        event.detailedReason = ReasonId::_3DMedusaColorTrap;
       }
     }
   }
