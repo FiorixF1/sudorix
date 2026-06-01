@@ -336,6 +336,16 @@ Ricevas Sudokuon kiel tabelojn enhavantajn kaj la jam solvitajn ĉelojn kaj la k
 
 ---
 
+## sudorix_solver_all_possible_steps_for_technique
+
+```
+int sudorix_solver_all_possible_steps_for_technique(const uint8_t *values, const uint16_t *cands, uint32_t reason, uint32_t *out, uint32_t out_words);
+```
+
+Ricevas Sudokuon kiel tabelojn enhavantajn kaj la jam solvitajn ĉelojn kaj la kandidatojn por ĉiu ĉelo, kune kun aplikenda tekniko kaj liveras liston de ĉiuj eblaj operacioj de tiu tekniko sur la donita skemo.
+
+---
+
 ## sudorix_solver_set_enabled_techniques
 
 ```

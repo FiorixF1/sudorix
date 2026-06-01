@@ -21,11 +21,19 @@ size_t Event::getNumberOfOperations() const {
 }
 
 void Event::addOperation(Cell idx, Digit digit) {
-  ops.push_back({idx, DigitSet({digit})});
+  // avoid duplicates
+  Operation op = {idx, DigitSet({digit})};
+  if (std::find(ops.begin(), ops.end(), op) == ops.end()) {
+    ops.push_back(op);
+  }
 }
 
 void Event::addOperation(Cell idx, DigitSet mask) {
-  ops.push_back({idx, mask});
+  // avoid duplicates
+  Operation op = {idx, mask};
+  if (std::find(ops.begin(), ops.end(), op) == ops.end()) {
+    ops.push_back(op);
+  }
 }
 
 std::vector<Source> &Event::getSources() {

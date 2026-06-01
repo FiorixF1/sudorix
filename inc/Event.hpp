@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <algorithm>
 #include "types.hpp"
 
 enum class EventType : uint8_t {
@@ -400,12 +401,20 @@ inline const char *reasonIdToString(ReasonId reason) {
 struct Operation {
   Cell idx;
   DigitSet mask;
+
+  bool operator==(const Operation &other) const {
+    return idx == other.idx && mask == other.mask;
+  }
 };
 
 // one source = a (cells, mask) pair explaining why the rule triggers
 struct Source {
   CellSet cells;
   DigitSet mask;
+
+  bool operator==(const Source &other) const {
+    return cells == other.cells && mask == other.mask;
+  }
 };
 
 class Event

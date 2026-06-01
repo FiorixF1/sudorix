@@ -908,6 +908,10 @@ bool AicSearcher::analyze_event(Event &event) {
     // identify the specific type of single digit pattern
     auto &sources = event.getSources();
 
+    if (sources.size() != 4) {
+      return false;
+    }
+
     Cell a = *sources[0].cells.begin();
     Cell b = *sources[1].cells.begin();
     Cell c = *sources[2].cells.begin();
@@ -1193,6 +1197,18 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   // AIC Type 2 requires one end to be a singleton
   Cell start_cell = *Start.cellSet.begin();
   Cell end_cell = *End.cellSet.begin();
+
+  // ensure that the chain contains groups if needed
+  if (reason == ReasonId::GroupedXChain || reason == ReasonId::GroupedAIC) {
+    AicPath path = reconstruct_path(end_state);
+    bool chain_has_groups = false;
+    for (const AicNode &node : path.nodes) {
+      chain_has_groups |= node.isGrouped;
+    }
+    if (!chain_has_groups) {
+      return {};
+    }
+  }
 
   // AIC Type 1
   if (start_digit == end_digit && !are_weakly_linked(start, end)) {

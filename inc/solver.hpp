@@ -11,6 +11,7 @@
 //   int sudorix_solver_init_board(const char *in81);
 //   int sudorix_solver_next_step(uint32_t *out, uint32_t out_words);
 //   int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out, uint32_t out_words);
+//   int sudorix_solver_all_possible_steps_for_technique(const uint8_t *values, const uint16_t *cands, uint32_t reason, uint32_t *out, uint32_t out_words);
 //   int sudorix_solver_set_enabled_techniques(const uint32_t *reasons, uint32_t count);
 //
 // Input contract:
@@ -63,6 +64,8 @@ extern "C"
   int sudorix_solver_export_board(uint8_t *values, uint16_t *cands);
 
   int sudorix_solver_hint(const uint8_t *values, const uint16_t *cands, uint32_t *out, uint32_t out_words);
+
+  int sudorix_solver_all_possible_steps_for_technique(const uint8_t *values, const uint16_t *cands, uint32_t reason, uint32_t *out, uint32_t out_words);
 
   int sudorix_solver_set_enabled_techniques(const uint32_t *reasons, uint32_t count);
 } // extern "C"

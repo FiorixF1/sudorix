@@ -229,15 +229,19 @@ const AlsConfig &AlsSearcher::setConfigAndReturn(ReasonId reason) {
 
   switch(reason) {
     case ReasonId::ALSXZ:
+      config.min_depth = 1;
       config.max_depth = 1;
       break;
     case ReasonId::ALSXYWing:
+      config.min_depth = 2;
       config.max_depth = 2;
       break;
     case ReasonId::ALSChain:
+      config.min_depth = 3;
       config.max_depth = DEFAULT_MAX_DEPTH;
       break;
     default:
+      config.min_depth = 3;
       config.max_depth = DEFAULT_MAX_DEPTH;
       break;
   }
@@ -276,10 +280,10 @@ std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
     }
 
     for (const AlsEdge &nb : graph.links[cur->node]) {
-      bool IS_RING = (nb.to == cur->start);
+      bool is_ring = (nb.to == cur->start);
 
-      // only with rings one more level is allowed
-      if (!IS_RING && cur->depth >= config.max_depth) {
+      // Only with rings one more level is allowed
+      if (!is_ring && cur->depth >= config.max_depth) {
         continue;
       }
 
@@ -296,48 +300,51 @@ std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
                                        cur->depth + 1,
                                        cur);
 
-      // look immediately for possible rings
-      for (const AlsEdge &nc : graph.links[nb.to]) {
-        if (nc.to == cur->start) {
-          if (nb.rcc != 0 && nc.rcc == nb.rcc) {
-            continue;
-          }
-
-          // Ring detected, give priority
-          AlsSearchNode *grandchild = make_node(cur->start,
-                                                nc.to,
-                                                nc.rcc,
-                                                cur->depth + 2,
-                                                child);
-
-          std::optional<Event> event = execute_als_rules(graph, cur->start, nc.to, grandchild);
-          if (event) {
-            release(grandchild);
-            release(child);
-
-            while (!q.empty()) {
-              release(q.front());
-              q.pop_front();
+      // Minimum depth needed to distinguish ALS-XZ, ALS-XY and ALS-Chain
+      if (cur->depth >= config.min_depth) {
+        // Look immediately for possible rings
+        for (const AlsEdge &nc : graph.links[nb.to]) {
+          if (nc.to == cur->start) {
+            if (nb.rcc != 0 && nc.rcc == nb.rcc) {
+              continue;
             }
 
-            release(cur);
-            return event;
+            // Ring detected, give priority
+            AlsSearchNode *grandchild = make_node(cur->start,
+                                                  nc.to,
+                                                  nc.rcc,
+                                                  cur->depth + 2,
+                                                  child);
+
+            std::optional<Event> event = execute_als_rules(graph, cur->start, nc.to, grandchild);
+            if (event) {
+              release(grandchild);
+              release(child);
+
+              while (!q.empty()) {
+                release(q.front());
+                q.pop_front();
+              }
+
+              release(cur);
+              return event;
+            }
           }
         }
-      }
 
-      // Look for eliminations according to ALS rules
-      std::optional<Event> event = execute_als_rules(graph, cur->start, nb.to, child);
-      if (event) {
-        release(child);
+        // Look for eliminations according to ALS rules
+        std::optional<Event> event = execute_als_rules(graph, cur->start, nb.to, child);
+        if (event) {
+          release(child);
 
-        while (!q.empty()) {
-          release(q.front());
-          q.pop_front();
+          while (!q.empty()) {
+            release(q.front());
+            q.pop_front();
+          }
+
+          release(cur);
+          return event;
         }
-
-        release(cur);
-        return event;
       }
 
       q.push_back(child);

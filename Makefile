@@ -49,7 +49,7 @@ TEST_MAIN_CPP   ?= $(TEST_DIR)/sudorix_solver_test_main.cpp
 TEST_BIN        := $(BIN_DIR)/sudorix_test
 
 # Emscripten exports (keep aligned with C API)
-EMCC_EXPORTED_FUNCTIONS := "['_malloc','_free','_sudorix_solver_count_solutions','_sudorix_solver_full','_sudorix_solver_init_board','_sudorix_solver_next_step','_sudorix_solver_hint']"
+EMCC_EXPORTED_FUNCTIONS := "['_malloc','_free','_sudorix_solver_count_solutions','_sudorix_solver_full','_sudorix_solver_init_board','_sudorix_solver_next_step','_sudorix_solver_hint','_sudorix_solver_all_possible_steps_for_technique', '_sudorix_solver_set_enabled_techniques']"
 EMCC_EXPORTED_RUNTIME   := "['cwrap','HEAPU8','HEAPU16','HEAPU32','lengthBytesUTF8','stringToUTF8','UTF8ToString']"
 
 # Targets

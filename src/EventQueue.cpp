@@ -1,4 +1,5 @@
 #include "EventQueue.hpp"
+#include "config.hpp"
 
 // =========================================================
 // Event queue
@@ -30,7 +31,9 @@ bool EventQueue::enqueue(SudokuBoard &board, Event &event) {
     // check again if the event is valid
     if (event.getNumberOfOperations() > 0) {
       q.push(event);
-      return true;
+      if (!g_solverConfig.allPossibleSteps) {
+        return true;
+      }
     }
   }
   return false;

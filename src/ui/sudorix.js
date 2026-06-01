@@ -31,17 +31,21 @@ var business_logic = (() => {
    *   - solver_wasm.wasm
    * ========================================================= */
   let wasmModule = null;
-  let wasmSolveFull = null;      // cwrap'd function
-  let wasmSolveInit = null;      // cwrap'd function
-  let wasmSolveNextStep = null;  // cwrap'd function
-  let wasmSolveHint = null;      // cwrap'd function
-  let wasmCountSolutions = null; // cwrap'd function
-  let wasmSetEnabledTechniques = null; // cwrap'd function
+  let wasmSolveFull = null;                    // cwrap'd function
+  let wasmSolveInit = null;                    // cwrap'd function
+  let wasmSolveNextStep = null;                // cwrap'd function
+  let wasmSolveHint = null;                    // cwrap'd function
+  let wasmAllPossibleStepsForTechnique = null; // cwrap'd function
+  let wasmCountSolutions = null;               // cwrap'd function
+  let wasmSetEnabledTechniques = null;         // cwrap'd function
   let wasmBufValues = 0;         // malloc'ed pointers in WASM heap
   let wasmBufCands  = 0;
   let wasmBufInStr  = 0;
   let wasmBufOut    = 0;
+  let wasmBufAllStepsOut = 0;
+  let wasmBufTechniques = 0;
   const WASM_OUT_WORDS = 1024;
+  const WASM_ALL_STEPS_WORDS = 262144;
 
   // must follow the same order in Event.hpp
   const WASM_REASON = [
@@ -323,6 +327,7 @@ var business_logic = (() => {
       wasmSolveInit = wasmModule.cwrap("sudorix_solver_init_board", "number", ["number"]);
       wasmSolveNextStep = wasmModule.cwrap("sudorix_solver_next_step", "number", ["number", "number"]);
       wasmSolveHint = wasmModule.cwrap("sudorix_solver_hint", "number", ["number", "number", "number", "number"]);
+      wasmAllPossibleStepsForTechnique = wasmModule.cwrap("sudorix_solver_all_possible_steps_for_technique", "number", ["number", "number", "number", "number", "number"]);
       wasmCountSolutions = wasmModule.cwrap("sudorix_solver_count_solutions", "number", ["number"]);
       wasmSetEnabledTechniques = wasmModule.cwrap("sudorix_solver_set_enabled_techniques", "number", ["number", "number"]);
 
@@ -330,6 +335,7 @@ var business_logic = (() => {
       wasmBufCands  = wasmModule._malloc(81 * 2);      // uint16_t[81]
       wasmBufInStr  = wasmModule._malloc(82);          // char[81] + '\0'
       wasmBufOut    = wasmModule._malloc(WASM_OUT_WORDS * 4); // uint32_t[WASM_OUT_WORDS]
+      wasmBufAllStepsOut = wasmModule._malloc(WASM_ALL_STEPS_WORDS * 4); // uint32_t[WASM_ALL_STEPS_WORDS]
       wasmBufTechniques = wasmModule._malloc(Math.max(TECHNIQUE_OPTIONS.length, 1) * 4);
 
       setSolverStatus(true, "WASM solvilo preta.");
@@ -341,6 +347,7 @@ var business_logic = (() => {
       wasmSolveInit = null;
       wasmSolveNextStep = null;
       wasmSolveHint = null;
+      wasmAllPossibleStepsForTechnique = null;
       wasmSetEnabledTechniques = null;
     });
   }
@@ -415,19 +422,6 @@ var business_logic = (() => {
       // Boh
     }
     return null;
-  }
-
-  function wasmApplyTechniqueSelection() {
-    if (!wasmModule || !wasmSetEnabledTechniques || !wasmBufTechniques) {
-      return false;
-    }
-
-    const ids = collectEnabledTechniqueIds();
-    if (ids.length > 0) {
-      wasmModule.HEAPU32.set(ids, wasmBufTechniques >> 2);
-    }
-
-    return !!wasmSetEnabledTechniques(wasmBufTechniques, ids.length);
   }
 
   function wasmComputeNextStep() {
@@ -534,6 +528,118 @@ var business_logic = (() => {
     }
 
     return ev;
+  }
+
+  function parseWasmEventAt(out, base, limitWords) {
+    if (base + 5 > limitWords) {
+      return { ok: false, error: "Evento troncato nel buffer WASM.", next: base };
+    }
+
+    const typeN = out[base + 0] >>> 0;
+    const reasonId = out[base + 1] >>> 0;
+    const detailedReasonId = out[base + 2] >>> 0;
+    const opCount = out[base + 3] >>> 0;
+    const srcCount = out[base + 4] >>> 0;
+    const needWords = 5 + 2 * srcCount + 2 * opCount;
+
+    if (typeN === 0 || opCount === 0) {
+      return { ok: false, error: "Evento vuoto nel buffer WASM.", next: base + Math.max(needWords, 5) };
+    }
+
+    if (base + needWords > limitWords) {
+      return { ok: false, error: "Evento oltre la fine del buffer WASM.", next: base };
+    }
+
+    const ev = {
+      type: (typeN === 1) ? "setValue" : (typeN === 2) ? "removeCandidate" : "none",
+      reason: WASM_REASON[reasonId] || "Solver",
+      detailedReason: WASM_REASON[detailedReasonId] || "Solver",
+      ops: [],
+      sources: []
+    };
+
+    for (let i = 0; i < srcCount; i++) {
+      const cells = out[base + 5 + 2 * i + 0] >>> 0;
+      const mask = out[base + 5 + 2 * i + 1] >>> 0;
+      ev.sources.push({ cells: decodeSourceCellCode(cells), mask: mask & 0x1FF });
+    }
+
+    const opsBase = base + 5 + 2 * srcCount;
+    for (let i = 0; i < opCount; i++) {
+      const idx = out[opsBase + 2 * i + 0] >>> 0;
+      const mask = out[opsBase + 2 * i + 1] >>> 0;
+      ev.ops.push({ idx: idx, mask: mask & 0x1FF });
+    }
+
+    return { ok: true, event: ev, next: base + needWords };
+  }
+
+  function wasmComputeAllPossibleStepsForTechnique(boardRef, reasonId) {
+    if (!wasmModule || !wasmAllPossibleStepsForTechnique) {
+      return { ok: false, error: "Funkcio sudorix_solver_all_possible_steps_for_technique ne disponeblas en ĉi tiu WASM build." };
+    }
+
+    const values = new Uint8Array(81);
+    const cands = new Uint16Array(81);
+    for (let i = 0; i < 81; i++) {
+      values[i] = boardRef.getValue(i) & 0xFF;
+      cands[i] = boardRef.getCandidateMask(i) & 0xFFFF;
+    }
+
+    wasmModule.HEAPU8.set(values, wasmBufValues);
+    wasmModule.HEAPU16.set(cands, wasmBufCands >> 1);
+
+    const writtenWords = wasmAllPossibleStepsForTechnique(
+      wasmBufValues,
+      wasmBufCands,
+      reasonId >>> 0,
+      wasmBufAllStepsOut,
+      WASM_ALL_STEPS_WORDS
+    ) | 0;
+
+    if (writtenWords === 0) {
+      return { ok: true, events: [] };
+    }
+    if (writtenWords === -2) {
+      return { ok: false, overflow: true, error: "Tro da eventoj por la bufero de unu tekniko." };
+    }
+    if (writtenWords < 0) {
+      return { ok: false, error: `WASM-eraro dum serĉo de eblaj paŝoj: ${writtenWords}` };
+    }
+    if (writtenWords > WASM_ALL_STEPS_WORDS) {
+      return { ok: false, overflow: true, error: "La WASM-solvilo raportis tro grandan output-buferon." };
+    }
+
+    const out = wasmModule.HEAPU32.subarray(
+      wasmBufAllStepsOut >> 2,
+      (wasmBufAllStepsOut >> 2) + writtenWords
+    );
+
+    const events = [];
+    let pos = 0;
+    while (pos < writtenWords) {
+      const parsed = parseWasmEventAt(out, pos, writtenWords);
+      if (!parsed.ok) {
+        return { ok: false, error: parsed.error || "Nevalida eventa serialigo." };
+      }
+      events.push(parsed.event);
+      pos = parsed.next;
+    }
+
+    return { ok: true, events };
+  }
+
+  function wasmApplyTechniqueSelection() {
+    if (!wasmModule || !wasmSetEnabledTechniques || !wasmBufTechniques) {
+      return false;
+    }
+
+    const ids = collectEnabledTechniqueIds();
+    if (ids.length > 0) {
+      wasmModule.HEAPU32.set(ids, wasmBufTechniques >> 2);
+    }
+
+    return !!wasmSetEnabledTechniques(wasmBufTechniques, ids.length);
   }
 
   /* =========================================================
@@ -1814,6 +1920,16 @@ var business_logic = (() => {
     btn.title = running ? "Haltigi la nunan solvadon" : "Komenci aŭtomatan solvadon";
   }
 
+  function updateAllPossibleStepsButtonState() {
+    const btn = $("btnAllPossibleSteps");
+    if (!btn) {
+      return;
+    }
+
+    btn.disabled = !!allPossibleScanRunning;
+    btn.classList.toggle("disabled", !!allPossibleScanRunning);
+  }
+
   function hasAnyCandidateInUnsolvedCell() {
     for (let i = 0; i < 81; i++) {
       if (!board.isSolved(i) && (board.getCandidateMask(i) & 0x1FF) !== 0) {
@@ -1903,6 +2019,7 @@ var business_logic = (() => {
   let previewActive = false;
   let previewSavedLiveState = null;
   let previewActiveIndex = -1;
+  let allPossibleScanRunning = false;
   let oldUndoDisabled = false;
   let oldRedoDisabled = false;
   let oldUndoContainsDisabled = false;
@@ -1924,7 +2041,7 @@ var business_logic = (() => {
   }
 
   function setControlsDuringPreview(disabled) {
-    const ids = ["btnStep", "btnSolve", "btnSolveWasmFull"];
+    const ids = ["btnStep", "btnSolve", "btnSolveWasmFull", "btnAllPossibleSteps"];
     for (const id of ids) {
       const b = $(id);
       if (b) {
@@ -2798,6 +2915,7 @@ var business_logic = (() => {
       solveTimer = null;
     }
     updateSolveButtonState();
+    updateAllPossibleStepsButtonState();
   }
 
   /* =========================================================
@@ -2863,7 +2981,7 @@ var business_logic = (() => {
   }
 
   function ensureWasmReadyOrNotify() {
-    if (wasmModule && wasmSolveFull && wasmSolveNextStep && wasmSolveInit && wasmSolveHint && wasmSetEnabledTechniques) {
+    if (wasmModule && wasmSolveFull && wasmSolveNextStep && wasmSolveInit && wasmSolveHint && wasmAllPossibleStepsForTechnique && wasmSetEnabledTechniques) {
       return true;
     }
 
@@ -2911,10 +3029,7 @@ var business_logic = (() => {
       logEventOnce(ev);
       const did = applyEvent(ev);
       renderAll();
-      clearAllEventHighlights();
-      highlightSourcesAndOps(ev);
-      clearCandidateLinks();
-      drawCandidateLinks(ev);
+      // no need to redraw sources and links
 
       setTimeout(() => {
         clearAllEventHighlights();
@@ -3061,6 +3176,94 @@ var business_logic = (() => {
     if (!did) {
       appendInfo("Evento ne aplikebla.");
     }
+  }
+
+  function runAllPossibleSteps() {
+    stopSolving();
+    clearPendingStepPreview();
+    exitLogPreview();
+
+    if (allPossibleScanRunning) {
+      return;
+    }
+
+    if (!ensureWasmReadyOrNotify()) {
+      return;
+    }
+
+    const selectedTechniques = TECHNIQUE_OPTIONS.filter((entry) => enabledTechniqueIds.has(entry.id));
+    if (selectedTechniques.length === 0) {
+      openCheckModal("Neniu tekniko estas aktiva.");
+      return;
+    }
+
+    ensureCandidatesBeforeStep();
+    renderAll();
+    clearAllEventHighlights();
+    clearCandidateLinks();
+
+    allPossibleScanRunning = true;
+    const btn = $("btnAllPossibleSteps");
+    const oldText = btn ? btn.textContent : "";
+    let totalEvents = 0;
+    let overflow = false;
+    let failed = false;
+    let index = 0;
+
+    updateAllPossibleStepsButtonState();
+    appendInfo("Serĉo de ĉiuj eblaj paŝoj komenciĝis.");
+
+    const finish = () => {
+      allPossibleScanRunning = false;
+      if (btn) {
+        btn.textContent = oldText || "Ĉiuj eblaj paŝoj";
+      }
+      updateAllPossibleStepsButtonState();
+
+      if (overflow) {
+        appendInfo("Serĉo haltis: la bufero por unu tekniko ne sufiĉis.");
+      } else if (failed) {
+        appendInfo("Serĉo haltis pro eraro en la WASM-solvilo.");
+      } else {
+        appendInfo(`Ĉiuj eblaj paŝoj: ${totalEvents} eventoj trovitaj.`);
+      }
+    };
+
+    const scanNextTechnique = () => {
+      if (index >= selectedTechniques.length || overflow || failed) {
+        finish();
+        return;
+      }
+
+      const tech = selectedTechniques[index++];
+      if (btn) {
+        btn.textContent = `Serĉas ${index}/${selectedTechniques.length}`;
+      }
+
+      // Yield before each expensive WASM call so the UI can repaint the progress text.
+      setTimeout(() => {
+        const res = wasmComputeAllPossibleStepsForTechnique(board, tech.id);
+        if (!res.ok) {
+          overflow = !!res.overflow;
+          failed = !res.overflow;
+          appendInfo(`${tech.label}: ${res.error || "eraro"}`);
+          scanNextTechnique();
+          return;
+        }
+
+        if (res.events.length > 0) {
+          appendInfo(`${tech.label}: ${res.events.length} eblaj paŝoj.`);
+          for (const ev of res.events) {
+            logEventOnce(ev);
+          }
+          totalEvents += res.events.length;
+        }
+
+        scanNextTechnique();
+      }, 0);
+    };
+
+    scanNextTechnique();
   }
 
   /* =========================================================
@@ -3285,6 +3488,7 @@ var business_logic = (() => {
   $("btnTechDefaults").addEventListener("click", () => setTechniqueSelection(DEFAULT_TECHNIQUE_IDS));
 
   $("btnStep").addEventListener("click", () => solveOneStep());
+  $("btnAllPossibleSteps").addEventListener("click", () => runAllPossibleSteps());
 
   $("btnUndo").addEventListener("click", () => doUndo());
   $("btnRedo").addEventListener("click", () => doRedo());

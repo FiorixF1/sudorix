@@ -70,6 +70,7 @@ constexpr int DEFAULT_MAX_DEPTH = 4;
 constexpr int DEFAULT_MAX_ALS_SIZE = 5;
 
 struct AlsConfig {
+  int min_depth = 1;
   int max_depth = DEFAULT_MAX_DEPTH;         // number of RCC edges
   int max_als_size = DEFAULT_MAX_ALS_SIZE;   // max cells inside an ALS
   bool allow_box = true;

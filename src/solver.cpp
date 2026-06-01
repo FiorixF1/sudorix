@@ -12,6 +12,7 @@
 #include "ALS.hpp"
 #include "encoder.hpp"
 #include "types.hpp"
+#include "config.hpp"
 
 static SudokuBoard g_sudokuBoard;
 static EventQueue g_eventQueue;
@@ -1685,40 +1686,16 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
   }
 }
 
+// nCr(9, 2) = 36
+// nCr(9, 3) = 84
+// nCr(9, 4) = 126
+
 typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);
 
 struct TechniqueEntry {
   TechniqueFn fn;
   ReasonId reason;
 };
-
-struct SolverConfig {
-  bool enabledTechniques[256] = {};
-};
-
-static SolverConfig g_solverConfig;
-
-static void set_default_solver_config() {
-  for (bool &enabled : g_solverConfig.enabledTechniques) {
-    enabled = true;
-  }
-}
-
-static void ensure_solver_config_initialized() {
-  static bool initialized = false;
-  if (!initialized) {
-    set_default_solver_config();
-    initialized = true;
-  }
-}
-
-static bool is_technique_enabled(ReasonId reason) {
-  return g_solverConfig.enabledTechniques[(uint8_t)reason];
-}
-
-// nCr(9, 2) = 36
-// nCr(9, 3) = 84
-// nCr(9, 4) = 126
 
 static constexpr TechniqueEntry TECHNIQUES[] = {
   {techFullHouse, ReasonId::FullHouse},
@@ -1774,6 +1751,69 @@ static bool is_operation_applicable(SudokuBoard &board, EventType type, Operatio
   return false;
 }
 
+
+// Serialize one event without applying it to the board. This is used by the
+// "all possible steps" UI feature: the caller wants to display every currently
+// available move, not to advance the Sudoku state while collecting them.
+// TODO: al 95% è identica a drain_event, generalizzare?
+static int serialize_event_no_apply(SudokuBoard &board,
+                                    Event ev,
+                                    uint32_t *out,
+                                    uint32_t out_words,
+                                    uint32_t &used_words) {
+  if (!out) {
+    return 0;
+  }
+
+  std::vector<Operation> applicableOps;
+  applicableOps.reserve(ev.getOperations().size());
+  for (Operation op : ev.getOperations()) {
+    if (is_operation_applicable(board, ev.type, op)) {
+      applicableOps.push_back(op);
+    }
+  }
+
+  if (applicableOps.empty()) {
+    return 0;
+  }
+
+  uint32_t srcChunks = 0;
+  for (const Source &src : ev.getSources()) {
+    srcChunks += (uint32_t)serialize_cellset_to_unitcodes(src.cells).size();
+  }
+
+  const uint32_t need_words = 5u + 2u * (uint32_t)applicableOps.size() + 2u * srcChunks;
+  if (used_words + need_words > out_words) {
+    return -1;
+  }
+
+  uint32_t *dst = out + used_words;
+  dst[0] = (uint32_t)ev.type;
+  dst[1] = (uint32_t)ev.reason;
+  dst[2] = (uint32_t)ev.detailedReason;
+  dst[3] = (uint32_t)applicableOps.size();
+  dst[4] = srcChunks;
+
+  uint32_t srcCount = 0;
+  for (const Source &src : ev.getSources()) {
+    const std::vector<uint32_t> codes = serialize_cellset_to_unitcodes(src.cells);
+    for (uint32_t code : codes) {
+      dst[5 + 2 * srcCount + 0] = code;
+      dst[5 + 2 * srcCount + 1] = src.mask.to_uint32();
+      srcCount++;
+    }
+  }
+
+  const uint32_t opsBase = 5u + 2u * srcCount;
+  for (uint32_t i = 0; i < applicableOps.size(); ++i) {
+    dst[opsBase + 2u * i + 0] = (uint32_t)applicableOps[i].idx;
+    dst[opsBase + 2u * i + 1] = applicableOps[i].mask.to_uint32();
+  }
+
+  used_words += need_words;
+  return 1;
+}
+
 // Drain the next event and serialize the operations into out[] as described by API.
 // The function returns only events and operations that are applicable to the current 
 // state of the board. This implies that some events in queue could be discarded.
@@ -1781,8 +1821,7 @@ static bool is_operation_applicable(SudokuBoard &board, EventType type, Operatio
 static int drain_event(SudokuBoard &board,
                        EventQueue &eventQueue,
                        uint32_t *out,
-                       uint32_t out_words,
-                       uint32_t fromPrev) {
+                       uint32_t out_words) {
   if (!out || out_words < 5) {
     return 0;
   }
@@ -1874,7 +1913,7 @@ static int drain_event(SudokuBoard &board,
   out[3] = opCount;
 
   // If opCount == 0, discard and continue draining.
-  return (opCount > 0) ? 1 : drain_event(board, eventQueue, out, out_words, fromPrev);
+  return (opCount > 0) ? 1 : drain_event(board, eventQueue, out, out_words);
 }
 
 // Run techniques to fill the queue if needed, then return a single event.
@@ -1884,7 +1923,7 @@ static int compute_next_event(SudokuBoard &board,
                               uint32_t *out,
                               uint32_t out_words) {
   // If we already have pending events, return them immediately.
-  if (drain_event(board, eventQueue, out, out_words, 1u)) {
+  if (drain_event(board, eventQueue, out, out_words)) {
     return 1;
   }
 
@@ -1895,7 +1934,7 @@ static int compute_next_event(SudokuBoard &board,
       continue;
     }
     tech.fn(board, eventQueue);
-    if (drain_event(board, eventQueue, out, out_words, 0u)) {
+    if (drain_event(board, eventQueue, out, out_words)) {
       return 1;
     }
   }
@@ -2138,6 +2177,78 @@ extern "C"
 
     const int ok = compute_next_event(board, queue, out, out_words);
     return ok ? 1 : 0;
+  }
+
+  // Calculates all currently possible steps for one macro-technique only.
+  // The output buffer contains a linear sequence of event records using the
+  // same per-event layout as sudorix_solver_hint/sudorix_solver_next_step.
+  // Return value:
+  //   >0 = number of uint32_t words written
+  //    0 = no event found
+  //   -1 = invalid input
+  //   -2 = output buffer too small
+  EMSCRIPTEN_KEEPALIVE
+  int sudorix_solver_all_possible_steps_for_technique(const uint8_t *values,
+                                                      const uint16_t *cands,
+                                                      uint32_t reason,
+                                                      uint32_t *out,
+                                                      uint32_t out_words) {
+    ensure_solver_config_initialized();
+
+    if (values == nullptr || cands == nullptr || out == nullptr || out_words < 5) {
+      return -1;
+    }
+
+    for (uint32_t i = 0; i < out_words; ++i) {
+      out[i] = 0;
+    }
+
+    if (reason >= 256u) {
+      return -1;
+    }
+
+    // Build a temporary board owned by the caller (JS is the source of truth here).
+    SudokuBoard board;
+    if (!board.importFromBuffers(values, cands)) {
+      return -1;
+    }
+
+    // Instantiate a new queue for steps computation.
+    EventQueue queue;
+
+    // Backup global config and update for all possible steps computation.
+    const bool oldAllPossibleSteps = g_solverConfig.allPossibleSteps;
+    const bool oldEnabled = g_solverConfig.enabledTechniques[reason];
+    g_solverConfig.allPossibleSteps = true;
+    g_solverConfig.enabledTechniques[reason] = true;
+
+    bool matched = false;
+    for (const TechniqueEntry &tech : TECHNIQUES) {
+      if ((uint32_t)tech.reason != reason) {
+        continue;
+      }
+      matched = true;
+      tech.fn(board, queue);
+    }
+
+    // Restore global config
+    g_solverConfig.enabledTechniques[reason] = oldEnabled;
+    g_solverConfig.allPossibleSteps = oldAllPossibleSteps;
+
+    if (!matched) {
+      return 0;
+    }
+
+    uint32_t used_words = 0;
+    Event ev;
+    while (queue.dequeue(ev)) {
+      const int rc = serialize_event_no_apply(board, ev, out, out_words, used_words);
+      if (rc < 0) {
+        return -2;
+      }
+    }
+
+    return (int)used_words;
   }
 
   // Replaces the enabled-technique set with the provided macro-techniques.
