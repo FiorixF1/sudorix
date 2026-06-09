@@ -1,8 +1,6 @@
 #ifndef ALS_HPP
 #define ALS_HPP
 
-#include <bit>
-#include <bitset>
 #include <set>
 #include <map>
 #include <vector>
@@ -13,6 +11,7 @@
 #include "SudokuCell.hpp"
 
 class SudokuBoard;
+class EventQueue;
 
 // Unique ID for nodes.
 // Same logic as in AIC.
@@ -127,19 +126,21 @@ struct AlsSearchNode {
 
 class AlsSearcher {
 public:
-  AlsSearcher(const SudokuBoard &board);
+  AlsSearcher(const SudokuBoard &board, EventQueue &eventQueue);
 
   const AlsConfig &setConfigAndReturn(ReasonId reason);
 
-  std::optional<Event> runSearch(AlsGraph &graph);
+  // true if an event has been produced
+  bool runSearch(AlsGraph &graph);
 
 private:
   const SudokuBoard &board;
+  EventQueue &eventQueue;
   ReasonId reason;
   AlsConfig config;
   std::set<AlsNodeID> visited;
 
-  std::optional<Event> als_search_from(/*AlsNodeID start,*/ AlsGraph &graph);
+  bool als_search_from(AlsGraph &graph);
 
   bool path_contains_node(AlsNodeID start, AlsSearchNode *cur, AlsNodeID node) const;
 

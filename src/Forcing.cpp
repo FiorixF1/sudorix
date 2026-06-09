@@ -4,23 +4,22 @@
 #include <queue>
 
 namespace {
-constexpr int kCells = 81;
-constexpr int kDigitsPerCellSlot = 10; // digits are addressed as 1..9; slot 0 unused
-constexpr int kPolaritySlots = 2;
-constexpr int kLiteralCount = kCells * kDigitsPerCellSlot * kPolaritySlots;
+  constexpr int kCells = 81;
+  constexpr int kDigitsPerCellSlot = 10; // digits are addressed as 1..9; slot 0 unused
+  constexpr int kPolaritySlots = 2;
+  constexpr int kLiteralCount = kCells * kDigitsPerCellSlot * kPolaritySlots;
 
-bool sameLiteral(const ForcingLiteral &a, const ForcingLiteral &b) {
-  return a.cell == b.cell && a.digit == b.digit && a.on == b.on;
-}
+  bool sameLiteral(const ForcingLiteral &a, const ForcingLiteral &b) {
+    return a.cell == b.cell && a.digit == b.digit && a.on == b.on;
+  }
 
-bool sameCandidate(const ForcingLiteral &a, const ForcingLiteral &b) {
-  return a.cell == b.cell && a.digit == b.digit;
-}
-
+  bool sameCandidate(const ForcingLiteral &a, const ForcingLiteral &b) {
+    return a.cell == b.cell && a.digit == b.digit;
+  }
 } // namespace
 
-ForcingChainBuilder::ForcingChainBuilder(const SudokuBoard &baseBoard, const ForcingConfig &cfg)
-  : base(baseBoard), config(cfg), graph(kLiteralCount) { }
+ForcingChainBuilder::ForcingChainBuilder(const SudokuBoard &baseBoard, EventQueue &eventQueue, const ForcingConfig &cfg)
+  : base(baseBoard), eventQueue(eventQueue), config(cfg), graph(kLiteralCount) { }
 
 int ForcingChainBuilder::literalIndex(Cell cell, Digit digit, bool on) {
   return ((static_cast<int>(cell) * kDigitsPerCellSlot + static_cast<int>(digit)) * kPolaritySlots) + (on ? 1 : 0);
@@ -221,11 +220,11 @@ std::vector<int> ForcingChainBuilder::reachableFrom(ForcingLiteral from) const {
   return depth;
 }
 
-bool ForcingChainBuilder::find(Event &outEvent) const {
-  return findContradiction(outEvent) || findCommonConsequences(outEvent);
+bool ForcingChainBuilder::find() {
+  return findContradiction() || findCommonConsequences();
 }
 
-bool ForcingChainBuilder::findContradiction(Event &outEvent) const {
+bool ForcingChainBuilder::findContradiction() {
   return false;
 
   // Nishio Forcing Chain
@@ -278,8 +277,7 @@ bool ForcingChainBuilder::findContradiction(Event &outEvent) const {
               event.addDelimiter();
               addPathSources(event, *pathB);
               event.addOperation(assumptionCell, assumptionDigit);
-              outEvent = event;
-              return true;
+              if (eventQueue.enqueue(base, event)) return true;
             }
           }
         }
@@ -290,7 +288,7 @@ bool ForcingChainBuilder::findContradiction(Event &outEvent) const {
   return false;
 }
 
-bool ForcingChainBuilder::findCommonConsequences(Event &outEvent) const {
+bool ForcingChainBuilder::findCommonConsequences() {
   // Digit Forcing Chain
   // Supported cases:
   // - One candidate is ON either the assumption is true or false. It must be the solution.
@@ -345,8 +343,7 @@ bool ForcingChainBuilder::findCommonConsequences(Event &outEvent) const {
             event.addDelimiter();
             addPathSources(event, *pathB);
             event.addOperation(cell, digit);
-            outEvent = event;
-            return true;
+            if (eventQueue.enqueue(base, event)) return true;
           }
         }
       }
@@ -431,8 +428,7 @@ bool ForcingChainBuilder::findCommonConsequences(Event &outEvent) const {
                   event.addDelimiter();
                 }
                 event.addOperation(cell, digit);
-                outEvent = event;
-                return true;
+                if (eventQueue.enqueue(base, event)) return true;
               }
             }
           }
@@ -518,8 +514,7 @@ bool ForcingChainBuilder::findCommonConsequences(Event &outEvent) const {
                   event.addDelimiter();
                 }
                 event.addOperation(cell, digit);
-                outEvent = event;
-                return true;
+                if (eventQueue.enqueue(base, event)) return true;
               }
             }
           }

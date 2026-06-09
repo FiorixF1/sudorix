@@ -1,5 +1,6 @@
 #include "ALS.hpp"
 #include "encoder.hpp"
+#include "EventQueue.hpp"
 #include <sstream>
 
 AlsGraphBuilder::AlsGraphBuilder(const SudokuBoard &board) : board(board) { }
@@ -219,10 +220,8 @@ AlsSearchNode *make_node(AlsNodeID start,
 
 /* ---------------------------------------------------------------------- */
 
-AlsSearcher::AlsSearcher(const SudokuBoard &board)
-  : board(board) {
-
-}
+AlsSearcher::AlsSearcher(const SudokuBoard &board, EventQueue &eventQueue)
+  : board(board), eventQueue(eventQueue) { }
 
 const AlsConfig &AlsSearcher::setConfigAndReturn(ReasonId reason) {
   config = {};
@@ -251,18 +250,13 @@ const AlsConfig &AlsSearcher::setConfigAndReturn(ReasonId reason) {
   return config;
 }
 
-std::optional<Event> AlsSearcher::runSearch(AlsGraph &graph) {
-  std::optional<Event> maybeEvent;
+bool AlsSearcher::runSearch(AlsGraph &graph) {
+  bool maybeEvent;
   maybeEvent = als_search_from(graph);
-
-  if (maybeEvent) {
-    return maybeEvent;
-  }
-
-  return {};
+  return maybeEvent;
 }
 
-std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
+bool AlsSearcher::als_search_from(AlsGraph &graph) {
   std::deque<AlsSearchNode *> q;
 
   for (auto it = graph.links.begin(); it != graph.links.end(); ++it) {
@@ -318,16 +312,18 @@ std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
 
             std::optional<Event> event = execute_als_rules(graph, cur->start, nc.to, grandchild);
             if (event) {
-              release(grandchild);
-              release(child);
+              if (eventQueue.enqueue(board, *event)) {
+                release(grandchild);
+                release(child);
 
-              while (!q.empty()) {
-                release(q.front());
-                q.pop_front();
+                while (!q.empty()) {
+                  release(q.front());
+                  q.pop_front();
+                }
+
+                release(cur);
+                return true;
               }
-
-              release(cur);
-              return event;
             }
           }
         }
@@ -335,15 +331,17 @@ std::optional<Event> AlsSearcher::als_search_from(AlsGraph &graph) {
         // Look for eliminations according to ALS rules
         std::optional<Event> event = execute_als_rules(graph, cur->start, nb.to, child);
         if (event) {
-          release(child);
+          if (eventQueue.enqueue(board, *event)) {
+            release(child);
 
-          while (!q.empty()) {
-            release(q.front());
-            q.pop_front();
+            while (!q.empty()) {
+              release(q.front());
+              q.pop_front();
+            }
+
+            release(cur);
+            return true;
           }
-
-          release(cur);
-          return event;
         }
       }
 
@@ -428,11 +426,6 @@ std::optional<Event> AlsSearcher::build_circular_elimination_event(AlsPath &path
       deserialize_unitcode(path.edges[i].to, toNode.cellSet, toNode.digitSet, toNode.isGrouped);
       event.addSource(board.getPositionsOfDigit(fromNode.cellSet, RCC), RCC);
       event.addSource(board.getPositionsOfDigit(toNode.cellSet, RCC), RCC);
-      
-      //AlsNode &toNode = path.nodes[(i+1)%path.nodes.size()];
-      //Digit RCC = path.edges[i].rcc;
-      //event.addSource(board.getPositionsOfDigit(fromNode.cellSet, RCC), RCC);
-      //event.addSource(board.getPositionsOfDigit(toNode.cellSet, RCC), RCC);
     }
   }
 

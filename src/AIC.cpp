@@ -1,6 +1,7 @@
 #include "AIC.hpp"
 #include "Forcing.hpp"
 #include "encoder.hpp"
+#include "EventQueue.hpp"
 
 AicGraphBuilder::AicGraphBuilder(const SudokuBoard &board) : board(board) { }
 
@@ -559,7 +560,8 @@ AicSearchNode *make_node(AicNodeID start,
 
 /* ---------------------------------------------------------------------- */
 
-AicSearcher::AicSearcher(const SudokuBoard &board) : board(board) { }
+AicSearcher::AicSearcher(const SudokuBoard &board, EventQueue &eventQueue)
+  : board(board), eventQueue(eventQueue) { }
 
 const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
   switch(reason) {
@@ -712,45 +714,42 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
   return config;
 }
 
-std::optional<Event> AicSearcher::runSearch(AicGraph &graph, ReasonId reason) {
+bool AicSearcher::runSearch(AicGraph &graph) {
   this->graph = &graph;
 
   visited.clear();
 
   if (reason == ReasonId::ForcingChain) {
     // forcing chain search
-    std::optional<Event> maybeEvent;
-    maybeEvent = forcing_chain_search();
+    bool maybeEvent = forcing_chain_search();
 
     if (maybeEvent) {
-      return maybeEvent;
+      return true;
     }
   } else if (config.useWeakLinks) {
     // generic AIC search
-    std::optional<Event> maybeEvent;
-    maybeEvent = aic_search();
+    bool maybeEvent = aic_search();
 
     if (maybeEvent) {
-      return maybeEvent;
+      return true;
     }
   } else {
     // color-based search, only strong links
     for (auto &it : graph.strong_links) {
       AicNodeID start = it.first;
 
-      std::optional<Event> maybeEvent;
-      maybeEvent = coloring_search_from(start);
+      bool maybeEvent = coloring_search_from(start);
 
       if (maybeEvent) {
-        return maybeEvent;
+        return true;
       }
     }
   }
 
-  return {};
+  return false;
 }
 
-std::optional<Event> AicSearcher::aic_search() {
+bool AicSearcher::aic_search() {
   std::deque<AicSearchNode *> q;
 
   // Partiamo dal nodo iniziale e imponiamo che il primo arco sia strong.
@@ -800,15 +799,17 @@ std::optional<Event> AicSearcher::aic_search() {
           bool valid = analyze_event(*event);
           // if event found
           if (valid) {
-            release(child);
+            if (eventQueue.enqueue(board, *event)) {
+              release(child);
 
-            while (!q.empty()) {
-              release(q.front());
-              q.pop_front();
+              while (!q.empty()) {
+                release(q.front());
+                q.pop_front();
+              }
+
+              release(cur);
+              return true;
             }
-
-            release(cur);
-            return event;
           }
         }
 
@@ -833,10 +834,10 @@ std::optional<Event> AicSearcher::aic_search() {
     release(cur);
   }
 
-  return {};
+  return false;
 }
 
-std::optional<Event> AicSearcher::coloring_search_from(AicNodeID start) {
+bool AicSearcher::coloring_search_from(AicNodeID start) {
   std::vector<ColorSearchState> states;
   std::deque<AicSearchNode *> q;
 
@@ -884,23 +885,16 @@ std::optional<Event> AicSearcher::coloring_search_from(AicNodeID start) {
   }
 
   // Look for contradictions among colors
-  std::optional<Event> event = execute_coloring_rules(start, states);
-
-  return event;
+  return execute_coloring_rules(start, states);
 }
 
-std::optional<Event> AicSearcher::forcing_chain_search() {
+bool AicSearcher::forcing_chain_search() {
   // forward the task to ForcingChainBuilder
   // there is a lot of overlapping logic, maybe it can be unified with AIC.cpp
-  ForcingChainBuilder builder(board);
+  ForcingChainBuilder builder(board, eventQueue);
   builder.build();
 
-  Event event;
-  if (builder.find(event)) {
-    return event;
-  }
-
-  return {};
+  return builder.find();
 }
 
 bool AicSearcher::analyze_event(Event &event) {
@@ -1311,7 +1305,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
   return {};
 }
 
-std::optional<Event> AicSearcher::execute_coloring_rules(
+bool AicSearcher::execute_coloring_rules(
   AicNodeID start,
   const std::vector<ColorSearchState> &states) const
 {
@@ -1373,13 +1367,13 @@ std::optional<Event> AicSearcher::execute_coloring_rules(
         ColorNode node = secondColorNodes[i];
         event.addSource(node.cell, remotePair);
       }
-      return event;
+      if (eventQueue.enqueue(board, event)) return true;
     }
-    return {};
+    return false;
   }
 
   // Color Wrap test
-  auto scanColor = [&](const std::vector<ColorNode> &nodes, const std::vector<ColorNode> &other) -> std::optional<Event>
+  auto scanColor = [&](const std::vector<ColorNode> &nodes, const std::vector<ColorNode> &other) -> bool
   {
     bool found = false;
     ReasonId detailedReason;
@@ -1465,17 +1459,17 @@ end_loop:
         event.addDelimiter();
         event.addSource(emptiedCellIdx, board.getCandidates(emptiedCellIdx));
       }
-      return event;
+      if (eventQueue.enqueue(board, event)) return true;
     }
 
-    return {};
+    return false;
   };
 
-  std::optional<Event> first = scanColor(firstColorNodes, secondColorNodes);
-  if (first) return *first;
+  bool first = scanColor(firstColorNodes, secondColorNodes);
+  if (first) return true;
 
-  std::optional<Event> second = scanColor(secondColorNodes, firstColorNodes);
-  if (second) return *second;
+  bool second = scanColor(secondColorNodes, firstColorNodes);
+  if (second) return true;
 
   // Color Trap test
   Event event(EventType::RemoveCandidate, reason);
@@ -1529,10 +1523,10 @@ end_loop:
       ColorNode node = secondColorNodes[i];
       event.addSource(node.cell, node.digit);
     }
-    return event;
+    if (eventQueue.enqueue(board, event)) return true;
   }
 
-  return {};
+  return false;
 }
 
 bool AicSearcher::are_weakly_linked(AicNodeID a, AicNodeID b) const {

@@ -11,6 +11,7 @@
 #include "SudokuCell.hpp"
 
 class SudokuBoard;
+class EventQueue;
 
 // Unique ID for nodes.
 // The ID, both for singletons and groups, is built as follows:
@@ -174,22 +175,24 @@ struct AicSearchNode {
 
 class AicSearcher {
 public:
-  AicSearcher(const SudokuBoard &board);
+  AicSearcher(const SudokuBoard &board, EventQueue &eventQueue);
 
   const AicConfig &setConfigAndReturn(ReasonId reason);
 
-  std::optional<Event> runSearch(AicGraph &graph, ReasonId reason);
+  // true if an event has been produced
+  bool runSearch(AicGraph &graph);
 
 private:
   const SudokuBoard &board;
+  EventQueue &eventQueue;
   AicGraph *graph;
   ReasonId reason;
   AicConfig config;
   std::set<AicNodeID> visited;
 
-  std::optional<Event> aic_search();
-  std::optional<Event> coloring_search_from(AicNodeID start);
-  std::optional<Event> forcing_chain_search();
+  bool aic_search();
+  bool coloring_search_from(AicNodeID start);
+  bool forcing_chain_search();
 
   bool analyze_event(Event &event);
 
@@ -201,7 +204,7 @@ private:
     AicNodeID start,
     AicNodeID end,
     AicSearchNode *end_state) const;
-  std::optional<Event> execute_coloring_rules(
+  bool execute_coloring_rules(
     AicNodeID start,
     const std::vector<ColorSearchState> &states) const;
 

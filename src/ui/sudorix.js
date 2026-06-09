@@ -3042,6 +3042,8 @@ var business_logic = (() => {
   function startSolving() {
     stopSolving();
 
+    clearLog();
+
     if (!ensureWasmReadyOrNotify()) {
       return;
     }
@@ -3181,7 +3183,7 @@ var business_logic = (() => {
   function runAllPossibleSteps() {
     stopSolving();
     clearPendingStepPreview();
-    exitLogPreview();
+    clearLog();
 
     if (allPossibleScanRunning) {
       return;

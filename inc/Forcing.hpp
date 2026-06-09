@@ -29,10 +29,10 @@ struct ForcingPath {
 
 class ForcingChainBuilder {
 public:
-  explicit ForcingChainBuilder(const SudokuBoard &baseBoard, const ForcingConfig &config = ForcingConfig{});
+  explicit ForcingChainBuilder(const SudokuBoard &baseBoard, EventQueue &eventQueue, const ForcingConfig &config = ForcingConfig{});
 
   void build();
-  bool find(Event &outEvent) const;
+  bool find();
 
 private:
   struct Edge {
@@ -40,6 +40,7 @@ private:
   };
 
   const SudokuBoard &base;
+  EventQueue &eventQueue;
   ForcingConfig config;
   std::vector<std::vector<Edge>> graph;
 
@@ -59,8 +60,8 @@ private:
   std::optional<ForcingPath> findPath(ForcingLiteral from, ForcingLiteral to) const;
   std::vector<int> reachableFrom(ForcingLiteral from) const;
 
-  bool findContradiction(Event &outEvent) const;
-  bool findCommonConsequences(Event &outEvent) const;
+  bool findContradiction();
+  bool findCommonConsequences();
 
   static void addPathSources(Event &event, const ForcingPath &path);
 };

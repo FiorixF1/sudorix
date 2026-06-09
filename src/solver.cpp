@@ -1309,14 +1309,10 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
 static void techGenericAIC(SudokuBoard &board,
                            EventQueue &eventQueue,
                            ReasonId reason) {
-  AicSearcher searcher(board);
+  AicSearcher searcher(board, eventQueue);
   const AicConfig &config = searcher.setConfigAndReturn(reason);
   AicGraph prunedGraph = board.getPrunedAicGraph(config);
-  std::optional<Event> event = searcher.runSearch(prunedGraph, reason);
-
-  if (event) {
-    eventQueue.enqueue(board, *event);
-  }
+  bool event = searcher.runSearch(prunedGraph);
 }
 
 static void techRemotePair(SudokuBoard &board, EventQueue &eventQueue) {
@@ -1369,14 +1365,10 @@ static void techGenericALS(SudokuBoard &board,
                            EventQueue &eventQueue,
                            ReasonId reason) {
   AlsGraphBuilder builder(board);
-  AlsSearcher searcher(board);
+  AlsSearcher searcher(board, eventQueue);
   const AlsConfig &config = searcher.setConfigAndReturn(reason);
   AlsGraph &graph = board.getAlsGraph(config);
-  std::optional<Event> event = searcher.runSearch(graph);
-
-  if (event) {
-    eventQueue.enqueue(board, *event);
-  }
+  bool event = searcher.runSearch(graph);
 }
 
 static void techALSXZ(SudokuBoard &board, EventQueue &eventQueue) {
@@ -1574,7 +1566,7 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
   };
 
   AlsGraphBuilder builder(board);
-  AlsSearcher searcher(board);
+  AlsSearcher searcher(board, eventQueue);
   const AlsConfig &config = searcher.setConfigAndReturn(ReasonId::Solver);  // not important
   AlsGraph &graph = board.getAlsGraph(config);
 

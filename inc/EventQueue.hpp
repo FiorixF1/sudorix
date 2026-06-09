@@ -10,11 +10,11 @@ class EventQueue
 public:
   EventQueue();
 
-  bool enqueue(SudokuBoard &board, Event &event);
+  bool enqueue(const SudokuBoard &board, Event &event);
 
-  bool dequeue(Event &ev);
+  bool dequeue(Event &event);
 
-  bool peek(Event &ev) const;
+  bool peek(Event &event) const;
 
   size_t size() const;
 

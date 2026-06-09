@@ -7,7 +7,7 @@
 
 EventQueue::EventQueue() = default;
 
-bool EventQueue::enqueue(SudokuBoard &board, Event &event) {
+bool EventQueue::enqueue(const SudokuBoard &board, Event &event) {
   // filter empty events and operations that would stop the solver loop
   if (event.getNumberOfOperations() > 0) {
     event.ops.erase(
@@ -39,22 +39,22 @@ bool EventQueue::enqueue(SudokuBoard &board, Event &event) {
   return false;
 }
 
-bool EventQueue::dequeue(Event &ev) {
+bool EventQueue::dequeue(Event &event) {
   if (q.empty()) {
     return false;
   }
 
-  ev = q.front();
+  event = q.front();
   q.pop();
   return true;
 }
 
-bool EventQueue::peek(Event &ev) const {
+bool EventQueue::peek(Event &event) const {
   if (q.empty()) {
     return false;
   }
 
-  ev = q.front();
+  event = q.front();
   return true;
 }
 
