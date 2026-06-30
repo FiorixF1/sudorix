@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <optional>
+#include <array>
 #include "SudokuCell.hpp"
 
 class SudokuBoard;
@@ -84,6 +85,33 @@ struct AicConfig {
   bool useRemotePairs;
   int max_depth; // max number of edges, makes sense if odd in AIC
   std::string pattern; // used to identify named chains
+};
+
+// Compact state ID for a singleton candidate plus polarity in a forcing chain:
+//   id = ((cell * 10 + digit) * 2) + polarity
+// where polarity is 1 for ON and 0 for OFF.
+// Digit 0 is intentionally unused, so the fixed table has 81*10*2 entries.
+using ForcingID = uint16_t;
+static constexpr ForcingID FORCING_INVALID_ID = 0xFFFF;
+static constexpr size_t FORCING_STATE_COUNT = 81 * 10 * 2;
+
+struct ForcingPath {
+  std::vector<ForcingID> nodes;
+};
+
+struct ForcingSearchEntry {
+  bool visited = false;
+  ForcingID parent = FORCING_INVALID_ID;
+  uint16_t depth = 0;
+};
+
+struct ForcingSearchResult {
+  ForcingID root = FORCING_INVALID_ID;
+  std::array<ForcingSearchEntry, FORCING_STATE_COUNT> entries{};
+  std::vector<ForcingID> reachable;
+
+  bool contains(ForcingID id) const;
+  std::optional<ForcingPath> reconstructPath(ForcingID target) const;
 };
 
 /* ---------------------------------------------------------------------- */
@@ -207,8 +235,14 @@ private:
   bool execute_coloring_rules(
     AicNodeID start,
     const std::vector<ColorSearchState> &states) const;
+  bool execute_fc_rules() const;
 
   bool are_weakly_linked(AicNodeID a, AicNodeID b) const;
+
+  bool find_contradiction() const;
+  bool find_common_consequences() const;
+  ForcingSearchResult reachable_from(ForcingID root) const;
+  void add_path_sources(Event &event, const ForcingPath &path) const;
 };
 
 #endif // AIC_HPP

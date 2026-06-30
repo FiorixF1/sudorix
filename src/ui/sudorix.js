@@ -424,113 +424,9 @@ var business_logic = (() => {
     return null;
   }
 
-  function wasmComputeNextStep() {
-    if (!wasmModule || !wasmSolveNextStep) {
-      return null;
-    }
+  function parseWasmEventAt(out, base, limitWords, options = {}) {
+    const allowEmpty = !!options.allowEmpty;
 
-    // C++ batch ABI - see solver.hpp
-    const ok = wasmSolveNextStep(wasmBufOut, WASM_OUT_WORDS);
-    if (!ok) {
-      return null;
-    }
-
-    const out = wasmModule.HEAPU32.subarray(wasmBufOut >> 2, (wasmBufOut >> 2) + WASM_OUT_WORDS);
-    const typeN = out[0] >>> 0;
-    const reasonId = out[1] >>> 0;
-    const detailedReasonId = out[2] >>> 0;
-    const opCount = out[3] >>> 0;
-    const srcCount = out[4] >>> 0;
-
-    if (typeN === 0 || opCount === 0) {
-      return null;
-    }
-
-    const ev = {
-      type: (typeN === 1) ? "setValue" : (typeN === 2) ? "removeCandidate" : "none",
-      reason: WASM_REASON[reasonId] || "Solver",
-      detailedReason: WASM_REASON[detailedReasonId] || "Solver",
-      ops: [],
-      sources: []
-    };
-
-    // sources (already decoded)
-    for (let i = 0; i < srcCount; i++) {
-      const cells = out[5 + 2 * i + 0] >>> 0;
-      const mask = out[5 + 2 * i + 1] >>> 0;
-      ev.sources.push({ cells: decodeSourceCellCode(cells), mask: mask & 0x1FF });
-    }
-
-    // operations
-    const opsBase = 5 + 2 * srcCount;
-    for (let i = 0; i < opCount; i++) {
-      const idx = out[opsBase + 2 * i + 0] >>> 0;
-      const mask = out[opsBase + 2 * i + 1] >>> 0;
-      ev.ops.push({ idx: idx, mask: mask & 0x1FF });
-    }
-
-    return ev;
-  }
-
-  function wasmComputeHint(board) {
-    if (!wasmModule || !wasmSolveHint) {
-      return null;
-    }
-
-    // Prepare inputs (snapshot board)
-    let inValues = new Uint8Array(81);
-    let inCands  = new Uint16Array(81);
-    for (let i = 0; i < 81; i++) {
-      inValues[i] = board.getValue(i) & 0xFF;
-      inCands[i]  = board.getCandidateMask(i) & 0xFFFF;
-    }
-
-    wasmModule.HEAPU8.set(inValues, wasmBufValues);
-    wasmModule.HEAPU16.set(inCands, wasmBufCands >> 1);
-
-    const ok = wasmSolveHint(wasmBufValues, wasmBufCands, wasmBufOut, WASM_OUT_WORDS);
-    if (!ok) {
-      return null;
-    }
-
-    const out = wasmModule.HEAPU32.subarray(wasmBufOut >> 2, (wasmBufOut >> 2) + WASM_OUT_WORDS);
-    const typeN = out[0] >>> 0;
-    const reasonId = out[1] >>> 0;
-    const detailedReasonId = out[2] >>> 0;
-    const opCount = out[3] >>> 0;
-    const srcCount = out[4] >>> 0;
-
-    if (typeN === 0 || opCount === 0) {
-      return null;
-    }
-
-    const ev = {
-      type: (typeN === 1) ? "setValue" : (typeN === 2) ? "removeCandidate" : "none",
-      reason: WASM_REASON[reasonId] || "Solver",
-      detailedReason: WASM_REASON[detailedReasonId] || "Solver",
-      ops: [],
-      sources: []
-    };
-
-    // sources (already decoded)
-    for (let i = 0; i < srcCount; i++) {
-      const cells = out[5 + 2 * i + 0] >>> 0;
-      const mask = out[5 + 2 * i + 1] >>> 0;
-      ev.sources.push({ cells: decodeSourceCellCode(cells), mask: mask & 0x1FF });
-    }
-
-    // operations
-    const opsBase = 5 + 2 * srcCount;
-    for (let i = 0; i < opCount; i++) {
-      const idx = out[opsBase + 2 * i + 0] >>> 0;
-      const mask = out[opsBase + 2 * i + 1] >>> 0;
-      ev.ops.push({ idx: idx, mask: mask & 0x1FF });
-    }
-
-    return ev;
-  }
-
-  function parseWasmEventAt(out, base, limitWords) {
     if (base + 5 > limitWords) {
       return { ok: false, error: "Evento troncato nel buffer WASM.", next: base };
     }
@@ -542,15 +438,18 @@ var business_logic = (() => {
     const srcCount = out[base + 4] >>> 0;
     const needWords = 5 + 2 * srcCount + 2 * opCount;
 
-    if (typeN === 0 || opCount === 0) {
-      return { ok: false, error: "Evento vuoto nel buffer WASM.", next: base + Math.max(needWords, 5) };
-    }
-
     if (base + needWords > limitWords) {
       return { ok: false, error: "Evento oltre la fine del buffer WASM.", next: base };
     }
 
-    const ev = {
+    if (typeN === 0 || opCount === 0) {
+      if (allowEmpty) {
+        return { ok: true, event: null, next: base + Math.max(needWords, 5), empty: true };
+      }
+      return { ok: false, error: "Evento vuoto nel buffer WASM.", next: base + Math.max(needWords, 5) };
+    }
+
+    const event = {
       type: (typeN === 1) ? "setValue" : (typeN === 2) ? "removeCandidate" : "none",
       reason: WASM_REASON[reasonId] || "Solver",
       detailedReason: WASM_REASON[detailedReasonId] || "Solver",
@@ -561,24 +460,54 @@ var business_logic = (() => {
     for (let i = 0; i < srcCount; i++) {
       const cells = out[base + 5 + 2 * i + 0] >>> 0;
       const mask = out[base + 5 + 2 * i + 1] >>> 0;
-      ev.sources.push({ cells: decodeSourceCellCode(cells), mask: mask & 0x1FF });
+      event.sources.push({ cells: decodeSourceCellCode(cells), mask: mask & 0x1FF });
     }
 
     const opsBase = base + 5 + 2 * srcCount;
     for (let i = 0; i < opCount; i++) {
       const idx = out[opsBase + 2 * i + 0] >>> 0;
       const mask = out[opsBase + 2 * i + 1] >>> 0;
-      ev.ops.push({ idx: idx, mask: mask & 0x1FF });
+      event.ops.push({ idx: idx, mask: mask & 0x1FF });
     }
 
-    return { ok: true, event: ev, next: base + needWords };
+    return { ok: true, event, next: base + needWords, empty: false };
   }
 
-  function wasmComputeAllPossibleStepsForTechnique(boardRef, reasonId) {
-    if (!wasmModule || !wasmAllPossibleStepsForTechnique) {
-      return { ok: false, error: "Funkcio sudorix_solver_all_possible_steps_for_technique ne disponeblas en ĉi tiu WASM build." };
+  function parseSingleWasmEventBuffer(ptr, wordCapacity) {
+    if (!wasmModule || !ptr || wordCapacity <= 0) {
+      return null;
     }
 
+    const out = wasmModule.HEAPU32.subarray(ptr >> 2, (ptr >> 2) + wordCapacity);
+    const parsed = parseWasmEventAt(out, 0, wordCapacity, { allowEmpty: true });
+    if (!parsed.ok || parsed.empty) {
+      return null;
+    }
+    return parsed.event;
+  }
+
+  function parseWasmEventListBuffer(ptr, writtenWords) {
+    if (!wasmModule || !ptr || writtenWords <= 0) {
+      return { ok: true, events: [] };
+    }
+
+    const out = wasmModule.HEAPU32.subarray(ptr >> 2, (ptr >> 2) + writtenWords);
+    const events = [];
+    let pos = 0;
+
+    while (pos < writtenWords) {
+      const parsed = parseWasmEventAt(out, pos, writtenWords);
+      if (!parsed.ok) {
+        return { ok: false, error: parsed.error || "Nevalida eventa serialigo.", events };
+      }
+      events.push(parsed.event);
+      pos = parsed.next;
+    }
+
+    return { ok: true, events };
+  }
+
+  function copyBoardToWasmBuffers(boardRef) {
     const values = new Uint8Array(81);
     const cands = new Uint16Array(81);
     for (let i = 0; i < 81; i++) {
@@ -588,6 +517,43 @@ var business_logic = (() => {
 
     wasmModule.HEAPU8.set(values, wasmBufValues);
     wasmModule.HEAPU16.set(cands, wasmBufCands >> 1);
+  }
+
+  function wasmComputeNextStep() {
+    if (!wasmModule || !wasmSolveNextStep) {
+      return null;
+    }
+
+    // C++ batch ABI - see solver.hpp
+    const ok = wasmSolveNextStep(wasmBufOut, WASM_OUT_WORDS);
+    if (!ok) {
+      return null;
+    }
+
+    return parseSingleWasmEventBuffer(wasmBufOut, WASM_OUT_WORDS);
+  }
+
+  function wasmComputeHint(board) {
+    if (!wasmModule || !wasmSolveHint) {
+      return null;
+    }
+
+    copyBoardToWasmBuffers(board);
+
+    const ok = wasmSolveHint(wasmBufValues, wasmBufCands, wasmBufOut, WASM_OUT_WORDS);
+    if (!ok) {
+      return null;
+    }
+
+    return parseSingleWasmEventBuffer(wasmBufOut, WASM_OUT_WORDS);
+  }
+
+  function wasmComputeAllPossibleStepsForTechnique(boardRef, reasonId) {
+    if (!wasmModule || !wasmAllPossibleStepsForTechnique) {
+      return { ok: false, error: "Funkcio sudorix_solver_all_possible_steps_for_technique ne disponeblas en ĉi tiu WASM build." };
+    }
+
+    copyBoardToWasmBuffers(boardRef);
 
     const writtenWords = wasmAllPossibleStepsForTechnique(
       wasmBufValues,
@@ -610,23 +576,7 @@ var business_logic = (() => {
       return { ok: false, overflow: true, error: "La WASM-solvilo raportis tro grandan output-buferon." };
     }
 
-    const out = wasmModule.HEAPU32.subarray(
-      wasmBufAllStepsOut >> 2,
-      (wasmBufAllStepsOut >> 2) + writtenWords
-    );
-
-    const events = [];
-    let pos = 0;
-    while (pos < writtenWords) {
-      const parsed = parseWasmEventAt(out, pos, writtenWords);
-      if (!parsed.ok) {
-        return { ok: false, error: parsed.error || "Nevalida eventa serialigo." };
-      }
-      events.push(parsed.event);
-      pos = parsed.next;
-    }
-
-    return { ok: true, events };
+    return parseWasmEventListBuffer(wasmBufAllStepsOut, writtenWords);
   }
 
   function wasmApplyTechniqueSelection() {

@@ -1,5 +1,4 @@
 #include "AIC.hpp"
-#include "Forcing.hpp"
 #include "encoder.hpp"
 #include "EventQueue.hpp"
 
@@ -637,7 +636,7 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .useWeakInCell = false,
         .useWeakInUnit = true,
         .useRemotePairs = false,
-        .max_depth = 11,
+        .max_depth = 19,
       };
       break;
     case ReasonId::XYChain:
@@ -650,7 +649,7 @@ const AicConfig &AicSearcher::setConfigAndReturn(ReasonId reason) {
         .useWeakInCell = false,
         .useWeakInUnit = true,
         .useRemotePairs = false,
-        .max_depth = 11,
+        .max_depth = 19,
       };
       break;
     case ReasonId::AIC:
@@ -889,12 +888,446 @@ bool AicSearcher::coloring_search_from(AicNodeID start) {
 }
 
 bool AicSearcher::forcing_chain_search() {
-  // forward the task to ForcingChainBuilder
-  // there is a lot of overlapping logic, maybe it can be unified with AIC.cpp
-  ForcingChainBuilder builder(board, eventQueue);
-  builder.build();
+  return execute_fc_rules();
+}
 
-  return builder.find();
+bool AicSearcher::execute_fc_rules() const {
+  return find_contradiction() || find_common_consequences();
+}
+
+// utility functions for forcing chains
+namespace {
+
+  static constexpr ForcingID make_forcing_id(Cell cell, Digit digit, bool on) {
+    return static_cast<ForcingID>(((static_cast<int>(cell) * 10 + static_cast<int>(digit)) * 2) + (on ? 1 : 0));
+  }
+
+  static constexpr Cell forcing_cell(ForcingID id) {
+    return static_cast<Cell>((id / 2) / 10);
+  }
+
+  static constexpr Digit forcing_digit(ForcingID id) {
+    return static_cast<Digit>((id / 2) % 10);
+  }
+
+  static constexpr bool forcing_on(ForcingID id) {
+    return (id & 1U) != 0;
+  }
+
+  static constexpr ForcingID opposite_forcing_id(ForcingID id) {
+    return static_cast<ForcingID>(id ^ 1U);
+  }
+
+  static bool valid_forcing_id(ForcingID id) {
+    return id < FORCING_STATE_COUNT && forcing_digit(id) >= 1 && forcing_digit(id) <= 9;
+  }
+
+  static std::optional<ForcingID> forcing_id_from_aic_node(const AicNode &node, bool on) {
+    if (node.isGrouped || node.cellSet.size() != 1 || node.digitSet.size() != 1) {
+      return std::nullopt;
+    }
+
+    Cell cell = *node.cellSet.begin();
+    Digit digit = *node.digitSet.begin();
+    return make_forcing_id(cell, digit, on);
+  }
+
+  static AicNodeID forcing_id_to_aic_node_id(ForcingID id) {
+    if (!valid_forcing_id(id)) {
+      return 0;
+    }
+    return AicGraphBuilder::get_node_id(forcing_digit(id), forcing_cell(id));
+  }
+
+} // namespace
+
+bool ForcingSearchResult::contains(ForcingID id) const {
+  return valid_forcing_id(id) && entries[id].visited;
+}
+
+std::optional<ForcingPath> ForcingSearchResult::reconstructPath(ForcingID target) const {
+  if (!contains(target)) {
+    return std::nullopt;
+  }
+
+  ForcingPath path;
+  ForcingID cur = target;
+
+  while (cur != FORCING_INVALID_ID) {
+    path.nodes.push_back(cur);
+    if (cur == root) {
+      break;
+    }
+    cur = entries[cur].parent;
+  }
+
+  if (path.nodes.empty() || path.nodes.back() != root) {
+    return std::nullopt;
+  }
+
+  std::reverse(path.nodes.begin(), path.nodes.end());
+  return path;
+}
+
+bool AicSearcher::find_contradiction() const {
+  return false;
+
+  // Nishio Forcing Chain
+  // Supported cases:
+  // - The assumption is false because it leads a candidate being both ON and OFF.
+  // Not yet supported:
+  // - The assumption is false because it leads to a bi-value cell being emptied.
+  // - The assumption is false because it leads to the last remaining candidates in a unit to be both ON.
+  // - The assumption in false because it leads to the last remaining candidates in a unit to be both OFF.
+  //
+  // WARNING: the current implementation gives the exact same results of a Digit Forcing Chain
+  // but they harder to visualize on the grid, so Nishio is currently disabled.
+  //
+  for (auto it = graph->nodes.begin(); it != graph->nodes.end(); ++it) {
+    const AicNode &node = it->second;
+    auto maybeRoot = forcing_id_from_aic_node(node, true);
+    if (!maybeRoot) {
+      continue;
+    }
+
+    // store the initial implication: the candidate is ON
+    ForcingID rootOn = *maybeRoot;
+    Cell assumptionCell = forcing_cell(rootOn);
+    Digit assumptionDigit = forcing_digit(rootOn);
+
+    // find the reachable consequences from the assumption
+    const ForcingSearchResult reach = reachable_from(rootOn);
+
+    // look for consequences that are contradictory
+    for (auto ot = graph->nodes.begin(); ot != graph->nodes.end(); ++ot) {
+      const AicNode &outNode = ot->second;
+      auto maybeOn = forcing_id_from_aic_node(outNode, true);
+      if (!maybeOn) {
+        continue;
+      }
+
+      ForcingID onConsequence = *maybeOn;
+      ForcingID offConsequence = opposite_forcing_id(onConsequence);
+
+      Cell cell = forcing_cell(onConsequence);
+      Digit digit = forcing_digit(onConsequence);
+      if (cell == assumptionCell && digit == assumptionDigit) {
+        continue;
+      }
+
+      // a consequence is both true and false -> the assumption is false
+      if (reach.contains(onConsequence) && reach.contains(offConsequence)) {
+        auto pathA = reach.reconstructPath(onConsequence);
+        auto pathB = reach.reconstructPath(offConsequence);
+        if (!pathA || !pathB) {
+          continue;
+        }
+
+        // Nishio Forcing Chain spotted: source is the two chains starting from the assumption
+        Event event(EventType::RemoveCandidate, ReasonId::ForcingChain, ReasonId::NishioForcingChain);
+        add_path_sources(event, *pathA);
+        event.addDelimiter();
+        add_path_sources(event, *pathB);
+        event.addOperation(assumptionCell, assumptionDigit);
+        if (eventQueue.enqueue(board, event)) return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+bool AicSearcher::find_common_consequences() const {
+  auto emit_common_consequence = [&](const std::vector<ForcingSearchResult> &searches,
+                                     ForcingID consequence,
+                                     ReasonId detailedReason) -> bool {
+    if (searches.empty()) {
+      return false;
+    }
+
+    // corner case: there is no path for the desired consequence
+    std::vector<ForcingPath> paths;
+    paths.reserve(searches.size());
+    for (const ForcingSearchResult &search : searches) {
+      auto path = search.reconstructPath(consequence);
+      if (!path) {
+        return false;
+      }
+      paths.push_back(*path);
+    }
+
+    Event event(forcing_on(consequence) ? EventType::SetValue : EventType::RemoveCandidate,
+                ReasonId::ForcingChain,
+                detailedReason);
+
+    for (size_t i = 0; i < paths.size(); ++i) {
+      if (i > 0) {
+        event.addDelimiter();
+      }
+      add_path_sources(event, paths[i]);
+    }
+
+    event.addOperation(forcing_cell(consequence), forcing_digit(consequence));
+    return eventQueue.enqueue(board, event);
+  };
+
+  auto common_consequence_from_searches = [&](const std::vector<ForcingSearchResult> &searches,
+                                              const std::vector<ForcingID> &assumptions,
+                                              ReasonId detailedReason) -> bool {
+    if (searches.empty()) {
+      return false;
+    }
+
+    for (ForcingID candidate : searches.front().reachable) {
+      if (!valid_forcing_id(candidate)) {
+        continue;
+      }
+
+      // corner case: a consequence is an initial assumption
+      bool isAssumption = false;
+      for (ForcingID assumption : assumptions) {
+        if ((assumption / 2) == (candidate / 2)) {
+          isAssumption = true;
+          break;
+        }
+      }
+      if (isAssumption) {
+        continue;
+      }
+
+      // corner case: the consequence is not reachable by every assumption
+      bool common = true;
+      for (size_t i = 1; i < searches.size(); ++i) {
+        if (!searches[i].contains(candidate)) {
+          common = false;
+          break;
+        }
+      }
+      if (!common) {
+        continue;
+      }
+
+      if (emit_common_consequence(searches, candidate, detailedReason)) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  // Digit Forcing Chain
+  // Supported cases:
+  // - One candidate is ON either the assumption is true or false. It must be the solution.
+  // - One candidate is OFF either the assumption is true or false. It can be removed.
+  // Not yet supported:
+  // - Two candidates in a cell are both ON, all other numbers can be removed.
+  // - Two candidates on the same unit are both ON, all other numbers can be removed on that unit.
+  for (auto it = graph->nodes.begin(); it != graph->nodes.end(); ++it) {
+    const AicNode &node = it->second;
+    auto maybeRootOn = forcing_id_from_aic_node(node, true);
+    if (!maybeRootOn) {
+      continue;
+    }
+
+    // store the initial implications: the candidate can be ON or OFF
+    ForcingID rootOn = *maybeRootOn;
+    ForcingID rootOff = opposite_forcing_id(rootOn);
+
+    // find the reachable consequences from each assumption
+    std::vector<ForcingSearchResult> searches;
+    searches.push_back(reachable_from(rootOn));
+    searches.push_back(reachable_from(rootOff));
+
+    // look for consequences that are common to all assumptions
+    if (common_consequence_from_searches(searches, {rootOn, rootOff}, ReasonId::DigitForcingChain)) {
+      return true;
+    }
+  }
+
+  auto multiForcingChain = [&](int size) -> bool {
+    // Cell Forcing Chain
+    // Supported cases:
+    // - One candidate is ON for each possible solution of the starting cell. It must be the solution.
+    // - One candidate is OFF for each possible solution of the starting cell. It can be removed.
+    // Not yet supported:
+    // - Two candidates in a cell are both ON, all other numbers can be removed.
+    // - All candidates that can see all ends of the chain can be removed.
+    for (Cell assumptionCell = 0; assumptionCell < 81; ++assumptionCell) {
+      if (board.isSolved(assumptionCell)) {
+        continue;
+      }
+
+      std::vector<int> assumptionDigits = board.getCandidates(assumptionCell).to_vector();
+      if (static_cast<int>(assumptionDigits.size()) != size) {
+        continue;
+      }
+
+      std::vector<ForcingID> assumptions;
+      std::vector<ForcingSearchResult> searches;
+      for (int rawDigit : assumptionDigits) {
+        Digit digit = static_cast<Digit>(rawDigit);
+        AicNodeID nodeId = AicGraphBuilder::get_node_id(digit, assumptionCell);
+        if (graph->nodes.find(nodeId) == graph->nodes.end()) {
+          assumptions.clear();
+          searches.clear();
+          break;
+        }
+        // store the initial implications: each candidate in the cell is true
+        ForcingID root = make_forcing_id(assumptionCell, digit, true);
+        assumptions.push_back(root);
+        // find the reachable consequences from each assumption
+        searches.push_back(reachable_from(root));
+      }
+
+      // look for consequences that are common to all assumptions
+      if (!searches.empty() && common_consequence_from_searches(searches, assumptions, ReasonId::CellForcingChain)) {
+        return true;
+      }
+    }
+
+    // Unit Forcing Chain
+    // Supported cases:
+    // - One candidate is ON for each possible position of the starting unit. It must be the solution.
+    // - One candidate is OFF for each possible position of the starting unit. It can be removed.
+    // Not yet supported:
+    // - Two candidates in a cell are both ON, all other numbers can be removed.
+    // - All candidates that can see all ends of the chain can be removed.
+    auto unitForcingChain = [&](const Unit &unit) -> bool {
+      for (Digit assumptionDigit = 1; assumptionDigit <= 9; ++assumptionDigit) {
+        std::vector<int> assumptionCells = board.getPositionsOfDigit(unit, assumptionDigit).to_vector();
+        if (static_cast<int>(assumptionCells.size()) != size) {
+          continue;
+        }
+
+        std::vector<ForcingID> assumptions;
+        std::vector<ForcingSearchResult> searches;
+        for (int rawCell : assumptionCells) {
+          Cell cell = static_cast<Cell>(rawCell);
+          AicNodeID nodeId = AicGraphBuilder::get_node_id(assumptionDigit, cell);
+          if (graph->nodes.find(nodeId) == graph->nodes.end()) {
+            assumptions.clear();
+            searches.clear();
+            break;
+          }
+          // store the initial implications: each candidate in the unit is true
+          ForcingID root = make_forcing_id(cell, assumptionDigit, true);
+          assumptions.push_back(root);
+          // find the reachable consequences from each assumption
+          searches.push_back(reachable_from(root));
+        }
+
+        // look for consequences that are common to all assumptions
+        if (!searches.empty() && common_consequence_from_searches(searches, assumptions, ReasonId::UnitForcingChain)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    for (const Unit &row : SudokuBoard::getRows()) {
+      if (unitForcingChain(row)) return true;
+    }
+    for (const Unit &column : SudokuBoard::getColumns()) {
+      if (unitForcingChain(column)) return true;
+    }
+    for (const Unit &box : SudokuBoard::getBoxes()) {
+      if (unitForcingChain(box)) return true;
+    }
+
+    return false;
+  };
+
+  for (int size = 2; size <= 4; ++size) {
+    if (multiForcingChain(size)) return true;
+  }
+
+  return false;
+}
+
+/*
+ * A true -> B true   ----- Start from A with WEAK, end in B with STRONG
+ * A true -> B false  ----- Start from A with WEAK, end in B with WEAK
+ * A false -> B true  ----- Start from A with STRONG, end in B with STRONG
+ * A false -> B false ----- Start from A with STRONG, end in B with WEAK
+ */
+ForcingSearchResult AicSearcher::reachable_from(ForcingID root) const {
+  ForcingSearchResult result;
+  result.root = root;
+
+  if (!valid_forcing_id(root)) {
+    return result;
+  }
+
+  std::deque<ForcingID> q;
+  result.entries[root].visited = true;
+  result.entries[root].parent = FORCING_INVALID_ID;
+  result.entries[root].depth = 0;
+  result.reachable.push_back(root);
+  q.push_back(root);
+
+  while (!q.empty()) {
+    ForcingID cur = q.front();
+    q.pop_front();
+
+    const ForcingSearchEntry &curEntry = result.entries[cur];
+    if (curEntry.depth >= config.max_depth) {
+      continue;
+    }
+
+    AicNodeID curNodeId = forcing_id_to_aic_node_id(cur);
+    if (curNodeId == 0 || graph->nodes.find(curNodeId) == graph->nodes.end()) {
+      continue;
+    }
+
+    const bool curOn = forcing_on(cur);
+    const AicGraphEdges &adj = curOn ? graph->weak_links : graph->strong_links;
+    auto edgeIt = adj.find(curNodeId);
+    if (edgeIt == adj.end()) {
+      continue;
+    }
+
+    const bool nextOn = !curOn;
+    for (const AicEdge &edge : edgeIt->second) {
+      auto targetIt = graph->nodes.find(edge.to);
+      if (targetIt == graph->nodes.end()) {
+        continue;
+      }
+
+      auto maybeNext = forcing_id_from_aic_node(targetIt->second, nextOn);
+      if (!maybeNext) {
+        continue;
+      }
+
+      ForcingID next = *maybeNext;
+      if (result.entries[next].visited) {
+        continue;
+      }
+
+      result.entries[next].visited = true;
+      result.entries[next].parent = cur;
+      result.entries[next].depth = static_cast<uint16_t>(curEntry.depth + 1);
+      result.reachable.push_back(next);
+      q.push_back(next);
+    }
+  }
+
+  return result;
+}
+
+void AicSearcher::add_path_sources(Event &event, const ForcingPath &path) const {
+  for (ForcingID id : path.nodes) {
+    if (!valid_forcing_id(id)) {
+      continue;
+    }
+
+    AicNodeID nodeId = forcing_id_to_aic_node_id(id);
+    auto it = graph->nodes.find(nodeId);
+    if (it != graph->nodes.end()) {
+      event.addSource(it->second.cellSet, it->second.digitSet);
+    } else {
+      event.addSource(CellSet({forcing_cell(id)}), DigitSet({forcing_digit(id)}));
+    }
+  }
 }
 
 bool AicSearcher::analyze_event(Event &event) {
