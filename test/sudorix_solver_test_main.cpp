@@ -82,7 +82,7 @@ static inline uint16_t bitForDigit(int d) {
   return static_cast<uint16_t>(1u << (d - 1));
 }
 
-static constexpr size_t kReasonCount = static_cast<size_t>(ReasonId::ForcingNet) + 1;
+static constexpr size_t kReasonCount = static_cast<size_t>(ReasonId::QuadrupleFireworks) + 1;
 static std::vector<uint64_t> g_reasonCounts(kReasonCount, 0);
 
 static void recordReasonId(uint32_t reasonIdRaw, uint32_t detailedReasonIdRaw) {

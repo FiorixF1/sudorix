@@ -116,6 +116,28 @@
   REGISTRY["XYZ-Wing"] = wingFormatter;
   REGISTRY["W-Wing"] = wingFormatter;
 
+  const fireworksFormatter = {
+    formatLog(ev, ctx) {
+      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const parts = [];
+
+      let totalMask = 0;
+      let fireworks = [];
+      for (let source of groups[0]) {
+        totalMask |= source.mask;
+        fireworks.push(ctx.formatEurekaCellCode(source.cells));
+      }
+      let digits = ctx.maskToDigits(totalMask);
+
+      parts.push(`<div>{${ctx.escapeHtml(digits.join(","))}} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(fireworks)}</span> => </div>`);
+
+      defaultOperationsFormatter(ctx, ev, parts);
+
+      return { title: ev.detailedReason, bodyHtml: parts.join("") };
+    }
+  };
+  REGISTRY["Fireworks"] = fireworksFormatter;
+
   const colorFormatter = {
     formatLog(ev, ctx) {
       const groups = ctx.splitSourceGroups(ev.sources || []);

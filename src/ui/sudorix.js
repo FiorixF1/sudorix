@@ -230,6 +230,9 @@ var business_logic = (() => {
     "Cell Forcing Chain",
     "Unit Forcing Chain",
     "Forcing Net",
+    "Fireworks",
+    "Triple Fireworks",
+    "Quadruple Fireworks",
   ];
 
   const TECHNIQUE_OPTIONS = [
@@ -257,6 +260,8 @@ var business_logic = (() => {
     { id: 61, label: "3D Medusa" },
     { id: 66, label: "X-Chain" },
     { id: 20, label: "Finned Swordfish" },
+    { id: 181, label: "Fireworks" },
+    { id: 51, label: "Hidden Rectangle" },
     { id: 18, label: "Jellyfish" },
     { id: 68, label: "XY-Chain" },
     { id: 74, label: "Grouped X-Chain" },

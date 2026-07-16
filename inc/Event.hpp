@@ -208,6 +208,10 @@ enum class ReasonId : uint8_t {
   CellForcingChain,
   UnitForcingChain,
   ForcingNet,
+  // exotic patterns
+  Fireworks,
+  TripleFireworks,
+  QuadrupleFireworks,
 };
 
 inline const char *reasonIdToString(ReasonId reason) {
@@ -393,6 +397,9 @@ inline const char *reasonIdToString(ReasonId reason) {
     case ReasonId::CellForcingChain: return "Cell Forcing Chain";
     case ReasonId::UnitForcingChain: return "Unit Forcing Chain";
     case ReasonId::ForcingNet: return "Forcing Net";
+    case ReasonId::Fireworks: return "Fireworks";
+    case ReasonId::TripleFireworks: return "Triple Fireworks";
+    case ReasonId::QuadrupleFireworks: return "Quadruple Fireworks";
   }
   return "Unknown Reason";
 }

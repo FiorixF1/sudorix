@@ -839,7 +839,6 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
   std::vector<Event> type4;
   std::vector<Event> type5;
   std::vector<Event> type6;
-  std::vector<Event> hidden;
 
   // Look for the four vertices of the rectangle, defined as:
   // - Main vertex: the main bivalue cell
@@ -1011,7 +1010,7 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   }
                 }
               } else if (xy.is_subset_of(oppositeVertexDigits)) {
-                // hidden rectangle + specific instance of type 5
+                // Specific instance of type 5
                 if (lineVertexDigits.size() == 3 && lineVertexDigits == boxVertexDigits && lineVertexDigits == oppositeVertexDigits) {
                   // Type 5 (three cells)
                   Digit z = *(lineVertexDigits - xy).begin();
@@ -1026,6 +1025,83 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   }
                   type5.push_back(event);
                 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // return by priority
+  for (Event &event : type1) { if (eventQueue.enqueue(board, event)) return; }
+  for (Event &event : type2) { if (eventQueue.enqueue(board, event)) return; }
+  for (Event &event : type3) { if (eventQueue.enqueue(board, event)) return; }
+  for (Event &event : type4) { if (eventQueue.enqueue(board, event)) return; }
+  for (Event &event : type5) { if (eventQueue.enqueue(board, event)) return; }
+  for (Event &event : type6) { if (eventQueue.enqueue(board, event)) return; }
+}
+
+static void techHiddenRectangle(SudokuBoard &board, EventQueue &eventQueue) {
+  std::vector<Event> hidden;
+
+  // Look for the four vertices of the rectangle, defined as:
+  // - Main vertex: the main bivalue cell
+  // - Box vertex: the vertex in the same box (and line) of the main vertex
+  // - Line vertex: the vertex in the same line of the main vertex, but different box
+  // - Opposite vertex: the vertex on the opposite side of the main vertex
+  CellSet bivalues = board.getBivalues();
+  for (Cell mainVertex : bivalues) {
+    DigitSet xy = board.getCandidates(mainVertex);
+    Digit x = *xy.begin();
+    Digit y = *(++xy.begin());
+    const Unit &box = SudokuBoard::getBoxByCell(mainVertex);
+    // Box vertex: look for peers in the same box and same row/column
+    for (Cell boxVertex : (box - CellSet({mainVertex})) &
+                          (SudokuBoard::getRowByCell(mainVertex) | SudokuBoard::getColumnByCell(mainVertex))) {
+      DigitSet boxVertexDigits = board.getCandidates(boxVertex);
+      if (boxVertexDigits.is_superset_of(xy)) {
+        // Line vertex: look for peers in the same row/column but different box (not visible by box vertex)
+        for (Cell lineVertex : board.getPeers(mainVertex) - board.getPeers(boxVertex) - CellSet({boxVertex})) {
+          DigitSet lineVertexDigits = board.getCandidates(lineVertex);
+          if (lineVertexDigits.is_superset_of(xy)) {
+            // Opposite vertex: the only *aligned* cell visible by both box vertex and line vertex
+            CellSet tmp = board.getBoxByCell(lineVertex) &
+                          board.getPeers(boxVertex) &
+                          (SudokuBoard::getRowByCell(lineVertex) | SudokuBoard::getColumnByCell(lineVertex));
+            // be careful, it could be a solved cell
+            if (tmp.empty()) continue;
+            Cell oppositeVertex = *tmp.begin();
+            DigitSet oppositeVertexDigits = board.getCandidates(oppositeVertex);
+            if (oppositeVertexDigits.is_superset_of(xy)) {
+              // rectangle found
+              Location rowMin = std::min({SudokuBoard::getRowLocation(mainVertex), 
+                                          SudokuBoard::getRowLocation(boxVertex),
+                                          SudokuBoard::getRowLocation(lineVertex),
+                                          SudokuBoard::getRowLocation(oppositeVertex)});
+              Location rowMax = std::max({SudokuBoard::getRowLocation(mainVertex), 
+                                          SudokuBoard::getRowLocation(boxVertex),
+                                          SudokuBoard::getRowLocation(lineVertex),
+                                          SudokuBoard::getRowLocation(oppositeVertex)});
+              Location colMin = std::min({SudokuBoard::getColumnLocation(mainVertex), 
+                                          SudokuBoard::getColumnLocation(boxVertex),
+                                          SudokuBoard::getColumnLocation(lineVertex),
+                                          SudokuBoard::getColumnLocation(oppositeVertex)});
+              Location colMax = std::max({SudokuBoard::getColumnLocation(mainVertex), 
+                                          SudokuBoard::getColumnLocation(boxVertex),
+                                          SudokuBoard::getColumnLocation(lineVertex),
+                                          SudokuBoard::getColumnLocation(oppositeVertex)});
+              const Unit &rowMinUnit = SudokuBoard::getRowByLocation(rowMin);
+              const Unit &rowMaxUnit = SudokuBoard::getRowByLocation(rowMax);
+              const Unit &colMinUnit = SudokuBoard::getRowByLocation(colMin);
+              const Unit &colMaxUnit = SudokuBoard::getRowByLocation(colMax);
+              Cell a = rowMin*9 + colMin;
+              Cell b = rowMin*9 + colMax;
+              Cell c = rowMax*9 + colMin;
+              Cell d = rowMax*9 + colMax;
+              CellSet rectangleUpper({a, b});
+              CellSet rectangleLower({c, d});
+              if (xy.is_subset_of(oppositeVertexDigits)) {
                 {
                   // hidden rectangle
                   const Unit &row = SudokuBoard::getRowByCell(oppositeVertex);
@@ -1054,13 +1130,6 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
     }
   }
 
-  // return by priority
-  for (Event &event : type1) { if (eventQueue.enqueue(board, event)) return; }
-  for (Event &event : type2) { if (eventQueue.enqueue(board, event)) return; }
-  for (Event &event : type3) { if (eventQueue.enqueue(board, event)) return; }
-  for (Event &event : type4) { if (eventQueue.enqueue(board, event)) return; }
-  for (Event &event : type5) { if (eventQueue.enqueue(board, event)) return; }
-  for (Event &event : type6) { if (eventQueue.enqueue(board, event)) return; }
   for (Event &event : hidden) { if (eventQueue.enqueue(board, event)) return; }
 }
 
@@ -1695,6 +1764,82 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
   }
 }
 
+static void techFireworks(SudokuBoard &board, EventQueue &eventQueue) {
+  // represent a single firework for a digit centered in a cell
+  struct Firework {
+    Digit digit;
+    Cell baseCell;
+    CellSet externalCells;
+    bool valid = false;
+  };
+
+  // map each cell-digit pair to a possible firework
+  std::map<std::pair<Cell, Digit>, Firework> fireworks;
+
+  // look for single fireworks
+  for (Cell i = 0; i < 81; i++) {
+    if (board.isSolved(i)) {
+      continue;
+    }
+
+    const Unit &box = board.getBoxByCell(i);
+    const CellSet &row_external = board.getRowByCell(i) - box;
+    const CellSet &column_external = board.getColumnByCell(i) - box;
+
+    for (Digit d : board.getCandidates(i)) {
+      const CellSet source_peers = board.getPeersContaining(i, d);
+      const CellSet row_external_peers = row_external & source_peers;
+      const CellSet column_external_peers = column_external & source_peers;
+      // a firework exists when the digit appears as candidate at most once along
+      // the row and column, without considering the initial box
+      if (row_external_peers.size() <= 1 && column_external_peers.size() <= 1 &&
+          row_external_peers.size() + column_external_peers.size() >= 1) {
+        // single firework identified
+        CellSet externalCells = row_external_peers | column_external_peers;
+        Firework firework{d, i, externalCells, true};
+        fireworks[{i, d}] = firework;
+      }
+    }
+  }
+
+  // look for triple fireworks
+  for (Cell i = 0; i < 81; i++) {
+    if (board.isSolved(i)) {
+      continue;
+    }
+    DigitSet candidates = board.getCandidates(i);
+    // check all subsets of three candidates in a cell
+    for (const DigitSet &triplet : candidates.generate_power_set_of_size(3)) {
+      std::vector<int> digits = triplet.to_vector();
+      Digit a = digits[0];
+      Digit b = digits[1];
+      Digit c = digits[2];
+      // TODO: improve implementation to avoid iterating on non-existing fireworks
+      const Firework &fireA = fireworks[{i, a}];
+      const Firework &fireB = fireworks[{i, b}];
+      const Firework &fireC = fireworks[{i, c}];
+      bool validity = fireA.valid && fireB.valid && fireC.valid;
+      CellSet totalExternalCells = validity ? fireA.externalCells | fireB.externalCells | fireC.externalCells : CellSet();
+      // if every firework involves the same cells, then we can apply eliminations
+      if (totalExternalCells.size() == 2) {
+        // Triple Fireworks spotted
+        Event event(EventType::RemoveCandidate, ReasonId::Fireworks, ReasonId::TripleFireworks);
+        // the source is the three cells forming the pattern and their digits
+        event.addSource(i, triplet);
+        for (Cell idx : totalExternalCells) {
+          event.addSource(idx, board.getCandidates(idx) & triplet);
+        }
+        // remove any digit outside of the triplet from the involved cells
+        event.addOperation(i, candidates - triplet);
+        for (Cell idx : totalExternalCells) {
+          event.addOperation(idx, board.getCandidates(idx) - triplet);
+        }
+        if (eventQueue.enqueue(board, event)) return;
+      }
+    }
+  }
+}
+
 // nCr(9, 2) = 36
 // nCr(9, 3) = 84
 // nCr(9, 4) = 126
@@ -1733,6 +1878,8 @@ static constexpr TechniqueEntry TECHNIQUES[] = {
   {tech3DMedusa, ReasonId::_3DMedusa},
   {techXChain, ReasonId::XChain},
   {techFinnedSwordfish, ReasonId::FinnedSwordfish},
+  {techFireworks, ReasonId::Fireworks},
+  {techHiddenRectangle, ReasonId::HiddenRectangle},
   {techJellyfish, ReasonId::Jellyfish},
   {techXYChain, ReasonId::XYChain},
   {techGroupedXChain, ReasonId::GroupedXChain},
