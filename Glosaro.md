@@ -52,6 +52,7 @@
 | - Continuous Nice Loop                    | - Kontinua Bela Lopo                      |
 | - Discontinuous Nice Loop                 | - Nekontinua Bela Lopo                    |
 | - Forcing Chain                           | - Deviganta Ĉeno                          |
+| - Forcing Net                             | - Deviganta Reto                          |
 | - Bivalue                                 | - Duvaloro                                |
 | - Bilocation                              | - Dulokaĵo                                |
 | - Strong link                             | - Forta kunligo                           |
@@ -60,6 +61,8 @@
 | Coloring                                  | Kolorigado                                |
 | - Simple Coloring                         | - Simpla Kolorigado                       |
 | - 3D Medusa                               | - Tridimensia Meduzo                      |
+| - Dragon Coloring                         | - Draka Kolorigado                        |
 | Set                                       | Aro                                       |
 | - Almost Locked Set                       | - Preskaŭ Blokita Aro                     |
 | - Restricted Common Candidate             | - Limigita Komuna Kandidato               |
+| Fireworks                                 | Artfajroj                                 |

@@ -1809,8 +1809,8 @@ static void techFireworks(SudokuBoard &board, EventQueue &eventQueue) {
     }
     DigitSet candidates = board.getCandidates(i);
     // check all subsets of three candidates in a cell
-    for (const DigitSet &triplet : candidates.generate_power_set_of_size(3)) {
-      std::vector<int> digits = triplet.to_vector();
+    for (const DigitSet &triple : candidates.generate_power_set_of_size(3)) {
+      std::vector<int> digits = triple.to_vector();
       Digit a = digits[0];
       Digit b = digits[1];
       Digit c = digits[2];
@@ -1819,22 +1819,97 @@ static void techFireworks(SudokuBoard &board, EventQueue &eventQueue) {
       const Firework &fireB = fireworks[{i, b}];
       const Firework &fireC = fireworks[{i, c}];
       bool validity = fireA.valid && fireB.valid && fireC.valid;
-      CellSet totalExternalCells = validity ? fireA.externalCells | fireB.externalCells | fireC.externalCells : CellSet();
+      CellSet totalExternalCells = validity ? (fireA.externalCells | fireB.externalCells | fireC.externalCells)
+                                            : CellSet();
       // if every firework involves the same cells, then we can apply eliminations
       if (totalExternalCells.size() == 2) {
         // Triple Fireworks spotted
         Event event(EventType::RemoveCandidate, ReasonId::Fireworks, ReasonId::TripleFireworks);
         // the source is the three cells forming the pattern and their digits
-        event.addSource(i, triplet);
+        event.addSource(i, triple);
         for (Cell idx : totalExternalCells) {
-          event.addSource(idx, board.getCandidates(idx) & triplet);
+          event.addSource(idx, board.getCandidates(idx) & triple);
         }
-        // remove any digit outside of the triplet from the involved cells
-        event.addOperation(i, candidates - triplet);
+        // remove any digit outside of the triple from the involved cells
+        event.addOperation(i, candidates - triple);
         for (Cell idx : totalExternalCells) {
-          event.addOperation(idx, board.getCandidates(idx) - triplet);
+          event.addOperation(idx, board.getCandidates(idx) - triple);
+        }
+        // remove instances of the triple inside the box (excluding row and column)
+        CellSet boxEliminationCells = SudokuBoard::getBoxByCell(i) - SudokuBoard::getRowByCell(i) - SudokuBoard::getColumnByCell(i);
+        for (Cell idx : boxEliminationCells) {
+          event.addOperation(idx, board.getCandidates(idx) & triple);
         }
         if (eventQueue.enqueue(board, event)) return;
+      }
+    }
+  }
+
+  // look for quadruple fireworks
+  for (Cell i = 0; i < 81; i++) {
+    if (board.isSolved(i)) {
+      continue;
+    }
+    for (Cell j = i+1; j < 81; j++) {
+      if (board.isSolved(j) || board.sees(i, j)) {
+        continue;
+      }
+      DigitSet A_candidates = board.getCandidates(i);
+      // check all subsets of two candidates in the two cells
+      for (const DigitSet &A_pair : A_candidates.generate_power_set_of_size(2)) {
+        DigitSet B_candidates = board.getCandidates(j);
+        for (const DigitSet &B_pair : B_candidates.generate_power_set_of_size(2)) {
+          // the two sets must be disjoint
+          if ((A_pair & B_pair).empty()) {
+            std::vector<int> A_digits = A_pair.to_vector();
+            Digit a = A_digits[0];
+            Digit b = A_digits[1];
+            std::vector<int> B_digits = B_pair.to_vector();
+            Digit c = B_digits[0];
+            Digit d = B_digits[1];
+            // TODO: improve implementation to avoid iterating on non-existing fireworks
+            const Firework &fireA = fireworks[{i, a}];
+            const Firework &fireB = fireworks[{i, b}];
+            const Firework &fireC = fireworks[{j, c}];
+            const Firework &fireD = fireworks[{j, d}];
+            bool validity = fireA.valid && fireB.valid && fireC.valid && fireD.valid;
+            CellSet totalExternalCells = validity ? (fireA.externalCells | fireB.externalCells) &
+                                                    (fireC.externalCells | fireD.externalCells)
+                                                  : CellSet();
+            // if every firework involves the same cells, then we can apply eliminations
+            if (totalExternalCells.size() == 2) {
+              // Quadruple Fireworks spotted
+              Event event(EventType::RemoveCandidate, ReasonId::Fireworks, ReasonId::QuadrupleFireworks);
+              // the source is the two sets of three cells forming the pattern and their digits
+              event.addSource(i, A_pair);
+              for (Cell idx : (fireA.externalCells | fireB.externalCells)) {
+                event.addSource(idx, board.getCandidates(idx) & A_pair);
+              }
+              event.addDelimiter();
+              event.addSource(j, B_pair);
+              for (Cell idx : (fireC.externalCells | fireD.externalCells)) {
+                event.addSource(idx, board.getCandidates(idx) & B_pair);
+              }
+              // remove any digit outside of the pair from the base cells
+              event.addOperation(i, A_candidates - A_pair);
+              event.addOperation(j, B_candidates - B_pair);
+              // remove any digit outside of the two pairs from the external cells
+              for (Cell idx : totalExternalCells) {
+                event.addOperation(idx, board.getCandidates(idx) - A_pair - B_pair);
+              }
+              // remove instances of the pairs inside each box (excluding row and column)
+              CellSet firstBoxEliminationCells = SudokuBoard::getBoxByCell(i) - SudokuBoard::getRowByCell(i) - SudokuBoard::getColumnByCell(i);
+              for (Cell idx : firstBoxEliminationCells) {
+                event.addOperation(idx, board.getCandidates(idx) & A_pair);
+              }
+              CellSet secondBoxEliminationCells = SudokuBoard::getBoxByCell(j) - SudokuBoard::getRowByCell(j) - SudokuBoard::getColumnByCell(j);
+              for (Cell idx : secondBoxEliminationCells) {
+                event.addOperation(idx, board.getCandidates(idx) & B_pair);
+              }
+              if (eventQueue.enqueue(board, event)) return;
+            }
+          }
+        }
       }
     }
   }

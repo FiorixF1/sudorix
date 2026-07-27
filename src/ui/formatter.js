@@ -121,15 +121,17 @@
       const groups = ctx.splitSourceGroups(ev.sources || []);
       const parts = [];
 
-      let totalMask = 0;
-      let fireworks = [];
-      for (let source of groups[0]) {
-        totalMask |= source.mask;
-        fireworks.push(ctx.formatEurekaCellCode(source.cells));
-      }
-      let digits = ctx.maskToDigits(totalMask);
+      for (let group of groups) {
+        let totalMask = 0;
+        let fireworks = [];
+        for (let source of group) {
+          totalMask |= source.mask;
+          fireworks.push(ctx.formatEurekaCellCode(source.cells));
+        }
+        let digits = ctx.maskToDigits(totalMask);
 
-      parts.push(`<div>{${ctx.escapeHtml(digits.join(","))}} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(fireworks)}</span> => </div>`);
+        parts.push(`<div>{${ctx.escapeHtml(digits.join(","))}} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(fireworks)}</span> => </div>`);
+      }
 
       defaultOperationsFormatter(ctx, ev, parts);
 

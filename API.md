@@ -260,6 +260,10 @@ enum class ReasonId : uint8_t {
     CellForcingChain,
     UnitForcingChain,
     ForcingNet,             // <---
+    // exotic patterns
+    Fireworks,              // <---
+    TripleFireworks,
+    QuadrupleFireworks,
 };
 ```
 
@@ -513,6 +517,15 @@ En Death Blossom oni havas unu fonton por la tigo kaj unu fonton por ĉiu petalo
 * Ĉeloj de la unua petalo + Ciferoj
 * Ĉeloj de la dua petalo + Ciferoj
 * ...
+---
+
+## Fireworks
+
+Fireworks havas unu aŭ du fontojn, surbaze de tio, ke ili estas triopaj aŭ kvaropaj.
+
+* Tri ĉeloj de la unua aro de artfajroj + Ciferoj
+* Disigilo (nur en kvaropaj artfajroj)
+* Tri ĉeloj de la dua aro de artfajroj + Ciferoj (nur en kvaropaj artfajroj)
 
 ---
 
