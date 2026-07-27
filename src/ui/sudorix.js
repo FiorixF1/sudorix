@@ -47,7 +47,7 @@ var business_logic = (() => {
   const WASM_OUT_WORDS = 1024;
   const WASM_ALL_STEPS_WORDS = 262144;
 
-  // must follow the same order in Event.hpp
+  // MUST follow the same order in Event.hpp
   const WASM_REASON = [
     "Solver",
     "Full House",
@@ -235,49 +235,54 @@ var business_logic = (() => {
     "Quadruple Fireworks",
   ];
 
+  function getTechniqueID(tech) {
+    return WASM_REASON.indexOf(tech);
+  }
+
+  // list of main techniques in order of priority
   const TECHNIQUE_OPTIONS = [
-    { id: 1, label: "Full House" },
-    { id: 6, label: "Hidden Single" },
-    { id: 10, label: "Pointing Set" },
-    { id: 13, label: "Box/Line Reduction" },
-    { id: 7, label: "Hidden Pair" },
-    { id: 2, label: "Naked Single" },
-    { id: 3, label: "Naked Pair" },
-    { id: 4, label: "Naked Triple" },
-    { id: 8, label: "Hidden Triple" },
-    { id: 53, label: "BUG+1" },
-    { id: 16, label: "X-Wing" },
-    { id: 54, label: "XY-Wing" },
-    { id: 17, label: "Swordfish" },
-    { id: 65, label: "Remote Pair" },
-    { id: 44, label: "Unique Rectangle" },
-    { id: 57, label: "W-Wing" },
-    { id: 39, label: "Single Digit Pattern" },
-    { id: 19, label: "Finned X-Wing" },
-    { id: 43, label: "Empty Rectangle" },
-    { id: 55, label: "XYZ-Wing" },
-    { id: 58, label: "Simple Coloring" },
-    { id: 61, label: "3D Medusa" },
-    { id: 66, label: "X-Chain" },
-    { id: 20, label: "Finned Swordfish" },
-    { id: 181, label: "Fireworks" },
-    { id: 51, label: "Hidden Rectangle" },
-    { id: 18, label: "Jellyfish" },
-    { id: 68, label: "XY-Chain" },
-    { id: 74, label: "Grouped X-Chain" },
-    { id: 21, label: "Finned Jellyfish" },
-    { id: 70, label: "Alternating Inference Chain" },
-    { id: 76, label: "Grouped Alternating Inference Chain" },
-    { id: 173, label: "Sue de Coq" },
-    { id: 166, label: "Almost Locked Set XZ" },
-    { id: 169, label: "Almost Locked Set XY-Wing" },
-    { id: 171, label: "Almost Locked Set Chain" },
-    { id: 174, label: "Death Blossom" },
-    { id: 175, label: "Forcing Chain" },
-    { id: 180, label: "Forcing Net" },
+    "Full House",
+    "Hidden Single",
+    "Pointing Set",
+    "Box/Line Reduction",
+    "Hidden Pair",
+    "Naked Single",
+    "Naked Pair",
+    "Naked Triple",
+    "Hidden Triple",
+    "BUG+1",
+    "X-Wing",
+    "XY-Wing",
+    "Swordfish",
+    "Remote Pair",
+    "Unique Rectangle",
+    "W-Wing",
+    "Single Digit Pattern",
+    "Finned X-Wing",
+    "Empty Rectangle",
+    "XYZ-Wing",
+    "Simple Coloring",
+    "3D Medusa",
+    "X-Chain",
+    "Finned Swordfish",
+    "Fireworks",
+    "Hidden Rectangle",
+    "Jellyfish",
+    "XY-Chain",
+    "Grouped X-Chain",
+    "Finned Jellyfish",
+    "Alternating Inference Chain",
+    "Grouped Alternating Inference Chain",
+    "Sue de Coq",
+    "Almost Locked Set XZ",
+    "Almost Locked Set XY-Wing",
+    "Almost Locked Set Chain",
+    "Death Blossom",
+    "Forcing Chain",
+    "Forcing Net",
   ];
 
-  const DEFAULT_TECHNIQUE_IDS = TECHNIQUE_OPTIONS.map((entry) => entry.id);
+  const DEFAULT_TECHNIQUE_IDS = TECHNIQUE_OPTIONS.map((entry) => getTechniqueID(entry));
   const TECHNIQUE_STORAGE_KEY = "sudorix.enabledTechniques.v1";
 
   function loadStoredTechniqueIds() {
@@ -290,7 +295,7 @@ var business_logic = (() => {
       if (!Array.isArray(parsed)) {
         return DEFAULT_TECHNIQUE_IDS;
       }
-      const validIds = new Set(TECHNIQUE_OPTIONS.map((entry) => entry.id));
+      const validIds = new Set(TECHNIQUE_OPTIONS.map((entry) => getTechniqueID(entry)));
       return parsed
         .map((x) => Number(x) | 0)
         .filter((id) => validIds.has(id));
@@ -1840,8 +1845,8 @@ var business_logic = (() => {
 
   function collectEnabledTechniqueIds() {
     return TECHNIQUE_OPTIONS
-      .filter((entry) => enabledTechniqueIds.has(entry.id))
-      .map((entry) => entry.id);
+      .filter((entry) => enabledTechniqueIds.has(getTechniqueID(entry)))
+      .map((entry) => getTechniqueID(entry));
   }
 
   function updateTechniqueSummary() {
@@ -1936,16 +1941,17 @@ var business_logic = (() => {
     for (const entry of TECHNIQUE_OPTIONS) {
       const label = document.createElement("label");
       label.className = "techniqueItem";
+      const ID = getTechniqueID(entry);
 
       const input = document.createElement("input");
       input.type = "checkbox";
-      input.checked = enabledTechniqueIds.has(entry.id);
-      input.dataset.techniqueId = String(entry.id);
+      input.checked = enabledTechniqueIds.has(ID);
+      input.dataset.techniqueId = String(ID);
       input.addEventListener("change", () => {
         if (input.checked) {
-          enabledTechniqueIds.add(entry.id);
+          enabledTechniqueIds.add(ID);
         } else {
-          enabledTechniqueIds.delete(entry.id);
+          enabledTechniqueIds.delete(ID);
         }
         updateTechniqueSummary();
         saveStoredTechniqueIds(enabledTechniqueIds);
@@ -1954,7 +1960,7 @@ var business_logic = (() => {
 
       const text = document.createElement("span");
       text.className = "techniqueItemLabel";
-      text.textContent = entry.label;
+      text.textContent = entry;
 
       label.appendChild(input);
       label.appendChild(text);
@@ -3148,7 +3154,7 @@ var business_logic = (() => {
       return;
     }
 
-    const selectedTechniques = TECHNIQUE_OPTIONS.filter((entry) => enabledTechniqueIds.has(entry.id));
+    const selectedTechniques = TECHNIQUE_OPTIONS.filter((entry) => enabledTechniqueIds.has(getTechniqueID(entry)));
     if (selectedTechniques.length === 0) {
       openCheckModal("Neniu tekniko estas aktiva.");
       return;
@@ -3203,13 +3209,13 @@ var business_logic = (() => {
         if (!res.ok) {
           overflow = !!res.overflow;
           failed = !res.overflow;
-          appendInfo(`${tech.label}: ${res.error || "eraro"}`);
+          appendInfo(`${tech}: ${res.error || "eraro"}`);
           scanNextTechnique();
           return;
         }
 
         if (res.events.length > 0) {
-          appendInfo(`${tech.label}: ${res.events.length} eblaj paŝoj.`);
+          appendInfo(`${tech}: ${res.events.length} eblaj paŝoj.`);
           for (const ev of res.events) {
             logEventOnce(ev);
           }
