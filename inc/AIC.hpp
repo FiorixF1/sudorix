@@ -242,7 +242,7 @@ private:
   bool find_contradiction() const;
   bool find_common_consequences() const;
   ForcingSearchResult reachable_from(ForcingID root) const;
-  void add_path_sources(Event &event, const ForcingPath &path) const;
+  void add_path_sources(Event &event, const ForcingPath &path, int group) const;
 };
 
 #endif // AIC_HPP

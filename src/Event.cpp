@@ -36,30 +36,27 @@ void Event::addOperation(Cell idx, DigitSet mask) {
   }
 }
 
-std::vector<Source> &Event::getSources() {
+std::array<std::vector<Source>, 4> &Event::getSources() {
   return this->sources;
 }
 
 size_t Event::getNumberOfSources() const {
-  return this->sources.size();
+  return this->sources[0].size() + this->sources[1].size() + this->sources[2].size() ;
 }
 
-void Event::addSource(Cell idx, Digit digit) {
-  sources.push_back({CellSet({idx}), DigitSet({digit})});
+void Event::addSource(Cell idx, Digit digit, int group) {
+  sources[group].push_back({CellSet({idx}), DigitSet({digit})});
 }
 
-void Event::addSource(Cell idx, DigitSet mask) {
-  sources.push_back({CellSet({idx}), mask});
+void Event::addSource(Cell idx, DigitSet mask, int group) {
+  sources[group].push_back({CellSet({idx}), mask});
 }
 
-void Event::addSource(CellSet cells, Digit digit) {
-  sources.push_back({cells, DigitSet({digit})});
+void Event::addSource(CellSet cells, Digit digit, int group) {
+  sources[group].push_back({cells, DigitSet({digit})});
 }
 
-void Event::addSource(CellSet cells, DigitSet mask) {
-  sources.push_back({cells, mask});
+void Event::addSource(CellSet cells, DigitSet mask, int group) {
+  sources[group].push_back({cells, mask});
 }
 
-void Event::addDelimiter() {
-  sources.push_back({CellSet(), DigitSet()});
-}

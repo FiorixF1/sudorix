@@ -2,7 +2,7 @@ var business_logic = (() => {
   /* =========================================================
    * Constants / Palette
    * ========================================================= */
-  const ALL_CANDIDATES_MASK = (1 << 9) - 1;
+  const ALL_CANDIDATES_LIST = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
   const PALETTE = [
     "#00D1FF", /* cyan */
@@ -31,21 +31,7 @@ var business_logic = (() => {
    *   - solver_wasm.wasm
    * ========================================================= */
   let wasmModule = null;
-  let wasmSolveFull = null;                    // cwrap'd function
-  let wasmSolveInit = null;                    // cwrap'd function
-  let wasmSolveNextStep = null;                // cwrap'd function
-  let wasmSolveHint = null;                    // cwrap'd function
-  let wasmAllPossibleStepsForTechnique = null; // cwrap'd function
-  let wasmCountSolutions = null;               // cwrap'd function
-  let wasmSetEnabledTechniques = null;         // cwrap'd function
-  let wasmBufValues = 0;         // malloc'ed pointers in WASM heap
-  let wasmBufCands  = 0;
-  let wasmBufInStr  = 0;
-  let wasmBufOut    = 0;
-  let wasmBufAllStepsOut = 0;
-  let wasmBufTechniques = 0;
-  const WASM_OUT_WORDS = 1024;
-  const WASM_ALL_STEPS_WORDS = 262144;
+  let wasmSolverAPI = null;
 
   // MUST follow the same order in Event.hpp
   const WASM_REASON = [
@@ -235,10 +221,6 @@ var business_logic = (() => {
     "Quadruple Fireworks",
   ];
 
-  function getTechniqueID(tech) {
-    return WASM_REASON.indexOf(tech);
-  }
-
   // list of main techniques in order of priority
   const TECHNIQUE_OPTIONS = [
     "Full House",
@@ -282,31 +264,30 @@ var business_logic = (() => {
     "Forcing Net",
   ];
 
-  const DEFAULT_TECHNIQUE_IDS = TECHNIQUE_OPTIONS.map((entry) => getTechniqueID(entry));
+  const DEFAULT_TECHNIQUES = TECHNIQUE_OPTIONS;
   const TECHNIQUE_STORAGE_KEY = "sudorix.enabledTechniques.v1";
 
-  function loadStoredTechniqueIds() {
+  function loadStoredTechnique() {
     try {
       const raw = window.localStorage.getItem(TECHNIQUE_STORAGE_KEY);
       if (!raw) {
-        return DEFAULT_TECHNIQUE_IDS;
+        return DEFAULT_TECHNIQUES;
       }
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) {
-        return DEFAULT_TECHNIQUE_IDS;
+        return DEFAULT_TECHNIQUES;
       }
-      const validIds = new Set(TECHNIQUE_OPTIONS.map((entry) => getTechniqueID(entry)));
+      const validTechs = new Set(TECHNIQUE_OPTIONS);
       return parsed
-        .map((x) => Number(x) | 0)
-        .filter((id) => validIds.has(id));
+        .filter((tech) => validTechs.has(tech));
     } catch (_) {
-      return DEFAULT_TECHNIQUE_IDS;
+      return DEFAULT_TECHNIQUES;
     }
   }
 
-  function saveStoredTechniqueIds(ids) {
+  function saveStoredTechnique(techs) {
     try {
-      window.localStorage.setItem(TECHNIQUE_STORAGE_KEY, JSON.stringify(Array.from(ids)));
+      window.localStorage.setItem(TECHNIQUE_STORAGE_KEY, JSON.stringify(Array.from(techs)));
     } catch (_) {
       /* localStorage unavailable: keep the in-memory setting only */
     }
@@ -333,273 +314,104 @@ var business_logic = (() => {
       locateFile: (path) => path  // keep .wasm next to .js
     }).then((Module) => {
       wasmModule = Module;
-      wasmSolveFull = wasmModule.cwrap("sudorix_solver_full", "number", ["number", "number"]);
-      wasmSolveInit = wasmModule.cwrap("sudorix_solver_init_board", "number", ["number"]);
-      wasmSolveNextStep = wasmModule.cwrap("sudorix_solver_next_step", "number", ["number", "number"]);
-      wasmSolveHint = wasmModule.cwrap("sudorix_solver_hint", "number", ["number", "number", "number", "number"]);
-      wasmAllPossibleStepsForTechnique = wasmModule.cwrap("sudorix_solver_all_possible_steps_for_technique", "number", ["number", "number", "number", "number", "number"]);
-      wasmCountSolutions = wasmModule.cwrap("sudorix_solver_count_solutions", "number", ["number"]);
-      wasmSetEnabledTechniques = wasmModule.cwrap("sudorix_solver_set_enabled_techniques", "number", ["number", "number"]);
-
-      wasmBufValues = wasmModule._malloc(81);          // uint8_t[81]
-      wasmBufCands  = wasmModule._malloc(81 * 2);      // uint16_t[81]
-      wasmBufInStr  = wasmModule._malloc(82);          // char[81] + '\0'
-      wasmBufOut    = wasmModule._malloc(WASM_OUT_WORDS * 4); // uint32_t[WASM_OUT_WORDS]
-      wasmBufAllStepsOut = wasmModule._malloc(WASM_ALL_STEPS_WORDS * 4); // uint32_t[WASM_ALL_STEPS_WORDS]
-      wasmBufTechniques = wasmModule._malloc(Math.max(TECHNIQUE_OPTIONS.length, 1) * 4);
-
+      wasmSolverAPI = wasmModule.cwrap("sudorix_solver_api", "string", ["string"]);
       setSolverStatus(true, "WASM solvilo preta.");
       return Module;
     }).catch((e) => {
       setSolverStatus(false, "WASM malsukcesis: " + (e && e.message ? e.message : String(e)));
       wasmModule = null;
-      wasmSolveFull = null;
-      wasmSolveInit = null;
-      wasmSolveNextStep = null;
-      wasmSolveHint = null;
-      wasmAllPossibleStepsForTechnique = null;
-      wasmSetEnabledTechniques = null;
+      wasmSolverAPI = null;
     });
   }
 
-  function wasmCountSolutionsFromString(boardRef) {
-    if (!wasmModule || !wasmCountSolutions) {
-      return { ok: false, err: "Funkcio sudorix_solver_count_solutions ne disponeblas en ĉi tiu WASM build." };
+  // General API
+  function solverApi(request) {
+    if (!wasmModule || !wasmSolverAPI) {
+      throw new Error("Funkcio sudorix_solver_api ne disponeblas en tiu ĉi WASM build.");
     }
 
-    const s = boardRef.exportToString();
-    const enc = new TextEncoder();
-    const bytes = enc.encode(String(s || ""));
-    // Copy at most 81 chars; terminate.
-    const max = Math.min(bytes.length, 81);
-    for (let i = 0; i < max; i++) {
-      wasmModule.HEAPU8[wasmBufInStr + i] = bytes[i];
-    }
-    for (let i = max; i < 81; i++) {
-      wasmModule.HEAPU8[wasmBufInStr + i] = 46; // '.'
-    }
-    wasmModule.HEAPU8[wasmBufInStr + 81] = 0;
+    // Memory allocation for input UTF-8 string
+    const requestStr = JSON.stringify(request);
+    //const requestSize = wasmModule.lengthBytesUTF8(requestStr) + 1;
+    //const requestPtr = wasmModule._malloc(requestSize);
 
-    const n = wasmCountSolutions(wasmBufInStr);
-    return { ok: true, n };
-  }
+    //try {
+      //wasmModule.stringToUTF8(requestStr, requestPtr, requestSize);
 
-  function wasmRunFullSolve(in81) {
-    if (!wasmModule || !wasmSolveFull) {
-      return null;
-    }
+      // Call WASM engine
+      const responseStr = wasmSolverAPI(requestStr);
 
-    const inLen = wasmModule.lengthBytesUTF8(in81) + 1;
-    const inPtr = wasmModule._malloc(inLen);
-    const outPtr = wasmModule._malloc(82); // 81 chars + '\0'
+      // Convert the result to JS string
+      //const responseStr = wasmModule.UTF8ToString(responsePtr);
+      const response = JSON.parse(responseStr);
 
-    try {
-      wasmModule.stringToUTF8(in81, inPtr, inLen);
-      wasmModule.HEAPU8.fill(0, outPtr, outPtr + 82);
-
-      const rc = wasmSolveFull(inPtr, outPtr);
-      if (rc === 0) {
-        return null;
+      // Error handling
+      if (response.status !== "ok") {
+        throw new Error(response.error || "Unknown solver error");
       }
 
-      return wasmModule.UTF8ToString(outPtr, 81);
-    } finally {
-      wasmModule._free(inPtr);
-      wasmModule._free(outPtr);
-    }
+      return response;
+    //} finally {
+    //  wasmModule._free(requestPtr);
+    //}
   }
 
-  function wasmInitBoard(boardRef) {
-    if (!wasmModule || !wasmSolveInit) {
-      return null;
+  // API wrapper
+  {
+    function apiCountSolutions(puzzle) {
+      return solverApi({
+        command: "countSolutions",
+        puzzle: puzzle
+      });
     }
 
-    const s = boardRef.exportToString();
-    const enc = new TextEncoder();
-    const bytes = enc.encode(String(s || ""));
-    // Copy at most 81 chars; terminate.
-    const max = Math.min(bytes.length, 81);
-    for (let i = 0; i < max; i++) {
-      wasmModule.HEAPU8[wasmBufInStr + i] = bytes[i];
-    }
-    for (let i = max; i < 81; i++) {
-      wasmModule.HEAPU8[wasmBufInStr + i] = 46; // '.'
-    }
-    wasmModule.HEAPU8[wasmBufInStr + 81] = 0;
-
-    const ok = wasmSolveInit(wasmBufInStr);
-    if (!ok) {
-      // Boh
-    }
-    return null;
-  }
-
-  function parseWasmEventAt(out, base, limitWords, options = {}) {
-    const allowEmpty = !!options.allowEmpty;
-
-    if (base + 5 > limitWords) {
-      return { ok: false, error: "Evento troncato nel buffer WASM.", next: base };
+    function apiSolveFull(puzzle) {
+      return solverApi({
+        command: "solveFull",
+        puzzle: puzzle
+      });
     }
 
-    const typeN = out[base + 0] >>> 0;
-    const reasonId = out[base + 1] >>> 0;
-    const detailedReasonId = out[base + 2] >>> 0;
-    const opCount = out[base + 3] >>> 0;
-    const srcCount = out[base + 4] >>> 0;
-    const needWords = 5 + 2 * srcCount + 2 * opCount;
-
-    if (base + needWords > limitWords) {
-      return { ok: false, error: "Evento oltre la fine del buffer WASM.", next: base };
+    function apiInitBoard(puzzle) {
+      return solverApi({
+        command: "initBoard",
+        puzzle: puzzle
+      });
     }
 
-    if (typeN === 0 || opCount === 0) {
-      if (allowEmpty) {
-        return { ok: true, event: null, next: base + Math.max(needWords, 5), empty: true };
-      }
-      return { ok: false, error: "Evento vuoto nel buffer WASM.", next: base + Math.max(needWords, 5) };
+    function apiNextStep() {
+      return solverApi({
+        command: "nextStep"
+      });
     }
 
-    const event = {
-      type: (typeN === 1) ? "setValue" : (typeN === 2) ? "removeCandidate" : "none",
-      reason: WASM_REASON[reasonId] || "Solver",
-      detailedReason: WASM_REASON[detailedReasonId] || "Solver",
-      ops: [],
-      sources: []
-    };
-
-    for (let i = 0; i < srcCount; i++) {
-      const cells = out[base + 5 + 2 * i + 0] >>> 0;
-      const mask = out[base + 5 + 2 * i + 1] >>> 0;
-      event.sources.push({ cells: decodeSourceCellCode(cells), mask: mask & 0x1FF });
+    function apiHint(values, candidates) {
+      return solverApi({
+        command: "hint",
+        board: {
+          values: values,
+          candidates: candidates
+        }
+      });
+    }
+  
+    function apiAllPossibleStepsForTechnique(technique, values, candidates) {
+      return solverApi({
+        command: "allPossibleSteps",
+        technique: technique,
+        board: {
+          values: values,
+          candidates: candidates
+        }
+      });
     }
 
-    const opsBase = base + 5 + 2 * srcCount;
-    for (let i = 0; i < opCount; i++) {
-      const idx = out[opsBase + 2 * i + 0] >>> 0;
-      const mask = out[opsBase + 2 * i + 1] >>> 0;
-      event.ops.push({ idx: idx, mask: mask & 0x1FF });
+    function apiSetEnabledTechniques(techniques) {
+      return solverApi({
+        command: "setEnabledTechniques",
+        techniques: techniques
+      });
     }
-
-    return { ok: true, event, next: base + needWords, empty: false };
-  }
-
-  function parseSingleWasmEventBuffer(ptr, wordCapacity) {
-    if (!wasmModule || !ptr || wordCapacity <= 0) {
-      return null;
-    }
-
-    const out = wasmModule.HEAPU32.subarray(ptr >> 2, (ptr >> 2) + wordCapacity);
-    const parsed = parseWasmEventAt(out, 0, wordCapacity, { allowEmpty: true });
-    if (!parsed.ok || parsed.empty) {
-      return null;
-    }
-    return parsed.event;
-  }
-
-  function parseWasmEventListBuffer(ptr, writtenWords) {
-    if (!wasmModule || !ptr || writtenWords <= 0) {
-      return { ok: true, events: [] };
-    }
-
-    const out = wasmModule.HEAPU32.subarray(ptr >> 2, (ptr >> 2) + writtenWords);
-    const events = [];
-    let pos = 0;
-
-    while (pos < writtenWords) {
-      const parsed = parseWasmEventAt(out, pos, writtenWords);
-      if (!parsed.ok) {
-        return { ok: false, error: parsed.error || "Nevalida eventa serialigo.", events };
-      }
-      events.push(parsed.event);
-      pos = parsed.next;
-    }
-
-    return { ok: true, events };
-  }
-
-  function copyBoardToWasmBuffers(boardRef) {
-    const values = new Uint8Array(81);
-    const cands = new Uint16Array(81);
-    for (let i = 0; i < 81; i++) {
-      values[i] = boardRef.getValue(i) & 0xFF;
-      cands[i] = boardRef.getCandidateMask(i) & 0xFFFF;
-    }
-
-    wasmModule.HEAPU8.set(values, wasmBufValues);
-    wasmModule.HEAPU16.set(cands, wasmBufCands >> 1);
-  }
-
-  function wasmComputeNextStep() {
-    if (!wasmModule || !wasmSolveNextStep) {
-      return null;
-    }
-
-    // C++ batch ABI - see solver.hpp
-    const ok = wasmSolveNextStep(wasmBufOut, WASM_OUT_WORDS);
-    if (!ok) {
-      return null;
-    }
-
-    return parseSingleWasmEventBuffer(wasmBufOut, WASM_OUT_WORDS);
-  }
-
-  function wasmComputeHint(board) {
-    if (!wasmModule || !wasmSolveHint) {
-      return null;
-    }
-
-    copyBoardToWasmBuffers(board);
-
-    const ok = wasmSolveHint(wasmBufValues, wasmBufCands, wasmBufOut, WASM_OUT_WORDS);
-    if (!ok) {
-      return null;
-    }
-
-    return parseSingleWasmEventBuffer(wasmBufOut, WASM_OUT_WORDS);
-  }
-
-  function wasmComputeAllPossibleStepsForTechnique(boardRef, reasonId) {
-    if (!wasmModule || !wasmAllPossibleStepsForTechnique) {
-      return { ok: false, error: "Funkcio sudorix_solver_all_possible_steps_for_technique ne disponeblas en ĉi tiu WASM build." };
-    }
-
-    copyBoardToWasmBuffers(boardRef);
-
-    const writtenWords = wasmAllPossibleStepsForTechnique(
-      wasmBufValues,
-      wasmBufCands,
-      reasonId >>> 0,
-      wasmBufAllStepsOut,
-      WASM_ALL_STEPS_WORDS
-    ) | 0;
-
-    if (writtenWords === 0) {
-      return { ok: true, events: [] };
-    }
-    if (writtenWords === -2) {
-      return { ok: false, overflow: true, error: "Tro da eventoj por la bufero de unu tekniko." };
-    }
-    if (writtenWords < 0) {
-      return { ok: false, error: `WASM-eraro dum serĉo de eblaj paŝoj: ${writtenWords}` };
-    }
-    if (writtenWords > WASM_ALL_STEPS_WORDS) {
-      return { ok: false, overflow: true, error: "La WASM-solvilo raportis tro grandan output-buferon." };
-    }
-
-    return parseWasmEventListBuffer(wasmBufAllStepsOut, writtenWords);
-  }
-
-  function wasmApplyTechniqueSelection() {
-    if (!wasmModule || !wasmSetEnabledTechniques || !wasmBufTechniques) {
-      return false;
-    }
-
-    const ids = collectEnabledTechniqueIds();
-    if (ids.length > 0) {
-      wasmModule.HEAPU32.set(ids, wasmBufTechniques >> 2);
-    }
-
-    return !!wasmSetEnabledTechniques(wasmBufTechniques, ids.length);
   }
 
   /* =========================================================
@@ -646,48 +458,8 @@ var business_logic = (() => {
     return (L > 0.36) ? "#0b0f14" : "#eaf2ff";
   }
 
-  function countBits9(mask) {
-    // m fits in 9 bits; JS bit ops are 32-bit
-    let m = mask & 0x1FF;
-    let c = 0;
-    while (m) {
-      m &= (m - 1);
-      c++;
-    }
-    // return number of active bits
-    return c;
-  }
-
-  function maskToDigits(mask) {
-    const out = [];
-    const m = (mask >>> 0) & 0x1FF;
-    for (let d = 1; d <= 9; d++) {
-      if (m & digitToBit(d)) {
-        out.push(d);
-      }
-    }
-    return out;
-  }
-
-  function maskToSingleDigit(mask) {
-    const m = (mask >>> 0) & 0x1FF;
-    if (m === 0 || (m & (m - 1)) !== 0) {
-      return 0;
-    }
-    for (let d = 1; d <= 9; d++) {
-      if (m === digitToBit(d)) {
-        return d;
-      }
-    }
-    return 0;
-  }
-
   function digitToBit(digit) {
     return 1 << (digit - 1);
-  }
-
-  function assertDigit(digit) {
-    return Number.isInteger(digit) && digit >= 1 && digit <= 9;
   }
 
   function getCandidateElement(idx, digit) {
@@ -703,128 +475,13 @@ var business_logic = (() => {
     return list && list[digit - 1] ? list[digit - 1] : null;
   }
 
-  // Encoding (uint32):
-  //   bits[0..4]   : unitId (0..26)
-  //   bits[5..13]  : 9-bit mask of cells inside the unit
-  // unitId mapping:
-  //   0..8   rows
-  //   9..17  cols
-  //   18..26 boxes
-  // Special case when bits[5..13] are all zero: empty cell-set.
-  // If the associated source digit-mask is also zero, the source is treated as a delimiter.
-  // Output:
-  //   { unitId, kind (row|col|box|empty), mask9, idxs }
-  function decodeSourceCellCode(code) {
-    const unitId = (code & 0x1F) >>> 0;
-    const mask9 = (code >>> 5) & 0x1FF;
-    const idxs = [];
-
-    if (mask9 == 0) {
-      return { unitId, kind: "empty", mask9, idxs };
-    }
-
-    if (unitId <= 8) {
-      const r = unitId;
-      for (let c = 0; c < 9; c++) {
-        if (mask9 & (1 << c)) {
-          idxs.push(r * 9 + c);
-        }
-      }
-      return { unitId, kind: "row", mask9, idxs };
-    }
-
-    if (unitId <= 17) {
-      const c = unitId - 9;
-      for (let r = 0; r < 9; r++) {
-        if (mask9 & (1 << r)) {
-          idxs.push(r * 9 + c);
-        }
-      }
-      return { unitId, kind: "col", mask9, idxs };
-    }
-
-    if (unitId <= 26) {
-      const b = unitId - 18;
-      const br = Math.floor(b / 3) * 3;
-      const bc = (b % 3) * 3;
-      for (let p = 0; p < 9; p++) {
-        if (mask9 & (1 << p)) {
-          const r = br + Math.floor(p / 3);
-          const c = bc + (p % 3);
-          idxs.push(r * 9 + c);
-        }
-      }
-      return { unitId, kind: "box", mask9, idxs, box: b };
-    }
-
-    return { unitId, kind: "unknown", mask9, idxs };
-  }
-
+  // TODO: unire celle che appartengono alla stessa riga/colonna/box
   function formatEurekaCellCode(source) {
-    if (!source || !source.idxs || source.idxs.length === 0) {
+    if (!source || source.length === 0) {
       return "";
     }
 
-    if (source.kind === "row") {
-      const r = source.unitId + 1;
-      const cols = [];
-      for (let c = 0; c < 9; c++) {
-        if (source.mask9 & (1 << c)) {
-          cols.push(String(c + 1));
-        }
-      }
-      return `r${r}c${cols.join("")}`;
-    }
-
-    if (source.kind === "col") {
-      const c = (source.unitId - 9) + 1;
-      const rows = [];
-      for (let r = 0; r < 9; r++) {
-        if (source.mask9 & (1 << r)) {
-          rows.push(String(r + 1));
-        }
-      }
-      return `r${rows.join("")}c${c}`;
-    }
-
-    if (source.kind === "box") {
-      const b = (source.unitId - 18) + 1;
-      const cells = [];
-      for (let i = 0; i < 9; i++) {
-        if (source.mask9 & (1 << i)) {
-          cells.push(String(i + 1));
-        }
-      }
-      return `b${b}p${cells.join("")}`;
-    }
-
-    return source.idxs.map(idx => idxToRef(idx)).join(",");
-  }
-
-  function sourceIsDelimiter(source) {
-    if (!source || !source.cells) {
-      return false;
-    }
-    return source.cells.idxs.length === 0 && ((source.mask >>> 0) & 0x1FF) === 0;
-  }
-
-  function splitSourceGroups(sources) {
-    const groups = [];
-    let current = [];
-    for (const src of (sources || [])) {
-      if (sourceIsDelimiter(src)) {
-        if (current.length > 0) {
-          groups.push(current);
-          current = [];
-        }
-        continue;
-      }
-      current.push(src);
-    }
-    if (current.length > 0) {
-      groups.push(current);
-    }
-    return groups;
+    return source.map(idx => idxToRef(idx)).join(",");
   }
 
   function normalizeSourceCategory(category) {
@@ -878,22 +535,20 @@ var business_logic = (() => {
     cellFlashSourceCategory.fill(0);
   }
 
-  function addCandidateFlashMask(idx, kind, mask, sourceCategory) {
-    const m = (mask & 0x1FF);
-    if (!m) {
-      return;
-    }
+  function addCandidateFlashMask(idx, kind, digits, sourceCategory) {
     if (kind === "source") {
       const category = normalizeSourceCategory(sourceCategory || 1);
-      for (let d = 1; d <= 9; d++) {
-        if (m & digitToBit(d)) {
-          candFlashSourceCategory[idx][d - 1] = category;
-        }
+      for (const d of digits) {
+        candFlashSourceCategory[idx][d - 1] = category;
       }
     } else if (kind === "set") {
-      candFlashSetMask[idx] |= m;
+      for (const d of digits) {
+        candFlashSetMask[idx] |= digitToBit(d);
+      }
     } else if (kind === "remove") {
-      candFlashRemoveMask[idx] |= m;
+      for (const d of digits) {
+        candFlashRemoveMask[idx] |= digitToBit(d);
+      }
     }
   }
 
@@ -952,7 +607,7 @@ var business_logic = (() => {
       return;
     }
 
-    const groups = splitSourceGroups(ev.sources || []);
+    const groups = ev.sources;
     let sourceIndex = 0;
 
     // Sources
@@ -963,12 +618,11 @@ var business_logic = (() => {
         const category = resolveSourceCategory(ev, s, sourceIndex, groupIndex, groupPos);
         sourceIndex++;
 
-        if (s.cells && s.cells.idxs && s.cells.idxs.length > 0) {
-          for (const idx of s.cells.idxs) {
+        if (s.cells && s.cells.length > 0) {
+          for (const idx of s.cells) {
             setCellSourceFlash(idx, category);
-            addCandidateFlashMask(idx, "source", s.mask, category);
-            const digits = maskToDigits(s.mask);
-            for (const d of digits) {
+            addCandidateFlashMask(idx, "source", s.digits, category);
+            for (const d of s.digits) {
               const el = getCandidateElement(idx, d);
               if (el) {
                 applyCandidateFlashClasses(el, idx, d);
@@ -987,14 +641,14 @@ var business_logic = (() => {
     }
 
     // Operations: set => green, remove => red
-    if (ev.ops) {
-      for (const op of ev.ops) {
-        const idx = op.idx;
+    if (ev.operations) {
+      for (const op of ev.operations) {
+        const idx = op.cell;
 
         if (ev.type === "setValue") {
-          addCandidateFlashMask(idx, "set", op.mask);
+          addCandidateFlashMask(idx, "set", op.digits);
 
-          const d = maskToSingleDigit(op.mask);
+          const d = op.digits[0]; // TODO: valutare se mettere solo digit lato C++
           if (d) {
             const el = getCandidateElement(idx, d);
             if (el) {
@@ -1002,9 +656,9 @@ var business_logic = (() => {
             }
           }
         } else if (ev.type === "removeCandidate") {
-          addCandidateFlashMask(idx, "remove", op.mask);
+          addCandidateFlashMask(idx, "remove", op.digits);
 
-          const digits = maskToDigits(op.mask);
+          const digits = op.digits;
           for (const d of digits) {
             const el = getCandidateElement(idx, d);
             if (el) {
@@ -1025,7 +679,7 @@ var business_logic = (() => {
 
     if (AIC_TECHNIQUES.indexOf(ev.reason) != -1) {
       // AIC
-      const groups = splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
 
       // Draw chain from sources
       for (let group of groups) {
@@ -1034,12 +688,12 @@ var business_logic = (() => {
         while (i < group.length) {
           const s = group[i];
           const t = group[i+1];
-          if (s && s.cells && s.cells.idxs && s.cells.idxs.length > 0 &&
-              t && t.cells && t.cells.idxs && t.cells.idxs.length > 0) {
-            addCandidateLink(s.cells.idxs[0],
-                             maskToSingleDigit(s.mask),
-                             t.cells.idxs[0],
-                             maskToSingleDigit(t.mask),
+          if (s && s.cells && s.cells.length > 0 &&
+              t && t.cells && t.cells.length > 0) {
+            addCandidateLink(s.cells[0],
+                             s.digits[0],
+                             t.cells[0],
+                             t.digits[0],
                              {
                                dashed: !WANT_STRONG,
                                bold: WANT_STRONG,
@@ -1053,19 +707,19 @@ var business_logic = (() => {
       }
     } else if (ev.reason.indexOf("Almost Locked Set") != -1) {
       // ALS
-      const groups = splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
 
       // Draw links between RCCs from sources
       let i = 0;
       while (i < groups[1].length) {
         const s = groups[1][i];
         const t = groups[1][i+1];
-        if (s && s.cells && s.cells.idxs && s.cells.idxs.length > 0 &&
-            t && t.cells && t.cells.idxs && t.cells.idxs.length > 0) {
-          addCandidateLink(s.cells.idxs[0],
-                           maskToSingleDigit(s.mask),
-                           t.cells.idxs[0],
-                           maskToSingleDigit(t.mask),
+        if (s && s.cells && s.cells.length > 0 &&
+            t && t.cells && t.cells.length > 0) {
+          addCandidateLink(s.cells[0],
+                           s.digits[0],
+                           t.cells[0],
+                           t.digits[0],
                            {
                              dashed: true,
                              bold: false,
@@ -1077,7 +731,7 @@ var business_logic = (() => {
       }
     } else if (ev.reason.indexOf("Forcing") != -1) {
       // FC
-      const groups = splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
 
       // Draw chain from sources
       for (let idx in groups) {
@@ -1091,12 +745,12 @@ var business_logic = (() => {
         while (i < group.length) {
           const s = group[i];
           const t = group[i+1];
-          if (s && s.cells && s.cells.idxs && s.cells.idxs.length > 0 &&
-              t && t.cells && t.cells.idxs && t.cells.idxs.length > 0) {
-            addCandidateLink(s.cells.idxs[0],
-                             maskToSingleDigit(s.mask),
-                             t.cells.idxs[0],
-                             maskToSingleDigit(t.mask),
+          if (s && s.cells && s.cells.length > 0 &&
+              t && t.cells && t.cells.length > 0) {
+            addCandidateLink(s.cells[0],
+                             s.digits[0],
+                             t.cells[0],
+                             t.digits[0],
                              {
                                dashed: !WANT_STRONG,
                                bold: WANT_STRONG,
@@ -1250,16 +904,16 @@ var business_logic = (() => {
    * ========================================================= */
   class SudokuCell {
     #value;
-    #candidateMask;
+    #candidates;
     #given;
 
     #cellColorIndex;
     #candidateColorIndex; /* length 9 array */
 
     constructor() {
-      this.#value = 0;          // value 0..9
-      this.#candidateMask = 0;  // candidate mask - start without candidates
-      this.#given = false;      // imported as fixed clue
+      this.#value = 0;               // value 0..9
+      this.#candidates = new Set();  // candidates - start without candidates
+      this.#given = false;           // imported as fixed clue
 
       /* cell background color (palette index or -1 for none) */
       this.#cellColorIndex = -1;
@@ -1290,7 +944,7 @@ var business_logic = (() => {
         /* keep candidates as-is; solver / recalc can fill later */
         return;
       }
-      this.#candidateMask = digitToBit(digit);
+      this.#candidates = new Set([digit]);
     }
 
     clearValue() {
@@ -1299,45 +953,53 @@ var business_logic = (() => {
     }
 
     /* ---- candidates ---- */
-    getCandidateMask() {
-      return this.#candidateMask & 0x1FF;
+    getCandidates() {
+      return this.#candidates;
     }
 
-    setCandidateMask(mask) {
-      this.#candidateMask = (mask & 0x1FF);
+    setCandidates(candidates) {
+      if (typeof candidates === "number") {
+        if (candidates === 0) {
+          this.#candidates = new Set();
+        } else {
+          this.#candidates = new Set([candidates]);
+        }
+      } else {
+        this.#candidates = new Set(candidates);
+      }
     }
 
     hasCandidate(digit) {
-      return !!(this.#candidateMask & digitToBit(digit));
+      return this.#candidates.has(digit);
     }
 
     enableCandidate(digit) {
-      this.#candidateMask |= digitToBit(digit);
+      this.#candidates.add(digit);
     }
 
     disableCandidate(digit) {
-      this.#candidateMask &= ~digitToBit(digit);
+      this.#candidates.delete(digit);
 
       /* If the candidate is removed, remove its candidate-color too */
       this.#candidateColorIndex[digit - 1] = -1;
     }
 
     toggleCandidate(digit) {
-      const bit = digitToBit(digit);
-      const wasOn = !!(this.#candidateMask & bit);
+      const wasOn = this.#candidates.has(digit);
 
-      this.#candidateMask ^= bit;
-
-      /* If candidate removed, remove its color too */
-      if (wasOn && !(this.#candidateMask & bit)) {
+      if (wasOn) {
+        /* If candidate removed, remove its color too */
+        this.#candidates.delete(digit);
         this.#candidateColorIndex[digit - 1] = -1;
+      } else {
+        this.#candidates.add(digit);
       }
 
       return !wasOn;
     }
 
     countCandidates() {
-      return countBits9(this.#candidateMask);
+      return this.#candidates.size;
     }
 
     /* ---- coloring ---- */
@@ -1427,8 +1089,8 @@ var business_logic = (() => {
       return this.#cellAt(idx).isGiven();
     }
 
-    getCandidateMask(idx) {
-      return this.#cellAt(idx).getCandidateMask();
+    getCandidates(idx) {
+      return this.#cellAt(idx).getCandidates();
     }
 
     hasCandidate(idx, digit) {
@@ -1453,7 +1115,7 @@ var business_logic = (() => {
         const cell = this.#cellAt(i);
         cell.setGiven(false);
         cell.setValue(0);
-        cell.setCandidateMask(0);
+        cell.setCandidates(0);
         cell.clearAllColors();
       }
       this.#filledCount = 0;
@@ -1493,13 +1155,13 @@ var business_logic = (() => {
         if (d === 0) {
           cell.setGiven(false);
           cell.setValue(0);
-          cell.setCandidateMask(0);
+          cell.setCandidates(0);
           continue;
         }
 
         cell.setGiven(true);
         cell.setValue(d);
-        cell.setCandidateMask(digitToBit(d));
+        cell.setCandidates(d);
         this.#filledCount++;
       }
 
@@ -1513,6 +1175,16 @@ var business_logic = (() => {
         text += cell.isSolved() ? cell.getValue() : ".";
       }
       return text;
+    }
+
+    exportCandidates() {
+      let total_candidates = [];
+      for (let i = 0; i < 81; i++) {
+        const cell = this.#cellAt(i);
+        const candidates = cell.getCandidates().values().toArray();
+        total_candidates.push(candidates);
+      }
+      return total_candidates;
     }
 
     exportState() {
@@ -1529,7 +1201,7 @@ var business_logic = (() => {
         state.cells.push({
           value: cell.getValue(),
           given: cell.isGiven(),
-          candMask: cell.getCandidateMask(),
+          candMask: cell.getCandidates().values().toArray(),
           cellColorIndex: cell.getCellColorIndex(),
           candColorIndex: candColors
         });
@@ -1549,7 +1221,7 @@ var business_logic = (() => {
 
         cell.setGiven(!!s.given);
         cell.setValue(s.value || 0);
-        cell.setCandidateMask((s.candMask >>> 0) & 0x1FF);
+        cell.setCandidates(s.candMask);
 
         cell.clearAllColors();
         if (typeof s.cellColorIndex === "number") {
@@ -1605,7 +1277,7 @@ var business_logic = (() => {
       }
 
       cell.setValue(digit);
-      cell.setCandidateMask(digitToBit(digit));
+      cell.setCandidates(digit);
 
       if (prev === 0) {
         this.#filledCount++;
@@ -1643,18 +1315,18 @@ var business_logic = (() => {
         const cell = this.#cellAt(i);
 
         if (cell.isSolved()) {
-          cell.setCandidateMask(digitToBit(cell.getValue()));
+          cell.setCandidates(cell.getValue());
           continue;
         }
 
-        let mask = ALL_CANDIDATES_MASK;
+        let candidates = new Set(ALL_CANDIDATES_LIST);
         for (const p of PEERS[i]) {
           const pv = this.getValue(p);
           if (pv) {
-            mask &= ~digitToBit(pv);
+            candidates.delete(pv);
           }
         }
-        cell.setCandidateMask(mask); // may become 0 if contradiction; that is OK
+        cell.setCandidates(candidates); // may become empty if contradiction; that is OK
       }
     }
 
@@ -1662,14 +1334,13 @@ var business_logic = (() => {
     // Removes the placed digit from candidates in peers ONLY.
     // Does NOT re-add any candidate bits that the user manually removed.
     autoClearPeersAfterPlacement(idx, digit) {
-      const bit = digitToBit(digit);
       // Remove digit from all peers' candidate masks (only if the peer is not filled).
       for (const p of PEERS[idx]) {
         const cell = this.#cellAt(p);
         if (cell.isSolved()) {
           continue;
         }
-        if (cell.getCandidateMask() & bit) {
+        if (cell.hasCandidate(digit)) {
           /* do not touch background here */
           cell.disableCandidate(digit);
         }
@@ -1819,7 +1490,7 @@ var business_logic = (() => {
 
   let activeDigit = 0; // 0 means none (except keyboard)
   let activeColorIndex = 0;
-  let enabledTechniqueIds = new Set(loadStoredTechniqueIds());
+  let enabledTechniques = new Set(loadStoredTechnique());
 
   /* Highlight digit selected by clicking solved cells (when optHighlight enabled) */
   let highlightDigit = 0;
@@ -1843,17 +1514,16 @@ var business_logic = (() => {
   let timerInterval = null;
   let resumeTimerAfterPause = false;
 
-  function collectEnabledTechniqueIds() {
+  function collectEnabledTechniques() {
     return TECHNIQUE_OPTIONS
-      .filter((entry) => enabledTechniqueIds.has(getTechniqueID(entry)))
-      .map((entry) => getTechniqueID(entry));
+      .filter((entry) => enabledTechniques.has(entry));
   }
 
   function updateTechniqueSummary() {
     if (!techniqueSummaryEl) {
       return;
     }
-    const count = collectEnabledTechniqueIds().length;
+    const count = collectEnabledTechniques().length;
     techniqueSummaryEl.textContent = count + " teknikoj aktivaj";
   }
 
@@ -1892,7 +1562,7 @@ var business_logic = (() => {
 
   function hasAnyCandidateInUnsolvedCell() {
     for (let i = 0; i < 81; i++) {
-      if (!board.isSolved(i) && (board.getCandidateMask(i) & 0x1FF) !== 0) {
+      if (!board.isSolved(i) && board.getCandidates(i).size !== 0) {
         return true;
       }
     }
@@ -1916,19 +1586,19 @@ var business_logic = (() => {
     updateStepButtonLabel();
   }
 
-  function setTechniqueSelection(ids) {
-    enabledTechniqueIds = new Set(ids);
+  function setTechniqueSelection(techs) {
+    enabledTechniques = new Set(techs);
 
     if (techniqueListEl) {
-      const inputs = techniqueListEl.querySelectorAll("input[type=checkbox][data-technique-id]");
+      const inputs = techniqueListEl.querySelectorAll("input[type=checkbox][data-technique]");
       for (const input of inputs) {
-        const id = Number(input.dataset.techniqueId) | 0;
-        input.checked = enabledTechniqueIds.has(id);
+        const tech = input.dataset.technique;
+        input.checked = enabledTechniques.has(tech);
       }
     }
 
     updateTechniqueSummary();
-    saveStoredTechniqueIds(enabledTechniqueIds);
+    saveStoredTechnique(enabledTechniques);
     clearPendingStepPreview();
   }
 
@@ -1941,20 +1611,19 @@ var business_logic = (() => {
     for (const entry of TECHNIQUE_OPTIONS) {
       const label = document.createElement("label");
       label.className = "techniqueItem";
-      const ID = getTechniqueID(entry);
 
       const input = document.createElement("input");
       input.type = "checkbox";
-      input.checked = enabledTechniqueIds.has(ID);
-      input.dataset.techniqueId = String(ID);
+      input.checked = enabledTechniques.has(entry);
+      input.dataset.technique = entry;
       input.addEventListener("change", () => {
         if (input.checked) {
-          enabledTechniqueIds.add(ID);
+          enabledTechniques.add(entry);
         } else {
-          enabledTechniqueIds.delete(ID);
+          enabledTechniques.delete(entry);
         }
         updateTechniqueSummary();
-        saveStoredTechniqueIds(enabledTechniqueIds);
+        saveStoredTechnique(enabledTechniques);
         clearPendingStepPreview();
       });
 
@@ -2185,13 +1854,9 @@ var business_logic = (() => {
     window.SudorixFormatterContext = {
       escapeHtml,
       idxToRef,
-      maskToDigits,
-      maskToSingleDigit,
       formatEurekaCellCode,
-      splitSourceGroups,
       normalizeSourceCategory,
       resolveSourceCategory,
-      sourceIsDelimiter,
       addCandidateLink,
       clearCandidateLinks,
       renderChainLinks,
@@ -2883,20 +2548,16 @@ var business_logic = (() => {
    * Solver
    * ========================================================= */
   function applyEvent(ev) {
-    if (!ev || !ev.ops || ev.ops.length === 0) {
+    if (!ev || !ev.operations || ev.operations.length === 0) {
       return false;
     }
 
     if (ev.type === "setValue") {
       let any = false;
 
-      for (const op of ev.ops) {
-        const idx = op.idx;
-        const digit = maskToSingleDigit(op.mask);
-
-        if (!assertDigit(digit)) {
-          continue;
-        }
+      for (const op of ev.operations) {
+        const idx = op.cell;
+        const digit = op.digits[0];  // TODO: nell'API potrei fare che digits è una singola cifra e non una lista per SetValue
 
         const wasSolved = board.isSolved(idx);
         const res = board.setManualValue(idx, digit); /* solver uses same setter but not user log */
@@ -2921,9 +2582,9 @@ var business_logic = (() => {
       let any = false;
       let removedCount = 0;
 
-      for (const op of ev.ops) {
-        const idx = op.idx;
-        const digits = maskToDigits(op.mask);
+      for (const op of ev.operations) {
+        const idx = op.cell;
+        const digits = op.digits;
 
         // Iterate bits 0..8
         for (const digit of digits) {
@@ -2942,7 +2603,7 @@ var business_logic = (() => {
   }
 
   function ensureWasmReadyOrNotify() {
-    if (wasmModule && wasmSolveFull && wasmSolveNextStep && wasmSolveInit && wasmSolveHint && wasmAllPossibleStepsForTechnique && wasmSetEnabledTechniques) {
+    if (wasmModule && wasmSolverAPI) {
       return true;
     }
 
@@ -2955,13 +2616,17 @@ var business_logic = (() => {
   }
 
   function solverTick(callbackDone) {
+    let ev;
+
     if (!ensureWasmReadyOrNotify()) {
       callbackDone(false);
       return;
     }
 
-    const ev = wasmComputeNextStep();
-    if (!ev) {
+    try {
+      const response = apiNextStep();
+      ev = response["step"];
+    } catch (e) {
       callbackDone(false);
       return;
     }
@@ -3011,11 +2676,21 @@ var business_logic = (() => {
 
     board.recalcAllCandidatesFromValues();
     renderAll();
-    if (!wasmApplyTechniqueSelection()) {
+
+    try {
+      const techniques = collectEnabledTechniques();
+      const response = apiSetEnabledTechniques(techniques);
+    } catch (e) {
       openCheckModal("Ne eblis sendi la liston de teknikoj al la WASM-solvilo.");
       return;
     }
-    wasmInitBoard(board);
+
+    try {
+      apiInitBoard(board.exportToString());
+    } catch (e) {
+      openCheckModal(e.message);
+      return;
+    }
 
     const loop = () => {
       if (!solveTimer) {
@@ -3060,22 +2735,23 @@ var business_logic = (() => {
       return;
     }
 
-    if (!wasmApplyTechniqueSelection()) {
+    try {
+      const techniques = collectEnabledTechniques();
+      const response = apiSetEnabledTechniques(techniques);
+    } catch (e) {
       openCheckModal("Ne eblis sendi la liston de teknikoj al la WASM-solvilo.");
       return;
     }
 
-    const in81 = board.exportToString();
-    const out81 = wasmRunFullSolve(in81);
-
-    if (!out81 || out81.length < 81) {
+    try {
+      const response = apiSolveFull(board.exportToString());
+      const solution = response.solution;
+      importSudoku(solution);
+      appendInfo("WASM plen-solve: finita.");
+    } catch (e) {
       openCheckModal("WASM plen-solve malsukcesis (neniu rezulto).");
       appendInfo("WASM plen-solve: malsukceso.");
-      return;
     }
-
-    importSudoku(out81);
-    appendInfo("WASM plen-solve: finita.");
   }
 
   function solveOneStep() {
@@ -3089,7 +2765,10 @@ var business_logic = (() => {
     //  - if no pending event: compute and PREVIEW (highlight only, do not apply)
     //  - if pending exists: APPLY it, then clear
     if (!pendingStepEvent) {
-      if (!wasmApplyTechniqueSelection()) {
+      try {
+        const techniques = collectEnabledTechniques();
+        const response = apiSetEnabledTechniques(techniques);
+      } catch (e) {
         openCheckModal("Ne eblis sendi la liston de teknikoj al la WASM-solvilo.");
         return;
       }
@@ -3102,8 +2781,13 @@ var business_logic = (() => {
         // ...
       }
 
-      const ev = wasmComputeHint(board);
-      if (!ev) {
+      let ev;
+      try {
+        const values = board.exportToString();
+        const candidates = board.exportCandidates();
+        const response = apiHint(values, candidates);
+        ev = response["step"];
+      } catch (e) {
         appendInfo("Neniu plia evento.");
         updateStepButtonLabel();
         return;
@@ -3154,7 +2838,7 @@ var business_logic = (() => {
       return;
     }
 
-    const selectedTechniques = TECHNIQUE_OPTIONS.filter((entry) => enabledTechniqueIds.has(getTechniqueID(entry)));
+    const selectedTechniques = TECHNIQUE_OPTIONS.filter((entry) => enabledTechniques.has(entry));
     if (selectedTechniques.length === 0) {
       openCheckModal("Neniu tekniko estas aktiva.");
       return;
@@ -3169,8 +2853,6 @@ var business_logic = (() => {
     const btn = $("btnAllPossibleSteps");
     const oldText = btn ? btn.textContent : "";
     let totalEvents = 0;
-    let overflow = false;
-    let failed = false;
     let index = 0;
 
     updateAllPossibleStepsButtonState();
@@ -3183,43 +2865,40 @@ var business_logic = (() => {
       }
       updateAllPossibleStepsButtonState();
 
-      if (overflow) {
-        appendInfo("Serĉo haltis: la bufero por unu tekniko ne sufiĉis.");
-      } else if (failed) {
-        appendInfo("Serĉo haltis pro eraro en la WASM-solvilo.");
-      } else {
-        appendInfo(`Ĉiuj eblaj paŝoj: ${totalEvents} eventoj trovitaj.`);
-      }
+      appendInfo(`Ĉiuj eblaj paŝoj: ${totalEvents} eventoj trovitaj.`);
     };
 
     const scanNextTechnique = () => {
-      if (index >= selectedTechniques.length || overflow || failed) {
+      if (index >= selectedTechniques.length) {
         finish();
         return;
       }
 
-      const tech = selectedTechniques[index++];
+      const technique = selectedTechniques[index++];
       if (btn) {
         btn.textContent = `Serĉas ${index}/${selectedTechniques.length}`;
       }
 
       // Yield before each expensive WASM call so the UI can repaint the progress text.
       setTimeout(() => {
-        const res = wasmComputeAllPossibleStepsForTechnique(board, tech.id);
-        if (!res.ok) {
-          overflow = !!res.overflow;
-          failed = !res.overflow;
-          appendInfo(`${tech}: ${res.error || "eraro"}`);
+        let events;
+        try {
+          const values = board.exportToString();
+          const candidates = board.exportCandidates();
+          const response = apiAllPossibleStepsForTechnique(technique, values, candidates);
+          events = response["steps"];
+        } catch (e) {
+          //appendInfo(`${technique}: ${events.error || "eraro"}`);
           scanNextTechnique();
           return;
         }
 
-        if (res.events.length > 0) {
-          appendInfo(`${tech}: ${res.events.length} eblaj paŝoj.`);
-          for (const ev of res.events) {
+        if (events.length > 0) {
+          appendInfo(`${technique}: ${events.length} eblaj paŝoj.`);
+          for (const ev of events) {
             logEventOnce(ev);
           }
-          totalEvents += res.events.length;
+          totalEvents += events.length;
         }
 
         scanNextTechnique();
@@ -3424,20 +3103,20 @@ var business_logic = (() => {
 
   $("btnCountSolutions").addEventListener("click", () => {
     // Count solutions on the current grid (values only)
-    const r = wasmCountSolutionsFromString(board);
-    if (!r.ok) {
-      openCheckModal(r.err);
-      return;
-    }
-
-    if (r.n === -1) {
-      openCheckModal("Eraro: malvalida Sudoku-ĉeno (kodiga eraro).");
-    } else if (r.n === 0) {
-      openCheckModal("Rezulto: neniu solvo (0).");
-    } else if (r.n === 1) {
-      openCheckModal("Rezulto: unu sola solvo (unika).");
-    } else {
-      openCheckModal("Rezulto: pluraj solvoj (" + r.n + ").");
+    try {
+      const response = apiCountSolutions(board.exportToString());
+      const solutions = response.solutions;
+      if (solutions === -1) {
+        openCheckModal("Eraro: malvalida Sudoku-ĉeno (kodiga eraro).");
+      } else if (solutions === 0) {
+        openCheckModal("Rezulto: neniu solvo (0).");
+      } else if (solutions === 1) {
+        openCheckModal("Rezulto: unu sola solvo (unika).");
+      } else {
+        openCheckModal("Rezulto: pluraj solvoj (" + solutions + ").");
+      }
+    } catch (e) {
+      openCheckModal(e.message);
     }
   });
 
@@ -3446,9 +3125,9 @@ var business_logic = (() => {
 
   $("btnClearLog").addEventListener("click", () => clearLog());
 
-  $("btnTechAll").addEventListener("click", () => setTechniqueSelection(DEFAULT_TECHNIQUE_IDS));
+  $("btnTechAll").addEventListener("click", () => setTechniqueSelection(DEFAULT_TECHNIQUES));
   $("btnTechNone").addEventListener("click", () => setTechniqueSelection([]));
-  $("btnTechDefaults").addEventListener("click", () => setTechniqueSelection(DEFAULT_TECHNIQUE_IDS));
+  $("btnTechDefaults").addEventListener("click", () => setTechniqueSelection(DEFAULT_TECHNIQUES));
 
   $("btnStep").addEventListener("click", () => solveOneStep());
   $("btnAllPossibleSteps").addEventListener("click", () => runAllPossibleSteps());

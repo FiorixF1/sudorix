@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include "BitmaskSet.hpp"
+#include "API.hpp"
 #include "debug.hpp"
 
 using Digit = uint8_t;                // a digit in range 1..9

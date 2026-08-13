@@ -411,10 +411,8 @@ std::optional<Event> AlsSearcher::build_circular_elimination_event(AlsPath &path
   // sources: list of ALSs
   for (size_t i = 0; i < path.nodes.size(); ++i) {
     AlsNode &node = path.nodes[i];
-    event.addSource(node.cellSet, node.digitSet);
+    event.addSource(node.cellSet, node.digitSet, 0);
   }
-
-  event.addDelimiter();
 
   // sources: list of RCCs
   for (size_t i = 0; i < path.nodes.size(); ++i) {
@@ -424,12 +422,10 @@ std::optional<Event> AlsSearcher::build_circular_elimination_event(AlsPath &path
       AlsNode toNode;
       Digit RCC = path.edges[i].rcc;
       deserialize_unitcode(path.edges[i].to, toNode.cellSet, toNode.digitSet, toNode.isGrouped);
-      event.addSource(board.getPositionsOfDigit(fromNode.cellSet, RCC), RCC);
-      event.addSource(board.getPositionsOfDigit(toNode.cellSet, RCC), RCC);
+      event.addSource(board.getPositionsOfDigit(fromNode.cellSet, RCC), RCC, 1);
+      event.addSource(board.getPositionsOfDigit(toNode.cellSet, RCC), RCC, 1);
     }
   }
-
-  event.addDelimiter();
 
   for (size_t i = 0; i < path.nodes.size(); ++i) {
     AlsNode &prevNode = path.nodes[i == 0 ? path.nodes.size()-1 : i-1];
@@ -505,10 +501,8 @@ std::optional<Event> AlsSearcher::build_endpoint_elimination_event(AlsPath &path
     // sources: list of ALSs
     for (size_t i = 0; i < path.nodes.size(); ++i) {
       AlsNode &node = path.nodes[i];
-      event.addSource(node.cellSet, node.digitSet);
+      event.addSource(node.cellSet, node.digitSet, 0);
     }
-
-    event.addDelimiter();
 
     // sources: list of RCCs
     for (size_t i = 0; i < path.nodes.size()-1; ++i) {
@@ -517,17 +511,15 @@ std::optional<Event> AlsSearcher::build_endpoint_elimination_event(AlsPath &path
       Digit RCC = path.edges[i].rcc;
 
       if (i < path.edges.size()) {
-        event.addSource(board.getPositionsOfDigit(fromNode.cellSet, RCC), RCC);
-        event.addSource(board.getPositionsOfDigit(toNode.cellSet, RCC), RCC);
+        event.addSource(board.getPositionsOfDigit(fromNode.cellSet, RCC), RCC, 1);
+        event.addSource(board.getPositionsOfDigit(toNode.cellSet, RCC), RCC, 1);
       }
     }
 
-    event.addDelimiter();
-
     // sources: list of Z digits
     for (int i = 0; i < validZs.size(); ++i) {
-      event.addSource(startZs[i], validZs[i]);
-      event.addSource(endZs[i], validZs[i]);
+      event.addSource(startZs[i], validZs[i], 2);
+      event.addSource(endZs[i], validZs[i], 2);
     }
 
     // operation: remove Z from peers

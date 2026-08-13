@@ -20,12 +20,14 @@ bool EventQueue::enqueue(const SudokuBoard &board, Event &event) {
     );
 
     // remove not available candidates from sources
-    for (Source &source : event.sources) {
-      DigitSet allowed;
-      for (int idx : source.cells.to_vector()) {
-        allowed |= board.getCandidates((Cell)idx);
+    for (auto &group : event.sources) {
+      for (Source &source : group) {
+        DigitSet allowed;
+        for (int idx : source.cells.to_vector()) {
+          allowed |= board.getCandidates((Cell)idx);
+        }
+        source.mask = source.mask & allowed;
       }
-      source.mask = source.mask & allowed;
     }
 
     // check again if the event is valid

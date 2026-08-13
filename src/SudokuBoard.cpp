@@ -182,73 +182,106 @@ void SudokuBoard::clear() {
   _invalidateCache();
 }
 
-// only values, candidates are calculated automatically
-int SudokuBoard::importFromString(const char *values) {
+int SudokuBoard::importValues(const std::string &values) {
+  // validate input
+  if (values.size() != 81) {
+    return 0;
+  }
+  for (char ch : values) {
+    if (!((ch >= '0' && ch <= '9') || (ch == '.'))) {
+      return 0;
+    }
+  }
+
   // reset state
   this->clear();
 
-  // parse: digits 1..9 are values; 0 or '.' are empty; ignore others
-  int tokens = 0;
-  for (int i = 0; values[i] != '\0'; i++) {
+  // parse: digits 1..9 are values, 0 or '.' is empty
+  for (int i = 0; i < 81; i++) {
     const char ch = values[i];
     if (ch >= '1' && ch <= '9') {
       // given
       cells[i].setValue(ch - '0');
       ++counter[ch - '0'];
       ++solvedCells;
-      ++tokens;
     } else if (ch == '0' || ch == '.') {
       // empty
       cells[i].setValue(0);
-      ++tokens;
     } else {
-      // skip character
-      continue;
-    }
-
-    if (tokens == 81) {
-      break;
+      // shouldn't get here
+      return 0;
     }
   }
-
-  // incomplete Sudoku if there are not enough symbols (0-9 or '.')
-  if (tokens < 81) {
-    return 0;
-  }
-
-  // calculate candidates
-  _recalcAllCandidatesFromValues();
 
   return 1;
 }
 
-// values and candidates
-int SudokuBoard::importFromBuffers(const uint8_t *values, const uint16_t *cands) {
+int SudokuBoard::importCandidates(const std::vector<std::vector<int>> &candidates) {
+  // validate input
+  if (candidates.size() != 81) {
+    return 0;
+  }
+  for (auto &cell : candidates) {
+    for (Digit candidate : cell) {
+      if (!(candidate >= 1 && candidate <= 9)) {
+        return 0;
+      }
+    }
+  }
+
   // reset state
   this->clear();
 
-  // TODO: error handling
+  // parse
   for (int i = 0; i < 81; i++) {
-    cells[i].setValue(values[i]);
-    // If JS provides candidates for solved cells too, keep them consistent anyway.
-    if (values[i] == 0) {
-      cells[i].setCandidates(DigitSet(  cands[i]   ));  // treat candidates as mask
-    } else {
-      ++counter[values[i]];
-      ++solvedCells;
-      cells[i].setCandidates(DigitSet( {values[i]} ));  // single value, use { ... }
+    auto &cell = candidates[i];
+    DigitSet mask;
+    for (Digit candidate : cell) {
+      mask.insert(candidate);
     }
+    cells[i].setCandidates(mask);
   }
 
   return 1;
 }
 
-int SudokuBoard::exportToBuffers(uint8_t *values, uint16_t *cands) const {
-  for (int i = 0; i < 81; i++) {
-    values[i] = cells[i].getValue();
-    cands[i]  = cells[i].getCandidates().to_uint32();
+// only values, candidates are calculated automatically
+int SudokuBoard::importPuzzle(const std::string &values) {
+  int ret = importValues(values);
+
+  if (ret) {
+    // calculate candidates
+    _recalcAllCandidatesFromValues();
   }
-  return 1;
+
+  return ret;
+}
+
+json SudokuBoard::to_json() {
+  json j;
+
+  std::string values;
+  for (int i = 0; i < 81; ++i) {
+    char digit = (char)cells[i].getValue() + '0';
+    values += digit;
+  }
+  j["values"] = values;
+
+  std::vector<std::vector<int>> candidates;
+  for (int i = 0; i < 81; ++i) {
+    auto digits = cells[i].getCandidates().to_vector();
+    candidates.push_back(digits);
+  }
+  j["candidates"] = candidates;
+
+  return j;
+}
+
+int SudokuBoard::from_json(const json &j) {
+  std::string values = j["values"];
+  std::vector<std::vector<int>> candidates = j["candidates"];
+
+  return importValues(values) && importCandidates(candidates);
 }
 
 // --- values API ---
@@ -496,6 +529,85 @@ void SudokuBoard::autoClearPeersAfterPlacement(Cell idx, Digit digit) {
 
 bool SudokuBoard::isCompletelySolved() const {
   return solvedCells == 81;
+}
+
+void SudokuBoard::_countSolutionsImpl(Cell current_cell, int &found_solutions) {
+  if (this->isCompletelySolved()) {
+    // validate rows
+    for (const Unit &row : this->getRows()) {
+      DigitSet set;
+      for (Cell idx : row) {
+        set.insert(this->getValue(idx));
+      }
+      if (set != ALL_DIGITS) {
+        return;
+      }
+    }
+
+    // validate columns
+    for (const Unit &column : this->getColumns()) {
+      DigitSet set;
+      for (Cell idx : column) {
+        set.insert(this->getValue(idx));
+      }
+      if (set != ALL_DIGITS) {
+        return;
+      }
+    }
+
+    // validate boxes
+    for (const Unit &box : this->getBoxes()) {
+      DigitSet set;
+      for (Cell idx : box) {
+        set.insert(this->getValue(idx));
+      }
+      if (set != ALL_DIGITS) {
+        return;
+      }
+    }
+
+    // solution found
+    ++found_solutions;
+    return;
+  }
+
+  if (this->isSolved(current_cell)) {
+    // this cell is already filled, go on with the next one
+    return _countSolutionsImpl(current_cell+1, found_solutions);
+  }
+
+  for (Digit d = 1; d <= 9; ++d) {
+    const CellSet &peers = this->getRowByCell(current_cell) |
+                           this->getColumnByCell(current_cell) |
+                           this->getBoxByCell(current_cell);
+
+    bool valid = true;
+    for (Cell idx : peers) {
+      if (this->isSolved(idx) && this->getValue(idx) == d) {
+        // not valid digit, test next one
+        valid = false;
+        break;
+      }
+    }
+    if (!valid) continue;
+
+    // d is a valid digit
+    this->setValue(current_cell, d);
+    _countSolutionsImpl(current_cell+1, found_solutions);
+    // restore previous status
+    this->clearValue(current_cell);
+  }
+}
+
+int SudokuBoard::countSolutions() {
+  // It is proven that a Sudoku needs at least 17 clues to have a unique solution
+  if (this->getNumberOfSolvedCells() < 17) {
+    return 999;
+  }
+
+  int solutions = 0;
+  _countSolutionsImpl(0, solutions);
+  return solutions;
 }
 
 DigitSet SudokuBoard::getUnsolvedDigits() const {

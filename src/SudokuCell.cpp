@@ -20,7 +20,7 @@ void SudokuCell::setValue(Digit digit) {
   value = digit;
   if (digit != 0) {
     // When solved, keep only the digit bit as candidates.
-    candMask = DigitSet({digit});
+    candidates = DigitSet({digit});
   }
 }
 
@@ -30,40 +30,40 @@ void SudokuCell::clearValue() {
 
 // --- candidates ---
 DigitSet SudokuCell::getCandidates() const {
-  return candMask;
+  return candidates;
 }
 
 void SudokuCell::setCandidates(DigitSet mask) {
-  candMask = mask;
+  candidates = mask;
 }
 
 bool SudokuCell::hasCandidate(Digit digit) const {
-  return candMask.contains(digit);
+  return candidates.contains(digit);
 }
 
 int SudokuCell::countCandidates() const {
-  return candMask.size();
+  return candidates.size();
 }
 
 Digit SudokuCell::getSingleCandidate() const {
-  if (candMask.size() == 1) {
-    return *candMask.begin();
+  if (candidates.size() == 1) {
+    return *candidates.begin();
   }
   return 0;
 }
 
 void SudokuCell::enableCandidate(Digit digit) {
-  candMask.insert(digit);
+  candidates.insert(digit);
 }
 
 bool SudokuCell::disableCandidate(Digit digit) {
-  bool result = candMask.contains(digit);
-  candMask.erase(digit);
+  bool result = candidates.contains(digit);
+  candidates.erase(digit);
   return result;
 }
 
 bool SudokuCell::toggleCandidate(Digit digit) {
-  bool result = candMask.contains(digit);
-  candMask.toggle(digit);
+  bool result = candidates.contains(digit);
+  candidates.toggle(digit);
   return result;
 }

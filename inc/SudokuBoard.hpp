@@ -16,11 +16,15 @@ public:
 
   void clear();
 
-  int importFromString(const char *values);
+  int importValues(const std::string &values);
 
-  int importFromBuffers(const uint8_t *values, const uint16_t *cands);
+  int importCandidates(const std::vector<std::vector<int>> &candidates);
 
-  int exportToBuffers(uint8_t *values, uint16_t *cands) const;
+  int importPuzzle(const std::string &values);
+
+  json to_json();
+
+  int from_json(const json &j);
 
   // --- values API ---
 
@@ -123,6 +127,8 @@ public:
 
   bool isCompletelySolved() const;
 
+  int countSolutions();
+
   // Return the digits that are not completely solved yet in the grid
   DigitSet getUnsolvedDigits() const;
 
@@ -160,6 +166,7 @@ private:
 
   bool _recalcAllCandidatesFromValues();
   void _invalidateCache();
+  void _countSolutionsImpl(Cell current_cell, int &found_solutions);
 };
 
 #endif // SUDOKU_BOARD_H

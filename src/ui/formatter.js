@@ -7,7 +7,7 @@
 
   const noSourcesFormatter = {
     formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
       const parts = [];
 
       defaultOperationsFormatter(ctx, ev, parts);
@@ -22,14 +22,14 @@
 
   const fishFormatter = {
     formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
       const parts = [];
 
       const baseSets = [];
       for (let baseSet of groups[0]) {
         baseSets.push(ctx.formatEurekaCellCode(baseSet.cells));
       }
-      const digit = ctx.maskToSingleDigit(ev.sources[0].mask);
+      const digit = ev.sources[0].digits[0];
 
       const fins = [];
       if (groups[1]) {
@@ -71,16 +71,16 @@
 
   const rectangleFormatter = {
     formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
       const parts = [];
 
-      let totalMask = 0;
+      let digitSet = new Set();
       let rectangleSet = [];
       for (let source of groups[0]) {
-        totalMask |= source.mask;
+        digitSet = digitSet.union(new Set(source.digits));
         rectangleSet.push(ctx.formatEurekaCellCode(source.cells));
       }
-      let digits = ctx.maskToDigits(totalMask);
+      let digits = digitSet.values().toArray();
 
       parts.push(`<div>{${ctx.escapeHtml(digits.join(","))}} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(rectangleSet.join(","))}</span> => </div>`);
 
@@ -94,16 +94,16 @@
 
   const wingFormatter = {
     formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
       const parts = [];
 
-      let totalMask = 0;
+      let digitSet = new Set();
       let wingSet = [];
       for (let source of groups[0]) {
-        totalMask |= source.mask;
+        digitSet = digitSet.union(new Set(source.digits));
         wingSet.push(ctx.formatEurekaCellCode(source.cells));
       }
-      let digits = ctx.maskToDigits(totalMask);
+      let digits = digitSet.values().toArray();
 
       parts.push(`<div>{${ctx.escapeHtml(digits.join(","))}} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(wingSet)}</span> => </div>`);
 
@@ -118,17 +118,17 @@
 
   const fireworksFormatter = {
     formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
       const parts = [];
 
       for (let group of groups) {
-        let totalMask = 0;
+        let digitSet = new Set();
         let fireworks = [];
         for (let source of group) {
-          totalMask |= source.mask;
+          digitSet = digitSet.union(new Set(source.digits));
           fireworks.push(ctx.formatEurekaCellCode(source.cells));
         }
-        let digits = ctx.maskToDigits(totalMask);
+        let digits = digitSet.values().toArray();
 
         parts.push(`<div>{${ctx.escapeHtml(digits.join(","))}} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(fireworks)}</span> => </div>`);
       }
@@ -142,7 +142,7 @@
 
   const colorFormatter = {
     formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
       const parts = [];
 
       defaultOperationsFormatter(ctx, ev, parts);
@@ -173,22 +173,21 @@
 
   const chainFormatter = {
     formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
       const parts = [];
 
       for (let group of groups) {
-        let totalMask = 0;
+        let digitCounter = new Set();
         let nodes = [];
         let digits = [];
         for (let node of group) {
-          totalMask |= node.mask;
+          digitCounter = digitCounter.union(new Set(node.digits));
           nodes.push(ctx.formatEurekaCellCode(node.cells));
-          digits.push(ctx.maskToSingleDigit(node.mask));
+          digits.push(node.digits[0]);
         }
-        let digitCounter = ctx.maskToDigits(totalMask);
 
         // stringify chain (Eureka notation)
-        if (digitCounter.length == 1) {
+        if (digitCounter.size == 1) {
           // single digit chain
           let chainString = "";
           let WANT_STRONG = true;
@@ -262,21 +261,20 @@
 
   const forcingFormatter = {
     formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
       const parts = [];
       const detailedReason = ev.detailedReason;
 
       for (let idx in groups) {
         let group = groups[idx];
-        let totalMask = 0;
+        let digitCounter = new Set();
         let nodes = [];
         let digits = [];
         for (let node of group) {
-          totalMask |= node.mask;
+          digitCounter = digitCounter.union(new Set(node.digits));
           nodes.push(ctx.formatEurekaCellCode(node.cells));
-          digits.push(ctx.maskToSingleDigit(node.mask));
+          digits.push(node.digits[0]);
         }
-        let digitCounter = ctx.maskToDigits(totalMask);
 
         // stringify chain (Eureka notation) - use only multi digit formatting
         let chainString = "";
@@ -333,25 +331,25 @@
 
   const alsFormatter = {
     formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
       const parts = [];
 
       let alsCellsList = [];
       let alsDigitsList = [];
       for (let als of groups[0]) {
         alsCellsList.push(ctx.formatEurekaCellCode(als.cells));
-        alsDigitsList.push(ctx.maskToDigits(als.mask));
+        alsDigitsList.push(als.digits);
       }
 
       let rccs = [];
       for (let rcc of groups[1]) {
-        rccs.push(ctx.maskToSingleDigit(rcc.mask));
+        rccs.push(rcc.digits[0]);
       }
 
       let zs = [];
       if (groups[2]) {
         for (let z of groups[2]) {
-          let digit = ctx.maskToSingleDigit(z.mask);
+          let digit = z.digits[0];
           if (zs.indexOf(digit) == -1) {
             zs.push(digit);
           }
@@ -395,7 +393,7 @@
 
   const sdcFormatter = {
     formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
       const parts = [];
 
       let sdcCellsList = [];
@@ -405,8 +403,8 @@
       for (let i in groups[0]) {
         let sdc = groups[0][i];
         sdcCellsList.push(ctx.formatEurekaCellCode(sdc.cells));
-        sdcDigitsList.push(ctx.maskToDigits(sdc.mask));
-        parts.push(`{${ctx.maskToDigits(sdc.mask)}} en <span class="logSourceCategory${i == 0 ? 2 : i == 1 ? 3 : 6}">${ctx.formatEurekaCellCode(sdc.cells)}</span>`);
+        sdcDigitsList.push(sdc.digits);
+        parts.push(`{${sdc.digits}} en <span class="logSourceCategory${i == 0 ? 2 : i == 1 ? 3 : 6}">${ctx.formatEurekaCellCode(sdc.cells)}</span>`);
         if (i == groups[0].length-1) {
           parts.push(` => </div>`);
         } else {
@@ -437,7 +435,7 @@
 
   const blossomFormatter = {
     formatLog(ev, ctx) {
-      const groups = ctx.splitSourceGroups(ev.sources || []);
+      const groups = ev.sources;
       const parts = [];
 
       let blossomCellsList = [];
@@ -447,12 +445,12 @@
       for (let i in groups[0]) {
         let blossom = groups[0][i];
         blossomCellsList.push(ctx.formatEurekaCellCode(blossom.cells));
-        blossomDigitsList.push(ctx.maskToDigits(blossom.mask));
+        blossomDigitsList.push(blossom.digits);
         // stem vs petal
         if (i == 0) {
-          parts.push(`Tigo en <span class="logSourceCategory${(i % 9) + 2}">${ctx.formatEurekaCellCode(blossom.cells)}</span> kun {${ctx.maskToDigits(blossom.mask)}}`);
+          parts.push(`Tigo en <span class="logSourceCategory${(i % 9) + 2}">${ctx.formatEurekaCellCode(blossom.cells)}</span> kun {${blossom.digits}}`);
         } else {
-          parts.push(`{${ctx.maskToDigits(blossom.mask)}} en <span class="logSourceCategory${(i % 9) + 2}">${ctx.formatEurekaCellCode(blossom.cells)}</span>`);
+          parts.push(`{${blossom.digits}} en <span class="logSourceCategory${(i % 9) + 2}">${ctx.formatEurekaCellCode(blossom.cells)}</span>`);
         }
         // last set
         if (i == groups[0].length-1) {
@@ -494,7 +492,7 @@
   };
 
   window.defaultFormatter = function (ev, ctx) {
-    const groups = ctx.splitSourceGroups(ev.sources || []);
+    const groups = ev.sources;
     const parts = [];
 
     defaultSourcesFormatter(ctx, ev, parts, groups);
@@ -516,8 +514,8 @@
           const s = group[groupPos];
           const category = ctx.resolveSourceCategory(ev, s, sourceIndex, groupIndex, groupPos);
           sourceIndex++;
-          const digs = ctx.maskToDigits(s.mask);
-          if (s.cells && s.cells.idxs && s.cells.idxs.length > 0) {
+          const digs = s.digits;
+          if (s.cells && s.cells.length > 0) {
             const ref = ctx.formatEurekaCellCode(s.cells);
             if (digs.length > 1) {
               parts.push(`<div>{${ctx.escapeHtml(digs.join(","))}} en <span class="logCellRef logSourceCategory${category}">${ctx.escapeHtml(ref)}</span> => </div>`);
@@ -534,26 +532,26 @@
 
   // not meant to be customized, actually
   window.defaultOperationsFormatter = function (ctx, ev, parts) {
-    if (!ev.ops || ev.ops.length === 0) {
+    if (!ev.operations || ev.operations.length === 0) {
       parts.push(`<div>Neniu operacio.</div>`);
       return;
     }
 
     if (ev.type === "setValue") {
-      for (const op of ev.ops) {
-        const d = ctx.maskToSingleDigit(op.mask);
-        const ref = ctx.idxToRef(op.idx);
+      for (const op of ev.operations) {
+        const d = op.digits[0];
+        const ref = ctx.idxToRef(op.cell);
         if (!d) {
-          const digs = ctx.maskToDigits(op.mask);
+          const digs = op.digits;
           parts.push(`<div><span class="logCellRef">${ctx.escapeHtml(ref)}</span> <span class="logOpSet">=</span> <span class="logOpSet">${ctx.escapeHtml(digs.join(","))}</span></div>`);
         } else {
           parts.push(`<div><span class="logCellRef">${ctx.escapeHtml(ref)}</span> <span class="logOpSet">=</span> <span class="logOpSet">${d}</span></div>`);
         }
       }
     } else if (ev.type === "removeCandidate") {
-      for (const op of ev.ops) {
-        const ref = ctx.idxToRef(op.idx);
-        const digs = ctx.maskToDigits(op.mask);
+      for (const op of ev.operations) {
+        const ref = ctx.idxToRef(op.cell);
+        const digs = op.digits;
         if (digs.length > 1) {
           parts.push(`<div><span class="logCellRef">${ctx.escapeHtml(ref)}</span> <span class="logOpRemove">&lt;&gt;</span> <span class="logOpRemove">{${ctx.escapeHtml(digs.join(","))}}</span></div>`);
         } else {
@@ -561,9 +559,9 @@
         }
       }
     } else {
-      for (const op of ev.ops) {
+      for (const op of ev.operations) {
         const ref = ctx.idxToRef(op.idx);
-        const digs = ctx.maskToDigits(op.mask);
+        const digs = op.digits;
         parts.push(`<div><span class="logCellRef">${ctx.escapeHtml(ref)}</span> ${ctx.escapeHtml(digs.join(","))}</div>`);
       }
     }

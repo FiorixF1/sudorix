@@ -82,6 +82,7 @@ static inline uint16_t bitForDigit(int d) {
   return static_cast<uint16_t>(1u << (d - 1));
 }
 
+// TODO: rimuovere riferimento all'ultimo valore dell'enum
 static constexpr size_t kReasonCount = static_cast<size_t>(ReasonId::QuadrupleFireworks) + 1;
 static std::vector<uint64_t> g_reasonCounts(kReasonCount, 0);
 
@@ -100,7 +101,7 @@ static void printTechniqueUsageSummary() {
   for (size_t i = 0; i < g_reasonCounts.size(); i++) {
     printedAny = true;
     std::cout << "  " << std::left << std::setw(28)
-              << reasonIdToString(static_cast<ReasonId>(i))
+              << json(static_cast<ReasonId>(i)).dump()
               << " : " << g_reasonCounts[i] << "\n";
   }
   if (!printedAny) {
@@ -217,26 +218,24 @@ static bool validateSolution(const std::string &in81, const std::string &out81, 
   return true;
 }
 
-static int runFullSolveOne(const std::string &in81, std::string *out81, std::string *why) {
-  char outBuf[82];
-  std::memset(outBuf, 0, sizeof(outBuf));
+static int runFullSolveOne(const std::string &in81, std::string &out81, std::string *why) {
+  json request;
+  request["command"] = "solveFull";
+  request["puzzle"] = in81;
+  for (int i = 0; i < g_reasonCounts.size(); ++i) request["techniques"].push_back(json(static_cast<ReasonId>(i)));
+  json response = sudorix_solver_api(request);
 
-  int rc = sudorix_solver_full(in81.c_str(), outBuf);
-
-  // Ensure null termination for printing even if solver returns non-terminated out.
-  outBuf[81] = '\0';
-
-  *out81 = std::string(outBuf, 81);
-
-  if (rc == 0) {
+  if (response["status"].get<std::string>() == "error") {
     if (why) {
-      *why = "sudorix_solver_full returned 0 (failure)";
+      *why = "sudorix_solver_api returned failure";
     }
     return 0;
   }
 
+  out81 = response["solution"].get<std::string>();
+
   std::string w;
-  if (!validateSolution(in81, *out81, &w)) {
+  if (!validateSolution(in81, out81, &w)) {
     if (why) {
       *why = w;
     }
@@ -246,17 +245,15 @@ static int runFullSolveOne(const std::string &in81, std::string *out81, std::str
   return 1;
 }
 
-static int runStepSolveOne(const std::string &in81, std::string *out81, std::string *why) {
-  uint8_t outValuesBuf[81];
-  std::memset(outValuesBuf, 0, sizeof(outValuesBuf));
+static int runStepSolveOne(const std::string &in81, std::string &out81, std::string *why) {
+  json request;
+  request["command"] = "initBoard";
+  request["puzzle"] = in81;
+  json response = sudorix_solver_api(request);
 
-  uint16_t outCandidatesBuf[81];
-  std::memset(outCandidatesBuf, 0, sizeof(outCandidatesBuf));
-
-  int rc = sudorix_solver_init_board(in81.c_str());
-  if (rc == 0) {
+  if (response["status"].get<std::string>() == "error") {
     if (why) {
-      *why = "sudorix_solver_init_board returned 0 (failure)";
+      *why = "sudorix_solver_api returned failure";
     }
     return 0;
   }
@@ -267,14 +264,18 @@ static int runStepSolveOne(const std::string &in81, std::string *out81, std::str
   while (guard++ < guardMax) {
     uint32_t out[1024];
     std::memset(out, 0, sizeof(out));
-
-    rc = sudorix_solver_next_step(out, 1024);
-    if (rc == 0) {
+  
+    json request;
+    request["command"] = "nextStep";
+    json response = sudorix_solver_api(request);
+    if (response["status"].get<std::string>() == "error") {
       break;
     }
 
-    if (out[0] != 0) {
-      recordReasonId(out[1], out[2]);
+    if (response.contains("step")) {
+      ReasonId reason = response["step"]["reason"];
+      ReasonId detailedReason = response["step"]["detailedReason"];
+      recordReasonId(static_cast<uint32_t>(reason), static_cast<uint32_t>(detailedReason));
     }
   }
 
@@ -285,23 +286,20 @@ static int runStepSolveOne(const std::string &in81, std::string *out81, std::str
     return 0;
   }
 
-  rc = sudorix_solver_export_board(outValuesBuf, outCandidatesBuf);
-  if (rc == 0) {
+  request["command"] = "exportBoard";
+  response = sudorix_solver_api(request);
+  if (response["status"].get<std::string>() == "error") {
     if (why) {
-      *why = "sudorix_solver_export_board returned 0 (failure)";
+      *why = "sudorix_solver_api returned failure";
     }
     return 0;
   }
 
-  out81->clear();
-  out81->reserve(81);
-  for (int i = 0; i < 81; i++) {
-    const uint8_t value = outValuesBuf[i];
-    out81->push_back(value ? static_cast<char>('0' + value) : '.');
-  }
+  std::string values = response["board"]["values"].get<std::string>();
+  out81 = values;
 
   std::string w;
-  if (!validateSolution(in81, *out81, &w)) {
+  if (!validateSolution(in81, out81, &w)) {
     if (why) {
       *why = w;
     }
@@ -445,9 +443,11 @@ int main(int argc, char **argv) {
   std::atomic<size_t> nextIndex{0};
 
   // set allowed techniques - default all
-  uint32_t techniques[256];
-  for (int i = 0; i < 256; ++i) techniques[i] = i;
-  sudorix_solver_set_enabled_techniques(techniques, 256);
+  json request;
+  request["command"] = "setEnabledTechniques";
+  request["techniques"] = json::array();
+  for (int i = 0; i < g_reasonCounts.size(); ++i) request["techniques"].push_back(json(static_cast<ReasonId>(i)));
+  sudorix_solver_api(request);
 
   auto worker = [&]() {
     while (true) {
@@ -472,9 +472,9 @@ int main(int argc, char **argv) {
 
       auto t0 = std::chrono::steady_clock::now();
       if (mode == "full") {
-        ok = runFullSolveOne(tc.input81, &out81, &why);
+        ok = runFullSolveOne(tc.input81, out81, &why);
       } else {
-        ok = runStepSolveOne(tc.input81, &out81, &why);
+        ok = runStepSolveOne(tc.input81, out81, &why);
       }
       auto t1 = std::chrono::steady_clock::now();
 
