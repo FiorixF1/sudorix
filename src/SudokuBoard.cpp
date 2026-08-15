@@ -612,9 +612,9 @@ int SudokuBoard::countSolutions() {
 
 DigitSet SudokuBoard::getUnsolvedDigits() const {
   DigitSet result;
-  for (auto it = counter.begin(); it != counter.end(); ++it) {
-    if (it->second != 9) {
-      result.insert(it->first);
+  for (auto &[digit, value] : counter) {
+    if (value != 9) {
+      result.insert(digit);
     }
   }
   return result;

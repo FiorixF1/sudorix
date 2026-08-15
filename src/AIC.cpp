@@ -19,8 +19,8 @@ AicGraph AicGraphBuilder::prune(AicGraph &graph, const AicConfig &config) {
   AicGraph prunedGraph;
 
   // build strong edges according to config
-  for (auto &it : graph.strong_links) {
-    AicNode &source = graph.nodes[it.first];
+  for (auto &[nodeID, edges] : graph.strong_links) {
+    AicNode &source = graph.nodes[nodeID];
 
     if (source.isGrouped && !config.useGroupedCells) {
       continue;
@@ -35,7 +35,6 @@ AicGraph AicGraphBuilder::prune(AicGraph &graph, const AicConfig &config) {
       continue;
     }
 
-    auto &edges = it.second;
     for (const AicEdge &edge : edges) {
       AicNode &target = graph.nodes[edge.to];
       if (target.isGrouped && !config.useGroupedCells) {
@@ -63,14 +62,13 @@ AicGraph AicGraphBuilder::prune(AicGraph &graph, const AicConfig &config) {
 
   // build weak edges according to config
   if (config.useWeakLinks) {
-    for (auto &it : graph.weak_links) {
-      AicNode &source = graph.nodes[it.first];
+    for (auto &[nodeID, edges] : graph.weak_links) {
+      AicNode &source = graph.nodes[nodeID];
 
       if (source.isGrouped && !config.useGroupedCells) {
         continue;
       }
 
-      auto &edges = it.second;
       for (const AicEdge &edge : edges) {
         AicNode &target = graph.nodes[edge.to];
         if (target.isGrouped && !config.useGroupedCells) {
@@ -89,23 +87,22 @@ AicGraph AicGraphBuilder::prune(AicGraph &graph, const AicConfig &config) {
 
   // build nodes from filtered edges
   // TODO: maybe you can iterate only over weak links since every strong link is also weak
-  for (auto &it : prunedGraph.strong_links) {
-    prunedGraph.nodes[it.first] = graph.nodes[it.first];
+  for (auto &[nodeID, edges] : prunedGraph.strong_links) {
+    prunedGraph.nodes[nodeID] = graph.nodes[nodeID];
   }
-  for (auto &it : prunedGraph.weak_links) {
-    prunedGraph.nodes[it.first] = graph.nodes[it.first];
+  for (auto &[nodeID, edges] : prunedGraph.weak_links) {
+    prunedGraph.nodes[nodeID] = graph.nodes[nodeID];
   }
 
 #if 0
   console_log("AIC GRAPH");
-  for (auto &it : prunedGraph.strong_links) {
-    AicNode &from = graph.nodes[it.first];
+  for (auto &[nodeID, edges] : prunedGraph.strong_links) {
+    AicNode &from = graph.nodes[nodeID];
 
     Cell fromCell = *from.cellSet.begin();
     Digit fromDigit = *from.digitSet.begin();
     if (from.isGrouped) continue;  // debug only singletons
 
-    auto &edges = it.second;
     for (auto &edge : edges) {
       AicNode &to = graph.nodes[edge.to];
 
@@ -734,8 +731,8 @@ bool AicSearcher::runSearch(AicGraph &graph) {
     }
   } else {
     // color-based search, only strong links
-    for (auto &it : graph.strong_links) {
-      AicNodeID start = it.first;
+    for (auto &[nodeID, _] : graph.strong_links) {
+      AicNodeID start = nodeID;
 
       bool maybeEvent = coloring_search_from(start);
 
@@ -752,8 +749,8 @@ bool AicSearcher::aic_search() {
   std::deque<AicSearchNode *> q;
 
   // Partiamo dal nodo iniziale e imponiamo che il primo arco sia strong.
-  for (auto &it : graph->strong_links) {
-    AicNodeID start = it.first;
+  for (auto &[nodeID, _] : graph->strong_links) {
+    AicNodeID start = nodeID;
     q.push_back(make_node(start, start, EdgeType::STRONG, 0, nullptr));
   }
 
@@ -983,8 +980,7 @@ bool AicSearcher::find_contradiction() const {
   // WARNING: the current implementation gives the exact same results of a Digit Forcing Chain
   // but they harder to visualize on the grid, so Nishio is currently disabled.
   //
-  for (auto it = graph->nodes.begin(); it != graph->nodes.end(); ++it) {
-    const AicNode &node = it->second;
+  for (auto &[nodeID, node] : graph->nodes) {
     auto maybeRoot = forcing_id_from_aic_node(node, true);
     if (!maybeRoot) {
       continue;
@@ -999,8 +995,7 @@ bool AicSearcher::find_contradiction() const {
     const ForcingSearchResult reach = reachable_from(rootOn);
 
     // look for consequences that are contradictory
-    for (auto ot = graph->nodes.begin(); ot != graph->nodes.end(); ++ot) {
-      const AicNode &outNode = ot->second;
+    for (auto &[_, outNode] : graph->nodes) {
       auto maybeOn = forcing_id_from_aic_node(outNode, true);
       if (!maybeOn) {
         continue;
@@ -1025,8 +1020,8 @@ bool AicSearcher::find_contradiction() const {
 
         // Nishio Forcing Chain spotted: source is the two chains starting from the assumption
         Event event(EventType::RemoveCandidate, ReasonId::ForcingChain, ReasonId::NishioForcingChain);
-        add_path_sources(event, *pathA, 0);
-        add_path_sources(event, *pathB, 1);
+        add_path_sources("FC_true", event, *pathA);
+        add_path_sources("FC_false", event, *pathB);
         event.addOperation(assumptionCell, assumptionDigit);
         if (eventQueue.enqueue(board, event)) return true;
       }
@@ -1059,12 +1054,12 @@ bool AicSearcher::find_common_consequences() const {
                 ReasonId::ForcingChain,
                 detailedReason);
 
-    int group = 0;
+    int group = 1;
     for (size_t i = 0; i < paths.size(); ++i) {
       if (i > 0) {
         ++group;
       }
-      add_path_sources(event, paths[i], group);
+      add_path_sources("FC_" + std::to_string(group), event, paths[i]);
     }
 
     event.addOperation(forcing_cell(consequence), forcing_digit(consequence));
@@ -1122,8 +1117,7 @@ bool AicSearcher::find_common_consequences() const {
   // Not yet supported:
   // - Two candidates in a cell are both ON, all other numbers can be removed.
   // - Two candidates on the same unit are both ON, all other numbers can be removed on that unit.
-  for (auto it = graph->nodes.begin(); it != graph->nodes.end(); ++it) {
-    const AicNode &node = it->second;
+  for (auto &[nodeID, node] : graph->nodes) {
     auto maybeRootOn = forcing_id_from_aic_node(node, true);
     if (!maybeRootOn) {
       continue;
@@ -1314,7 +1308,7 @@ ForcingSearchResult AicSearcher::reachable_from(ForcingID root) const {
   return result;
 }
 
-void AicSearcher::add_path_sources(Event &event, const ForcingPath &path, int group) const {
+void AicSearcher::add_path_sources(const std::string &name, Event &event, const ForcingPath &path) const {
   for (ForcingID id : path.nodes) {
     if (!valid_forcing_id(id)) {
       continue;
@@ -1323,9 +1317,9 @@ void AicSearcher::add_path_sources(Event &event, const ForcingPath &path, int gr
     AicNodeID nodeId = forcing_id_to_aic_node_id(id);
     auto it = graph->nodes.find(nodeId);
     if (it != graph->nodes.end()) {
-      event.addSource(it->second.cellSet, it->second.digitSet, group);
+      event.addSource(name, it->second.cellSet, it->second.digitSet);
     } else {
-      event.addSource(CellSet({forcing_cell(id)}), DigitSet({forcing_digit(id)}), group);
+      event.addSource(name, CellSet({forcing_cell(id)}), DigitSet({forcing_digit(id)}));
     }
   }
 }
@@ -1333,7 +1327,7 @@ void AicSearcher::add_path_sources(Event &event, const ForcingPath &path, int gr
 bool AicSearcher::analyze_event(Event &event) {
   if (event.reason == ReasonId::SingleDigitPattern) {
     // identify the specific type of single digit pattern
-    auto &sources = event.getSources()[0];
+    auto &sources = event.getSources()["chain"];
 
     if (sources.size() != 4) {
       return false;
@@ -1379,7 +1373,7 @@ bool AicSearcher::analyze_event(Event &event) {
   } else if (event.reason == ReasonId::EmptyRectangle) {
     // identify if this is an empty rectangle pattern
     bool valid = false;
-    auto &sources = event.getSources()[0];
+    auto &sources = event.getSources()["chain"];
     if (sources.size() == 4) {
       CellSet a = sources[0].cells;
       CellSet b = sources[1].cells;
@@ -1411,7 +1405,7 @@ bool AicSearcher::analyze_event(Event &event) {
     bool WANT_STRONG = true;
     bool IS_GROUPED = false;
 
-    auto &sources = event.getSources()[0];
+    auto &sources = event.getSources()["chain"];
     for (int i = 0; i < sources.size()-1; ++i) {
       const Source &current = sources[i];
       const Source &next = sources[i+1];
@@ -1647,7 +1641,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
                                             reason == ReasonId::GroupedAIC ? ReasonId::GroupedAICType1 :
                                             reason);
     for (const AicNode &node : path.nodes) {
-      event.addSource(node.cellSet, node.digitSet, 0);
+      event.addSource("chain", node.cellSet, node.digitSet);
     }
 
     for (Cell idx : peers) {
@@ -1672,7 +1666,7 @@ std::optional<Event> AicSearcher::execute_aic_rules(
                                               reason == ReasonId::GroupedAIC ? ReasonId::GroupedAICType2 :
                                               reason);
       for (const AicNode &node : path.nodes) {
-        event.addSource(node.cellSet, node.digitSet, 0);
+        event.addSource("chain", node.cellSet, node.digitSet);
       }
       if (!Start.isGrouped && board.hasCandidate(start_cell, end_digit)) {
         event.addOperation(start_cell, end_digit);
@@ -1696,12 +1690,12 @@ std::optional<Event> AicSearcher::execute_aic_rules(
                                             reason == ReasonId::GroupedXChain ? ReasonId::GroupedXRing :
                                             reason);
     for (const AicNode &node : path.nodes) {
-      event.addSource(node.cellSet, node.digitSet, 0);
+      event.addSource("chain", node.cellSet, node.digitSet);
     }
     {
       // add again the first node since this is a ring
       AicNode &node = path.nodes[0];
-      event.addSource(node.cellSet, node.digitSet, 0);
+      event.addSource("chain", node.cellSet, node.digitSet);
     }
 
     for (int i = 0; i < path.nodes.size(); ++i) {
@@ -1793,11 +1787,11 @@ bool AicSearcher::execute_coloring_rules(
       // add sources first || second and return event
       for (int i = 0; i < firstColorNodes.size(); ++i) {
         ColorNode node = firstColorNodes[i];
-        event.addSource(node.cell, remotePair, 0);
+        event.addSource("color_A", node.cell, remotePair);
       }
       for (int i = 0; i < secondColorNodes.size(); ++i) {
         ColorNode node = secondColorNodes[i];
-        event.addSource(node.cell, remotePair, 1);
+        event.addSource("color_B", node.cell, remotePair);
       }
       if (eventQueue.enqueue(board, event)) return true;
     }
@@ -1879,15 +1873,15 @@ end_loop:
       Event event(EventType::SetValue, reason, detailedReason);
       for (int i = 0; i < other.size(); ++i) {
         ColorNode node = other[i];
-        event.addSource(node.cell, node.digit, 0);
+        event.addSource("color_A", node.cell, node.digit);
         event.addOperation(node.cell, node.digit);
       }
       for (int i = 0; i < nodes.size(); ++i) {
         ColorNode node = nodes[i];
-        event.addSource(node.cell, node.digit, 1);
+        event.addSource("color_B", node.cell, node.digit);
       }
       if (emptiedCellIdx != -1) {
-        event.addSource(emptiedCellIdx, board.getCandidates(emptiedCellIdx), 2);
+        event.addSource("empty", emptiedCellIdx, board.getCandidates(emptiedCellIdx));
       }
       if (eventQueue.enqueue(board, event)) return true;
     }
@@ -1946,11 +1940,11 @@ end_loop:
     // add sources first || second and return event
     for (int i = 0; i < firstColorNodes.size(); ++i) {
       ColorNode node = firstColorNodes[i];
-      event.addSource(node.cell, node.digit, 0);
+      event.addSource("color_A", node.cell, node.digit);
     }
     for (int i = 0; i < secondColorNodes.size(); ++i) {
       ColorNode node = secondColorNodes[i];
-      event.addSource(node.cell, node.digit, 1);
+      event.addSource("color_B", node.cell, node.digit);
     }
     if (eventQueue.enqueue(board, event)) return true;
   }

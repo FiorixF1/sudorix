@@ -438,19 +438,19 @@ public:
   void addOperation(Cell idx, Digit digit);
   void addOperation(Cell idx, DigitSet mask);
 
-  std::array<std::vector<Source>, 4> &getSources();
-  size_t getNumberOfSources() const;
-  void addSource(Cell idx, Digit digit, int group);
-  void addSource(Cell idx, DigitSet mask, int group);
-  void addSource(CellSet cells, Digit digit, int group);
-  void addSource(CellSet cells, DigitSet mask, int group);
+  std::map<std::string, std::vector<Source>> &getSources();
+  size_t getNumberOfSources();
+  void addSource(const std::string &name, Cell idx, Digit digit);
+  void addSource(const std::string &name, Cell idx, DigitSet mask);
+  void addSource(const std::string &name, CellSet cells, Digit digit);
+  void addSource(const std::string &name, CellSet cells, DigitSet mask);
 
 private:
   friend class EventQueue;
   // an event is a set of multiple operations
   std::vector<Operation> ops;
-  // an event can be described by more sources, divided in four groups
-  std::array<std::vector<Source>, 4> sources;
+  // an event can be described by one or more set of sources, each one defined by a descriptive label
+  std::map<std::string, std::vector<Source>> sources;
 };
 
 #endif // EVENT_H

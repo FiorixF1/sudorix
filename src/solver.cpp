@@ -90,7 +90,7 @@ static void techNakedPairs(SudokuBoard &board, EventQueue &eventQueue) {
         Event event(EventType::RemoveCandidate, ReasonId::NakedPair);
         // the source is the two cells containing the pair
         CellSet sourceSet = CellSet({unitList[subsetList[0]], unitList[subsetList[1]]});
-        event.addSource(sourceSet, digitSet, 0);
+        event.addSource("basic", sourceSet, digitSet);
         for (Cell idx : board.getPeers(sourceSet)) {
           // remove digits from other cells in the unit
           event.addOperation(idx, digitSet);
@@ -124,7 +124,7 @@ static void techNakedTriples(SudokuBoard &board, EventQueue &eventQueue) {
         Event event(EventType::RemoveCandidate, ReasonId::NakedTriple);
         // the source is the three cells containing the triple
         CellSet sourceSet = CellSet({unitList[subsetList[0]], unitList[subsetList[1]], unitList[subsetList[2]]});
-        event.addSource(sourceSet, digitSet, 0);
+        event.addSource("basic", sourceSet, digitSet);
         for (Cell idx : board.getPeers(sourceSet)) {
           // remove digits from other cells in the unit
           event.addOperation(idx, digitSet);
@@ -180,7 +180,7 @@ static void techHiddenPairs(SudokuBoard &board, EventQueue &eventQueue, const Un
       Event event(EventType::RemoveCandidate, ReasonId::HiddenPair);
       // the source is the two cells containing the pair
       CellSet sourceSet = cellSet;
-      event.addSource(sourceSet, subset, 0);
+      event.addSource("basic", sourceSet, subset);
       for (Cell idx : cellSet) {
         // remove other digits from the cells of the pair
         event.addOperation(idx, board.getUnsolvedDigits() - subset);
@@ -216,7 +216,7 @@ static void techHiddenTriples(SudokuBoard &board, EventQueue &eventQueue) {
         Event event(EventType::RemoveCandidate, ReasonId::HiddenTriple);
         // the source is the three cells containing the triple
         CellSet sourceSet = cellSet;
-        event.addSource(sourceSet, subset, 0);
+        event.addSource("basic", sourceSet, subset);
         for (Cell idx : cellSet) {
           // remove other digits from the cells of the triple
           event.addOperation(idx, board.getUnsolvedDigits() - subset);
@@ -272,7 +272,7 @@ static void techPointingSet(SudokuBoard &board, EventQueue &eventQueue) {
         Event event(EventType::RemoveCandidate, ReasonId::PointingSet, reasonId);
         // the source is the cells containing the digit
         CellSet sourceSet = positions;
-        event.addSource(sourceSet, digit, 0);
+        event.addSource("basic", sourceSet, digit);
         // remove digit from row r0, excluding cells in this box
         CellSet set = SudokuBoard::getRowByLocation(r0).difference_with(box);
         for (Cell idx : set) {
@@ -294,7 +294,7 @@ static void techPointingSet(SudokuBoard &board, EventQueue &eventQueue) {
         Event event(EventType::RemoveCandidate, ReasonId::PointingSet, reasonId);
         // the source is the cells containing the digit
         CellSet sourceSet = positions;
-        event.addSource(sourceSet, digit, 0);
+        event.addSource("basic", sourceSet, digit);
         // remove digit from column c0, excluding cells in this box
         CellSet set = SudokuBoard::getColumnByLocation(c0).difference_with(box);
         for (Cell idx : set) {
@@ -336,7 +336,7 @@ static void techBoxLineReduction(SudokuBoard &board, EventQueue &eventQueue) {
         Event event(EventType::RemoveCandidate, ReasonId::BoxLineReduction, reasonId);
         // the source is the cells containing the digit
         CellSet sourceSet = positions;
-        event.addSource(sourceSet, digit, 0);
+        event.addSource("basic", sourceSet, digit);
         // remove digit from this box, excluding cells in this row/column
         CellSet set = SudokuBoard::getBoxByLocation(boxIdx).difference_with(unit);
         for (Cell idx : set) {
@@ -393,8 +393,8 @@ static void techXWing(SudokuBoard &board, EventQueue &eventQueue) {
             const Unit &coverB = getCoverByLocation(coverSetsList[1]);
             Event event(EventType::RemoveCandidate, ReasonId::XWing);
             // the source is the base sets forming the X-Wing
-            event.addSource(positionsA, digit, 0);
-            event.addSource(positionsB, digit, 0);
+            event.addSource("base", positionsA, digit);
+            event.addSource("base", positionsB, digit);
             // remove instances of the digit from cover sets, excluding the base sets
             CellSet set = (coverA | coverB) - (baseA | baseB);
             for (Cell idx : set) {
@@ -459,9 +459,9 @@ static void techSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
             const Unit &coverC = getCoverByLocation(coverSetsList[2]);
             Event event(EventType::RemoveCandidate, ReasonId::Swordfish);
             // the source is the base sets forming the Swordfish
-            event.addSource(positionsA, digit, 0);
-            event.addSource(positionsB, digit, 0);
-            event.addSource(positionsC, digit, 0);
+            event.addSource("base", positionsA, digit);
+            event.addSource("base", positionsB, digit);
+            event.addSource("base", positionsC, digit);
             // remove instances of the digit from cover sets, excluding the base sets
             CellSet set = (coverA | coverB | coverC) - (baseA | baseB | baseC);
             for (Cell idx : set) {
@@ -530,10 +530,10 @@ static void techJellyfish(SudokuBoard &board, EventQueue &eventQueue) {
             const Unit &coverD = getCoverByLocation(coverSetsList[3]);
             Event event(EventType::RemoveCandidate, ReasonId::Jellyfish);
             // the source is the base sets forming the Jellyfish
-            event.addSource(positionsA, digit, 0);
-            event.addSource(positionsB, digit, 0);
-            event.addSource(positionsC, digit, 0);
-            event.addSource(positionsD, digit, 0);
+            event.addSource("base", positionsA, digit);
+            event.addSource("base", positionsB, digit);
+            event.addSource("base", positionsC, digit);
+            event.addSource("base", positionsD, digit);
             // remove instances of the digit from cover sets, excluding the base sets
             CellSet set = (coverA | coverB | coverC | coverD) - (baseA | baseB | baseC | baseD);
             for (Cell idx : set) {
@@ -612,11 +612,11 @@ static void techFinnedXWing(SudokuBoard &board, EventQueue &eventQueue) {
                 // Finned X-Wing spotted
                 Event event(EventType::RemoveCandidate, ReasonId::FinnedXWing, sashiminess ? ReasonId::SashimiXWing : ReasonId::FinnedXWing);
                 // base sets without the fins
-                event.addSource(positionsA - fins, digit, 0);
-                event.addSource(positionsB - fins, digit, 0);
+                event.addSource("base", positionsA - fins, digit);
+                event.addSource("base", positionsB - fins, digit);
                 // fins
                 for (Cell idx : fins) {
-                  event.addSource(idx, digit, 1);
+                  event.addSource("fin", idx, digit);
                 }
                 // eliminations
                 for (Cell idx : set) {
@@ -702,12 +702,12 @@ static void techFinnedSwordfish(SudokuBoard &board, EventQueue &eventQueue) {
                 // Finned Swordfish spotted
                 Event event(EventType::RemoveCandidate, ReasonId::FinnedSwordfish, sashiminess ? ReasonId::SashimiSwordfish : ReasonId::FinnedSwordfish);
                 // base sets without the fins
-                event.addSource(positionsA - fins, digit, 0);
-                event.addSource(positionsB - fins, digit, 0);
-                event.addSource(positionsC - fins, digit, 0);
+                event.addSource("base", positionsA - fins, digit);
+                event.addSource("base", positionsB - fins, digit);
+                event.addSource("base", positionsC - fins, digit);
                 // fins
                 for (Cell idx : fins) {
-                  event.addSource(idx, digit, 1);
+                  event.addSource("fin", idx, digit);
                 }
                 // eliminations
                 for (Cell idx : set) {
@@ -797,13 +797,13 @@ static void techFinnedJellyfish(SudokuBoard &board, EventQueue &eventQueue) {
                 // Finned Jellyfish spotted
                 Event event(EventType::RemoveCandidate, ReasonId::FinnedJellyfish, sashiminess ? ReasonId::SashimiJellyfish : ReasonId::FinnedJellyfish);
                 // base sets without the fins
-                event.addSource(positionsA - fins, digit, 0);
-                event.addSource(positionsB - fins, digit, 0);
-                event.addSource(positionsC - fins, digit, 0);
-                event.addSource(positionsD - fins, digit, 0);
+                event.addSource("base", positionsA - fins, digit);
+                event.addSource("base", positionsB - fins, digit);
+                event.addSource("base", positionsC - fins, digit);
+                event.addSource("base", positionsD - fins, digit);
                 // fins
                 for (Cell idx : fins) {
-                  event.addSource(idx, digit, 1);
+                  event.addSource("fin", idx, digit);
                 }
                 // eliminations
                 for (Cell idx : set) {
@@ -898,8 +898,8 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                 if (xy == lineVertexDigits || xy == oppositeVertexDigits) {
                   // Type 1
                   Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType1);
-                  event.addSource(rectangleUpper, xy, 0);
-                  event.addSource(rectangleLower, xy, 0);
+                  event.addSource("UR", rectangleUpper, xy);
+                  event.addSource("UR", rectangleLower, xy);
                   // remove xy from the vertex with more candidates
                   event.addOperation(xy == lineVertexDigits ? oppositeVertex : lineVertex, xy);
                   type1.push_back(event);
@@ -908,9 +908,9 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   // Type 2
                   Digit z = *(lineVertexDigits - xy).begin();
                   Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType2);
-                  event.addSource(rectangleUpper, xy, 0);
-                  event.addSource(rectangleLower, xy, 0);
-                  event.addSource({lineVertex, oppositeVertex}, z, 1);
+                  event.addSource("UR", rectangleUpper, xy);
+                  event.addSource("UR", rectangleLower, xy);
+                  event.addSource("guardian", {lineVertex, oppositeVertex}, z);
                   // remove z from peers of lineVertex and oppositeVertex
                   for (Cell idx : board.getPeers({lineVertex, oppositeVertex})) {
                     event.addOperation(idx, z);
@@ -931,9 +931,9 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   // let's go
                   if (virtualSubset.size() == extraDigits.size()-1 && foundDigits == extraDigits && seeEachOther) {
                     Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType3);
-                    event.addSource(rectangleUpper, xy, 0);
-                    event.addSource(rectangleLower, xy, 0);
-                    event.addSource({lineVertex, oppositeVertex}, extraDigits, 1);
+                    event.addSource("UR", rectangleUpper, xy);
+                    event.addSource("UR", rectangleLower, xy);
+                    event.addSource("guardian", {lineVertex, oppositeVertex}, extraDigits);
                     // remove the extra digits from peers of lineVertex, oppositeVertex and the found cells
                     for (Cell idx : board.getPeers(CellSet({lineVertex, oppositeVertex}) | virtualSubset)) {
                       event.addOperation(idx, extraDigits);
@@ -945,16 +945,16 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   CellSet yPositions = board.getPositionsOfDigit(peers, y);
                   if (xPositions.empty()) {
                     Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType4);
-                    event.addSource(rectangleUpper, xy, 0);
-                    event.addSource(rectangleLower, xy, 0);
+                    event.addSource("UR", rectangleUpper, xy);
+                    event.addSource("UR", rectangleLower, xy);
                     // remove the other digit from lineVertex and oppositeVertex
                     event.addOperation(lineVertex, y);
                     event.addOperation(oppositeVertex, y);
                     type4.push_back(event);
                   } else if (yPositions.empty()) {
                     Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType4);
-                    event.addSource(rectangleUpper, xy, 0);
-                    event.addSource(rectangleLower, xy, 0);
+                    event.addSource("UR", rectangleUpper, xy);
+                    event.addSource("UR", rectangleLower, xy);
                     // remove the other digit from lineVertex and oppositeVertex
                     event.addOperation(lineVertex, x);
                     event.addOperation(oppositeVertex, x);
@@ -967,9 +967,9 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   // Type 5 (two cells)
                   Digit z = *(lineVertexDigits - xy).begin();
                   Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType5);
-                  event.addSource(rectangleUpper, xy, 0);
-                  event.addSource(rectangleLower, xy, 0);
-                  event.addSource({lineVertex, boxVertex}, z, 1);
+                  event.addSource("UR", rectangleUpper, xy);
+                  event.addSource("UR", rectangleLower, xy);
+                  event.addSource("guardian", {lineVertex, boxVertex}, z);
                   // remove z from peers of lineVertex and boxVertex
                   for (Cell idx : board.getPeers({lineVertex, boxVertex})) {
                     event.addOperation(idx, z);
@@ -983,8 +983,8 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                       board.getPositionsOfDigit(colMinUnit, x).size() == 2 &&
                       board.getPositionsOfDigit(colMaxUnit, x).size() == 2) {
                     Event event(EventType::SetValue, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType6);
-                    event.addSource(rectangleUpper, xy, 0);
-                    event.addSource(rectangleLower, xy, 0);
+                    event.addSource("UR", rectangleUpper, xy);
+                    event.addSource("UR", rectangleLower, xy);
                     // set the X-Wing digit in the bivalue cells of the UR
                     event.addOperation(mainVertex, x);
                     event.addOperation(oppositeVertex, x);
@@ -995,8 +995,8 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                       board.getPositionsOfDigit(colMinUnit, y).size() == 2 &&
                       board.getPositionsOfDigit(colMaxUnit, y).size() == 2) {
                     Event event(EventType::SetValue, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType6);
-                    event.addSource(rectangleUpper, xy, 0);
-                    event.addSource(rectangleLower, xy, 0);
+                    event.addSource("UR", rectangleUpper, xy);
+                    event.addSource("UR", rectangleLower, xy);
                     // set the X-Wing digit in the bivalue cells of the UR
                     event.addOperation(mainVertex, y);
                     event.addOperation(oppositeVertex, y);
@@ -1009,9 +1009,9 @@ static void techUniqueRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   // Type 5 (three cells)
                   Digit z = *(lineVertexDigits - xy).begin();
                   Event event(EventType::RemoveCandidate, ReasonId::UniqueRectangle, ReasonId::UniqueRectangleType5);
-                  event.addSource(rectangleUpper, xy, 0);
-                  event.addSource(rectangleLower, xy, 0);
-                  event.addSource({lineVertex, boxVertex}, z, 1);
+                  event.addSource("UR", rectangleUpper, xy);
+                  event.addSource("UR", rectangleLower, xy);
+                  event.addSource("guardian", {lineVertex, boxVertex}, z);
                   // remove z from peers of lineVertex and boxVertex and oppositeVertex
                   for (Cell idx : board.getPeers({lineVertex, boxVertex, oppositeVertex})) {
                     event.addOperation(idx, z);
@@ -1101,15 +1101,15 @@ static void techHiddenRectangle(SudokuBoard &board, EventQueue &eventQueue) {
                   const Unit &column = SudokuBoard::getColumnByCell(oppositeVertex);
                   if (board.getPositionsOfDigit(row | column, x).size() == 3) {
                     Event event(EventType::RemoveCandidate, ReasonId::HiddenRectangle);
-                    event.addSource(rectangleUpper, xy, 0);
-                    event.addSource(rectangleLower, xy, 0);
+                    event.addSource("UR", rectangleUpper, xy);
+                    event.addSource("UR", rectangleLower, xy);
                     // remove the other UR digit from oppositeVertex
                     event.addOperation(oppositeVertex, y);
                     hidden.push_back(event);
                   } else if (board.getPositionsOfDigit(row | column, y).size() == 3) {
                     Event event(EventType::RemoveCandidate, ReasonId::HiddenRectangle);
-                    event.addSource(rectangleUpper, xy, 0);
-                    event.addSource(rectangleLower, xy, 0);
+                    event.addSource("UR", rectangleUpper, xy);
+                    event.addSource("UR", rectangleLower, xy);
                     // remove the other UR digit from oppositeVertex
                     event.addOperation(oppositeVertex, x);
                     hidden.push_back(event);
@@ -1200,9 +1200,9 @@ static void techBUGPlusOne(SudokuBoard &board, EventQueue &eventQueue) {
       Digit solution = trilocationDigitRowValue;
       Event event(EventType::SetValue, ReasonId::BUGPlusOne);
       // the source is the trivalue cell and its peers containing the BUG value
-      event.addSource(trivalueCell, solution, 0);
+      event.addSource("BUG", trivalueCell, solution);
       CellSet sourceSet = board.getPeersContaining(trivalueCell, solution);
-      event.addSource(sourceSet, solution, 0);
+      event.addSource("peers", sourceSet, solution);
       // set the BUG value in the trivalue cell
       event.addOperation(trivalueCell, solution);
       eventQueue.enqueue(board, event);
@@ -1229,11 +1229,11 @@ static void techXYWing(SudokuBoard &board, EventQueue &eventQueue) {
             // XY-Wing spotted
             Event event(EventType::RemoveCandidate, ReasonId::XYWing);
             // the source is the three cells forming the XY-Wing
-            event.addSource(a, DigitSet({x, z}), 0);  // wing
-            event.addSource(b, DigitSet({x, y}), 0);  // hinge
-            event.addSource(c, DigitSet({y, z}), 0);  // wing
-            event.addSource(a, DigitSet({z}), 1);     // mark Z for UI
-            event.addSource(c, DigitSet({z}), 1);
+            event.addSource("wing", a, DigitSet({x, z}));
+            event.addSource("hinge", b, DigitSet({x, y}));
+            event.addSource("wing", c, DigitSet({y, z}));
+            event.addSource("Z", a, DigitSet({z}));
+            event.addSource("Z", c, DigitSet({z}));
             // remove instances of Z from peers of extreme cells
             CellSet set = board.getPeersContaining(CellSet({a, c}), z);
             for (Cell idx : set) {
@@ -1266,12 +1266,12 @@ static void techXYZWing(SudokuBoard &board, EventQueue &eventQueue) {
             Digit z = *(xz & yz).begin();
             Event event(EventType::RemoveCandidate, ReasonId::XYZWing);
             // the source is the three cells forming the XYZ-Wing
-            event.addSource(a, DigitSet({x, z}), 0);     // wing
-            event.addSource(b, DigitSet({x, y, z}), 0);  // hinge
-            event.addSource(c, DigitSet({y, z}), 0);     // wing
-            event.addSource(a, DigitSet({z}), 1);        // mark Z for UI
-            event.addSource(b, DigitSet({z}), 1);
-            event.addSource(c, DigitSet({z}), 1);
+            event.addSource("wing", a, DigitSet({x, z}));
+            event.addSource("hinge", b, DigitSet({x, y, z}));
+            event.addSource("wing", c, DigitSet({y, z}));
+            event.addSource("Z", a, DigitSet({z}));
+            event.addSource("Z", b, DigitSet({z}));
+            event.addSource("Z", c, DigitSet({z}));
             // remove instances of Z from peers of all cells
             CellSet set = board.getPeersContaining(CellSet({a, b, c}), z);
             for (Cell idx : set) {
@@ -1325,12 +1325,12 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
                   // W-Wing spotted on digit x
                   Event event(EventType::RemoveCandidate, ReasonId::WWing);
                   // the source is the four (or more) cells forming the W-Wing
-                  event.addSource(a, DigitSet({x, y}), 0);
-                  event.addSource(xInUnit & peers_of_a, DigitSet({x}), 0);
-                  event.addSource(xInUnit & peers_of_b, DigitSet({x}), 0);
-                  event.addSource(b, DigitSet({x, y}), 0);
-                  event.addSource(a, DigitSet({y}), 1);
-                  event.addSource(b, DigitSet({y}), 1);
+                  event.addSource("wing", a, DigitSet({x, y}));
+                  event.addSource("hinge", xInUnit & peers_of_a, DigitSet({x}));
+                  event.addSource("hinge", xInUnit & peers_of_b, DigitSet({x}));
+                  event.addSource("wing", b, DigitSet({x, y}));
+                  event.addSource("Z", a, DigitSet({y}));
+                  event.addSource("Z", b, DigitSet({y}));
                   // remove instances of Y from peers of extreme cells
                   CellSet set = board.getPeersContaining(CellSet({a, b}), y);
                   for (Cell idx : set) {
@@ -1341,12 +1341,12 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
                   // W-Wing spotted on digit y
                   Event event(EventType::RemoveCandidate, ReasonId::WWing);
                   // the source is the four (or more) cells forming the W-Wing
-                  event.addSource(a, DigitSet({x, y}), 0);
-                  event.addSource(yInUnit & peers_of_a, DigitSet({y}), 0);
-                  event.addSource(yInUnit & peers_of_b, DigitSet({y}), 0);
-                  event.addSource(b, DigitSet({x, y}), 0);
-                  event.addSource(a, DigitSet({x}), 1);
-                  event.addSource(b, DigitSet({x}), 1);
+                  event.addSource("wing", a, DigitSet({x, y}));
+                  event.addSource("hinge", yInUnit & peers_of_a, DigitSet({y}));
+                  event.addSource("hinge", yInUnit & peers_of_b, DigitSet({y}));
+                  event.addSource("wing", b, DigitSet({x, y}));
+                  event.addSource("Z", a, DigitSet({x}));
+                  event.addSource("Z", b, DigitSet({x}));
                   // remove instances of X from peers of extreme cells
                   CellSet set = board.getPeersContaining(CellSet({a, b}), x);
                   for (Cell idx : set) {
@@ -1466,8 +1466,8 @@ static void techSueDeCoq(SudokuBoard &board, EventQueue &eventQueue) {
             // basic Sue-de-Coq spotted
             Event event(EventType::RemoveCandidate, ReasonId::SueDeCoq);
             // the source is the cells in intersection, line and box
-            event.addSource(CellSet({lidx}) | intersection, liDigits, 0);
-            event.addSource(CellSet({bidx}) | intersection, biDigits, 0);
+            event.addSource("line", CellSet({lidx}) | intersection, liDigits);
+            event.addSource("box", CellSet({bidx}) | intersection, biDigits);
             // eliminate along line and inside the box
             for (Cell idx : line - intersection - li) {
               event.addOperation(idx, liDigits);
@@ -1483,9 +1483,9 @@ static void techSueDeCoq(SudokuBoard &board, EventQueue &eventQueue) {
             // basic Sue-de-Coq spotted
             Event event(EventType::RemoveCandidate, ReasonId::SueDeCoq);
             // the source is the cells in intersection, line and box
-            event.addSource(CellSet({lidx}) | intersection, liDigits, 0);
-            event.addSource(CellSet({bidx}) | intersection, biDigits, 0);
-            event.addSource(intersection, extraDigit, 0);
+            event.addSource("line", CellSet({lidx}) | intersection, liDigits);
+            event.addSource("box", CellSet({bidx}) | intersection, biDigits);
+            event.addSource("extra", intersection, extraDigit);
             // eliminate along line and inside the box
             for (Cell idx : line - intersection - li) {
               event.addOperation(idx, liDigits | extraDigit);
@@ -1592,9 +1592,9 @@ static void techSueDeCoq(SudokuBoard &board, EventQueue &eventQueue) {
                     // extended Sue-de-Coq spotted
                     Event event(EventType::RemoveCandidate, ReasonId::SueDeCoq);
                     // the source is the cells in intersection, line and box
-                    event.addSource(lineCells | intersection, lineDigits, 0);
-                    event.addSource(boxCells | intersection, boxDigits, 0);
-                    if (!extraDigit.empty()) event.addSource(intersection, extraDigit, 0);
+                    event.addSource("line", lineCells | intersection, lineDigits);
+                    event.addSource("box", boxCells | intersection, boxDigits);
+                    if (!extraDigit.empty()) event.addSource("extra", intersection, extraDigit);
                     // eliminate along line and inside the box
                     for (Cell idx : line - intersection - lineCells) {
                       event.addOperation(idx, lineDigits | extraDigit);
@@ -1664,9 +1664,9 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
       // initialize Death Blossom event
       Event event(EventType::RemoveCandidate, ReasonId::DeathBlossom);
       // the source is the stem and the petals
-      event.addSource(index, stem.candidates, 0);
+      event.addSource("stem", index, stem.candidates);
       for (const AlsNode *petal : petals) {
-        event.addSource(petal->cellSet, petal->digitSet, 0);
+        event.addSource("petal", petal->cellSet, petal->digitSet);
       }
 
       // look for eliminations
@@ -1725,9 +1725,8 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
    *     Get peers outside the ALS containing that digit
    *     Store those peers in a Blossom Node 
    */
-  for (auto it = graph.nodes.begin(); it != graph.nodes.end(); ++it) {
-    AlsNodeID id = it->first;
-    const AlsNode &node = it->second;
+  for (auto &[nodeID, node] : graph.nodes) {
+    AlsNodeID id = nodeID;
     for (Digit digit : node.digitSet) {
       CellSet source = node.cellSet.filter([&](Cell i){ return board.hasCandidate(i, digit); });
       CellSet target = board.getPeersContaining(source, digit);
@@ -1815,9 +1814,9 @@ static void techFireworks(SudokuBoard &board, EventQueue &eventQueue) {
         // Triple Fireworks spotted
         Event event(EventType::RemoveCandidate, ReasonId::Fireworks, ReasonId::TripleFireworks);
         // the source is the three cells forming the pattern and their digits
-        event.addSource(i, triple, 0);
+        event.addSource("central_firework", i, triple);
         for (Cell idx : totalExternalCells) {
-          event.addSource(idx, board.getCandidates(idx) & triple, 0);
+          event.addSource("external_firework", idx, board.getCandidates(idx) & triple);
         }
         // remove any digit outside of the triple from the involved cells
         event.addOperation(i, candidates - triple);
@@ -1870,13 +1869,13 @@ static void techFireworks(SudokuBoard &board, EventQueue &eventQueue) {
               // Quadruple Fireworks spotted
               Event event(EventType::RemoveCandidate, ReasonId::Fireworks, ReasonId::QuadrupleFireworks);
               // the source is the two sets of three cells forming the pattern and their digits
-              event.addSource(i, A_pair, 0);
+              event.addSource("firework", i, A_pair);
               for (Cell idx : (fireA.externalCells | fireB.externalCells)) {
-                event.addSource(idx, board.getCandidates(idx) & A_pair, 0);
+                event.addSource("external_firework", idx, board.getCandidates(idx) & A_pair);
               }
-              event.addSource(j, B_pair, 1);
+              event.addSource("firework", j, B_pair);
               for (Cell idx : (fireC.externalCells | fireD.externalCells)) {
-                event.addSource(idx, board.getCandidates(idx) & B_pair, 1);
+                event.addSource("external_firework", idx, board.getCandidates(idx) & B_pair);
               }
               // remove any digit outside of the pair from the base cells
               event.addOperation(i, A_candidates - A_pair);
@@ -1999,19 +1998,25 @@ static int drain_event(SudokuBoard &board,
 
   // Serialize sources first
   out["sources"] = json::array();
-  for (auto &group : first.getSources()) {
-    json this_group = json::array();
-    if (!group.empty()) {
-      for (auto &source : group) {
+  for (auto &[name, sourceList] : first.getSources()) {
+    json this_source = json::object();
+
+    json this_list = json::array();
+    if (!sourceList.empty()) {
+      for (auto &source : sourceList) {
         json this_source;
         auto cells = source.cells.to_vector();
         auto mask = source.mask.to_vector();
         this_source["cells"] = cells;
         this_source["digits"] = mask;
-        this_group.push_back(this_source);
+        this_list.push_back(this_source);
       }
-      out["sources"].push_back(this_group);
     }
+
+    this_source["name"] = name;
+    this_source["list"] = this_list;
+
+    out["sources"].push_back(this_source);
   }
 
   // Serialize operations (with applicability filter)
@@ -2102,10 +2107,11 @@ static json json_sudorix_solver_export_board(const json &request);
 static json json_sudorix_solver_hint(const json &request);
 static json json_sudorix_solver_all_possible_steps_for_technique(const json &request);
 static json json_sudorix_solver_set_enabled_techniques(const json &request);
+static json json_sudorix_solver_get_techniques(const json &request);
 
 static json json_sudorix_solver_count_solutions(const json &request) {
   json response;
-  std::string puzzle = request["puzzle"];
+  std::string puzzle = request.at("puzzle");
 
   // Import Sudoku from string
   SudokuBoard board;
@@ -2125,7 +2131,7 @@ static json json_sudorix_solver_full(const json &request) {
   ensure_solver_config_initialized();
 
   json response;
-  std::string puzzle = request["puzzle"];
+  std::string puzzle = request.at("puzzle");
 
   // Import Sudoku from string
   SudokuBoard board;
@@ -2161,7 +2167,7 @@ static json json_sudorix_solver_init_board(const json &request) {
   ensure_solver_config_initialized();
 
   json response;
-  std::string puzzle = request["puzzle"];
+  std::string puzzle = request.at("puzzle");
 
   // Import Sudoku from string (solver is the source of truth)
   if (!g_sudokuBoard.importPuzzle(puzzle)) {
@@ -2203,7 +2209,7 @@ static json json_sudorix_solver_hint(const json &request) {
 
   // Build a temporary board owned by the caller (UI is the source of truth here).
   SudokuBoard board;
-  if (!board.from_json(request["board"])) {
+  if (!board.from_json(request.at("board"))) {
     return api_error(ApiError::InvalidBoard, "Invalid board");
   }
 
@@ -2222,11 +2228,11 @@ static json json_sudorix_solver_all_possible_steps_for_technique(const json &req
   ensure_solver_config_initialized();
 
   json response;
-  ReasonId technique = request["technique"];
+  ReasonId technique = request.at("technique");
 
   // Build a temporary board owned by the caller (JS is the source of truth here).
   SudokuBoard board;
-  if (!board.from_json(request["board"])) {
+  if (!board.from_json(request.at("board"))) {
     return api_error(ApiError::InvalidBoard, "Invalid board");
   }
 
@@ -2277,7 +2283,7 @@ static json json_sudorix_solver_set_enabled_techniques(const json &request) {
   ensure_solver_config_initialized();
 
   json response;
-  std::vector<ReasonId> techniques = request["techniques"].get<std::vector<ReasonId>>();
+  std::vector<ReasonId> techniques = request.at("techniques").get<std::vector<ReasonId>>();
 
   for (bool &enabled : g_solverConfig.enabledTechniques) {
     enabled = false;
@@ -2289,6 +2295,20 @@ static json json_sudorix_solver_set_enabled_techniques(const json &request) {
   }
 
   return api_ok();
+}
+
+static json json_sudorix_solver_get_techniques(const json &request) {
+  json response;
+
+  std::vector<ReasonId> techniques;
+
+  for (auto &tech : TECHNIQUES) {
+    techniques.push_back(tech.reason);
+  }
+
+  response["status"] = "ok";
+  response["techniques"] = techniques;
+  return response;
 }
 
 //
@@ -2305,47 +2325,72 @@ extern "C"
   EMSCRIPTEN_KEEPALIVE
   const char *sudorix_solver_api(const char *requestJson) {
     thread_local std::string output;
-    json response;
 
     try {
       json request = json::parse(requestJson);
+      json response;
 
-#if 0
+#if 1
       console_log("JSON request: %s", request.dump(2).c_str());
 #endif
 
-      ApiCommand cmd = request["command"].get<ApiCommand>();
-      if (cmd == ApiCommand::CountSolutions) {
-        response = json_sudorix_solver_count_solutions(request);
-      } else if (cmd == ApiCommand::FullSolve) {
-        response = json_sudorix_solver_full(request);
-      } else if (cmd == ApiCommand::InitBoard) {
-        response = json_sudorix_solver_init_board(request);
-      } else if (cmd == ApiCommand::NextStep) {
-        response = json_sudorix_solver_next_step(request);
-      } else if (cmd == ApiCommand::ExportBoard) {
-        response = json_sudorix_solver_export_board(request);
-      } else if (cmd == ApiCommand::Hint) {
-        response = json_sudorix_solver_hint(request);
-      } else if (cmd == ApiCommand::AllPossibleSteps) {
-        response = json_sudorix_solver_all_possible_steps_for_technique(request);
-      } else if (cmd == ApiCommand::SetEnabledTechniques) {
-        response = json_sudorix_solver_set_enabled_techniques(request);
-      } else {
-        response = api_error(ApiError::InvalidCommand, "Unknown command: " + request["command"].get<std::string>());
+      ApiCommand cmd;
+
+      try {
+        cmd = request.at("command").get<ApiCommand>();
+      } catch (const json::exception &e) {
+        response = api_error(ApiError::InvalidCommand, e.what());
+
+        output = response.dump();
+        return output.c_str();
       }
-    } catch (const json::exception &e) {
-      response = api_error(ApiError::InvalidRequest, e.what());
-    } catch (const std::exception &e) {
-      response = api_error(ApiError::InternalError, e.what());
-    }
-    // TODO: in seguito si potrà usare una mappa unordered_map<string,function<>>
-#if 0
-    console_log("JSON response: %s", response.dump(2).c_str());
+      
+      switch (cmd) {
+        case ApiCommand::CountSolutions:
+          response = json_sudorix_solver_count_solutions(request);
+          break;
+        case ApiCommand::FullSolve:
+          response = json_sudorix_solver_full(request);
+          break;
+        case ApiCommand::InitBoard:
+          response = json_sudorix_solver_init_board(request);
+          break;
+        case ApiCommand::NextStep:
+          response = json_sudorix_solver_next_step(request);
+          break;
+        case ApiCommand::ExportBoard:
+          response = json_sudorix_solver_export_board(request);
+          break;
+        case ApiCommand::Hint:
+          response = json_sudorix_solver_hint(request);
+          break;
+        case ApiCommand::AllPossibleSteps:
+          response = json_sudorix_solver_all_possible_steps_for_technique(request);
+          break;
+        case ApiCommand::SetEnabledTechniques:
+          response = json_sudorix_solver_set_enabled_techniques(request);
+          break;
+        case ApiCommand::GetTechniques:
+          response = json_sudorix_solver_get_techniques(request);
+          break;
+      }
+
+#if 1
+      console_log("JSON response: %s", response.dump(2).c_str());
 #endif
 
-    output = response.dump();
-    return output.c_str();
+      output = response.dump();
+      return output.c_str();
+    } catch (const json::exception &e) {
+      output = api_error(ApiError::InvalidRequest, e.what()).dump();
+      return output.c_str();
+    } catch (const std::exception &e) {
+      output = api_error(ApiError::InternalError, e.what()).dump();
+      return output.c_str();
+    } catch (...) {
+      output = api_error(ApiError::InternalError, "Unknown exception").dump();
+      return output.c_str();
+    }
   }
 } // extern "C"
 

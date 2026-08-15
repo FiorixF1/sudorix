@@ -33,255 +33,26 @@ var business_logic = (() => {
   let wasmModule = null;
   let wasmSolverAPI = null;
 
-  // MUST follow the same order in Event.hpp
-  const WASM_REASON = [
-    "Solver",
-    "Full House",
-    "Naked Single",
-    "Naked Pair",
-    "Naked Triple",
-    "Naked Quad",
-    "Hidden Single",
-    "Hidden Pair",
-    "Hidden Triple",
-    "Hidden Quad",
-    "Pointing Set",
-    "Pointing Pair",
-    "Pointing Triple",
-    "Box/Line Reduction",
-    "Claiming Pair",
-    "Claiming Triple",
-    "X-Wing",
-    "Swordfish",
-    "Jellyfish",
-    "Finned X-Wing",
-    "Finned Swordfish",
-    "Finned Jellyfish",
-    "Sashimi X-Wing",
-    "Sashimi Swordfish",
-    "Sashimi Jellyfish",
-    "Franken X-Wing",
-    "Franken Swordfish",
-    "Franken Jellyfish",
-    "Finned Franken X-Wing",
-    "Finned Franken Swordfish",
-    "Finned Franken Jellyfish",
-    "Mutant X-Wing",
-    "Mutant Swordfish",
-    "Mutant Jellyfish",
-    "Finned Mutant X-Wing",
-    "Finned Mutant Swordfish",
-    "Finned Mutant Jellyfish",
-    "Siamese Fish",
-    "Kraken Fish",
-    "Single Digit Pattern",
-    "Skyscraper",
-    "Two-String Kite",
-    "Crane",
-    "Empty Rectangle",
-    "Unique Rectangle",
-    "Unique Rectangle (Type 1)",
-    "Unique Rectangle (Type 2)",
-    "Unique Rectangle (Type 3)",
-    "Unique Rectangle (Type 4)",
-    "Unique Rectangle (Type 5)",
-    "Unique Rectangle (Type 6)",
-    "Hidden Rectangle",
-    "Avoidable Rectangle",
-    "BUG+1",
-    "XY-Wing",
-    "XYZ-Wing",
-    "WXYZ-Wing",
-    "W-Wing",
-    "Simple Coloring",
-    "Simple Coloring (Color Trap)",
-    "Simple Coloring (Color Wrap)",
-    "3D Medusa",
-    "3D Medusa (Color Trap)",
-    "3D Medusa (Color Wrap)",
-    "3D Medusa (Emptied Cell)",
-    "Remote Pair",
-    "X-Chain",
-    "X-Ring",
-    "XY-Chain",
-    "XY-Ring",
-    "Alternating Inference Chain",
-    "Alternating Inference Chain (Type 1)",
-    "Alternating Inference Chain (Type 2)",
-    "Alternating Inference Chain (Type 3)",
-    "Grouped X-Chain",
-    "Grouped X-Ring",
-    "Grouped Alternating Inference Chain",
-    "Grouped Alternating Inference Chain (Type 1)",
-    "Grouped Alternating Inference Chain (Type 2)",
-    "Grouped Alternating Inference Chain (Type 3)",
-    "S-Wing",
-    "M(2)-Wing",
-    "M(3)-Wing",
-    "L(1)-Wing",
-    "L(2)-Wing",
-    "L(3)-Wing",
-    "H(1)-Wing",
-    "H(2)-Wing",
-    "H(3)-Wing",
-    "Strong Wing",
-    "Inverted W-Wing",
-    "Dual W-Wing",
-    "Inverted XY-Wing",
-    "Inverted S-Wing",
-    "Inverted M(2)-Wing",
-    "Inverted M(3)-Wing",
-    "Inverted L(1)-Wing",
-    "Inverted L(2)-Wing",
-    "Inverted L(3)-Wing",
-    "Inverted H(1)-Wing",
-    "Inverted H(2)-Wing",
-    "Inverted H(3)-Wing",
-    "W-Ring",
-    "S-Ring",
-    "M(2)-Ring",
-    "M(3)-Ring",
-    "L(1)-Ring",
-    "L(2)-Ring",
-    "L(3)-Ring",
-    "H(1)-Ring",
-    "H(2)-Ring",
-    "H(3)-Ring",
-    "Inverted Strong Ring",
-    "Inverted W-Ring",
-    "Inverted Dual W-Ring",
-    "Inverted XY-Ring",
-    "Inverted S-Ring",
-    "Inverted M(2)-Ring",
-    "Inverted M(3)-Ring",
-    "Inverted L(1)-Ring",
-    "Inverted L(2)-Ring",
-    "Inverted L(3)-Ring",
-    "Inverted H(1)-Ring",
-    "Inverted H(2)-Ring",
-    "Inverted H(3)-Ring",
-    "Grouped XY-Wing",
-    "Grouped W-Wing",
-    "Grouped S-Wing",
-    "Grouped M(2)-Wing",
-    "Grouped M(3)-Wing",
-    "Grouped L(1)-Wing",
-    "Grouped L(2)-Wing",
-    "Grouped L(3)-Wing",
-    "Grouped H(1)-Wing",
-    "Grouped H(2)-Wing",
-    "Grouped H(3)-Wing",
-    "Grouped Strong Wing",
-    "Grouped Inverted W-Wing",
-    "Grouped Dual W-Wing",
-    "Grouped Inverted XY-Wing",
-    "Grouped Inverted S-Wing",
-    "Grouped Inverted M(2)-Wing",
-    "Grouped Inverted M(3)-Wing",
-    "Grouped Inverted L(1)-Wing",
-    "Grouped Inverted L(2)-Wing",
-    "Grouped Inverted L(3)-Wing",
-    "Grouped Inverted H(1)-Wing",
-    "Grouped Inverted H(2)-Wing",
-    "Grouped Inverted H(3)-Wing",
-    "Grouped W-Ring",
-    "Grouped M(2)-Ring",
-    "Grouped L(1)-Ring",
-    "Grouped L(2)-Ring",
-    "Grouped H(2)-Ring",
-    "Grouped Strong Ring",
-    "Grouped Inverted W-Ring",
-    "Grouped Inverted XY-Ring",
-    "Grouped Inverted S-Ring",
-    "Grouped Inverted M(2)-Ring",
-    "Grouped Inverted M(3)-Ring",
-    "Grouped Inverted L(1)-Ring",
-    "Grouped Inverted L(2)-Ring",
-    "Grouped Inverted L(3)-Ring",
-    "Grouped Inverted H(1)-Ring",
-    "Grouped Inverted H(2)-Ring",
-    "Grouped Inverted H(3)-Ring",
-    "Almost Locked Set XZ",
-    "Almost Locked Set XZ Singly Linked",
-    "Almost Locked Set XZ Doubly Linked",
-    "Almost Locked Set XY-Wing",
-    "Almost Locked Set XY-Ring",
-    "Almost Locked Set Chain",
-    "Almost Locked Set Ring",
-    "Sue de Coq",
-    "Death Blossom",
-    "Forcing Chain",
-    "Digit Forcing Chain",
-    "Nishio Forcing Chain",
-    "Cell Forcing Chain",
-    "Unit Forcing Chain",
-    "Forcing Net",
-    "Fireworks",
-    "Triple Fireworks",
-    "Quadruple Fireworks",
-  ];
-
-  // list of main techniques in order of priority
-  const TECHNIQUE_OPTIONS = [
-    "Full House",
-    "Hidden Single",
-    "Pointing Set",
-    "Box/Line Reduction",
-    "Hidden Pair",
-    "Naked Single",
-    "Naked Pair",
-    "Naked Triple",
-    "Hidden Triple",
-    "BUG+1",
-    "X-Wing",
-    "XY-Wing",
-    "Swordfish",
-    "Remote Pair",
-    "Unique Rectangle",
-    "W-Wing",
-    "Single Digit Pattern",
-    "Finned X-Wing",
-    "Empty Rectangle",
-    "XYZ-Wing",
-    "Simple Coloring",
-    "3D Medusa",
-    "X-Chain",
-    "Finned Swordfish",
-    "Fireworks",
-    "Hidden Rectangle",
-    "Jellyfish",
-    "XY-Chain",
-    "Grouped X-Chain",
-    "Finned Jellyfish",
-    "Alternating Inference Chain",
-    "Grouped Alternating Inference Chain",
-    "Sue de Coq",
-    "Almost Locked Set XZ",
-    "Almost Locked Set XY-Wing",
-    "Almost Locked Set Chain",
-    "Death Blossom",
-    "Forcing Chain",
-    "Forcing Net",
-  ];
-
-  const DEFAULT_TECHNIQUES = TECHNIQUE_OPTIONS;
   const TECHNIQUE_STORAGE_KEY = "sudorix.enabledTechniques.v1";
+
+  function getEnabledTechniques() {
+    // as array
+    return enabledTechniques.values().toArray()
+  }
 
   function loadStoredTechnique() {
     try {
       const raw = window.localStorage.getItem(TECHNIQUE_STORAGE_KEY);
       if (!raw) {
-        return DEFAULT_TECHNIQUES;
+        return [];
       }
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) {
-        return DEFAULT_TECHNIQUES;
+        return [];
       }
-      const validTechs = new Set(TECHNIQUE_OPTIONS);
-      return parsed
-        .filter((tech) => validTechs.has(tech));
+      return parsed;
     } catch (_) {
-      return DEFAULT_TECHNIQUES;
+      return [];
     }
   }
 
@@ -304,10 +75,14 @@ var business_logic = (() => {
   ];
 
   function initWasmSolver() {
+    setSolverStatus(false, "WASM solvilo ne preta.");
+
     // createSudorixSolver is defined by solver_wasm.js (Emscripten output)
     if (typeof createSudorixSolver !== "function") {
       setSolverStatus(false, "solver_wasm.js ne ŝargita. Solvilo ne disponebla.");
-      return;
+      return Promise.reject(
+        new Error("createSudorixSolver ne disponebla")
+      );
     }
 
     wasmReady = createSudorixSolver({
@@ -321,7 +96,10 @@ var business_logic = (() => {
       setSolverStatus(false, "WASM malsukcesis: " + (e && e.message ? e.message : String(e)));
       wasmModule = null;
       wasmSolverAPI = null;
+      throw e;
     });
+
+    return wasmReady;
   }
 
   // General API
@@ -330,30 +108,21 @@ var business_logic = (() => {
       throw new Error("Funkcio sudorix_solver_api ne disponeblas en tiu ĉi WASM build.");
     }
 
-    // Memory allocation for input UTF-8 string
+    // JS object to string
     const requestStr = JSON.stringify(request);
-    //const requestSize = wasmModule.lengthBytesUTF8(requestStr) + 1;
-    //const requestPtr = wasmModule._malloc(requestSize);
 
-    //try {
-      //wasmModule.stringToUTF8(requestStr, requestPtr, requestSize);
+    // Call WASM engine
+    const responseStr = wasmSolverAPI(requestStr);
 
-      // Call WASM engine
-      const responseStr = wasmSolverAPI(requestStr);
+    // Convert the result to JS object
+    const response = JSON.parse(responseStr);
 
-      // Convert the result to JS string
-      //const responseStr = wasmModule.UTF8ToString(responsePtr);
-      const response = JSON.parse(responseStr);
+    // Error handling
+    if (response.status !== "ok") {
+      throw new Error(response.error || "Unknown solver error");
+    }
 
-      // Error handling
-      if (response.status !== "ok") {
-        throw new Error(response.error || "Unknown solver error");
-      }
-
-      return response;
-    //} finally {
-    //  wasmModule._free(requestPtr);
-    //}
+    return response;
   }
 
   // API wrapper
@@ -365,9 +134,9 @@ var business_logic = (() => {
       });
     }
 
-    function apiSolveFull(puzzle) {
+    function apiFullSolve(puzzle) {
       return solverApi({
-        command: "solveFull",
+        command: "fullSolve",
         puzzle: puzzle
       });
     }
@@ -410,6 +179,12 @@ var business_logic = (() => {
       return solverApi({
         command: "setEnabledTechniques",
         techniques: techniques
+      });
+    }
+
+    function apiGetTechniques() {
+      return solverApi({
+        command: "getTechniques"
       });
     }
   }
@@ -1490,7 +1265,8 @@ var business_logic = (() => {
 
   let activeDigit = 0; // 0 means none (except keyboard)
   let activeColorIndex = 0;
-  let enabledTechniques = new Set(loadStoredTechnique());
+  let availableTechniques = new Set();  // all techniques existing in the solver
+  let enabledTechniques = new Set(loadStoredTechnique());  // only techniques checked by the user
 
   /* Highlight digit selected by clicking solved cells (when optHighlight enabled) */
   let highlightDigit = 0;
@@ -1514,16 +1290,11 @@ var business_logic = (() => {
   let timerInterval = null;
   let resumeTimerAfterPause = false;
 
-  function collectEnabledTechniques() {
-    return TECHNIQUE_OPTIONS
-      .filter((entry) => enabledTechniques.has(entry));
-  }
-
   function updateTechniqueSummary() {
     if (!techniqueSummaryEl) {
       return;
     }
-    const count = collectEnabledTechniques().length;
+    const count = getEnabledTechniques().length;
     techniqueSummaryEl.textContent = count + " teknikoj aktivaj";
   }
 
@@ -1608,35 +1379,42 @@ var business_logic = (() => {
     }
 
     techniqueListEl.innerHTML = "";
-    for (const entry of TECHNIQUE_OPTIONS) {
-      const label = document.createElement("label");
-      label.className = "techniqueItem";
+    try {
+      const response = apiGetTechniques();
+      availableTechniques = response["techniques"];
+      for (const entry of availableTechniques) {
+        const label = document.createElement("label");
+        label.className = "techniqueItem";
 
-      const input = document.createElement("input");
-      input.type = "checkbox";
-      input.checked = enabledTechniques.has(entry);
-      input.dataset.technique = entry;
-      input.addEventListener("change", () => {
-        if (input.checked) {
-          enabledTechniques.add(entry);
-        } else {
-          enabledTechniques.delete(entry);
-        }
-        updateTechniqueSummary();
-        saveStoredTechnique(enabledTechniques);
-        clearPendingStepPreview();
-      });
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = enabledTechniques.has(entry);
+        input.dataset.technique = entry;
+        input.addEventListener("change", () => {
+          if (input.checked) {
+            enabledTechniques.add(entry);
+          } else {
+            enabledTechniques.delete(entry);
+          }
+          updateTechniqueSummary();
+          saveStoredTechnique(enabledTechniques);
+          clearPendingStepPreview();
+        });
 
-      const text = document.createElement("span");
-      text.className = "techniqueItemLabel";
-      text.textContent = entry;
+        const text = document.createElement("span");
+        text.className = "techniqueItemLabel";
+        text.textContent = entry;
 
-      label.appendChild(input);
-      label.appendChild(text);
-      techniqueListEl.appendChild(label);
+        label.appendChild(input);
+        label.appendChild(text);
+        techniqueListEl.appendChild(label);
+      }
+
+      updateTechniqueSummary();
+    } catch (e) {
+      openCheckModal("Ne eblis ricevi la liston de teknikoj el la WASM-solvilo.");
+      return;
     }
-
-    updateTechniqueSummary();
   }
 
   /* chain overlay state */
@@ -2678,7 +2456,7 @@ var business_logic = (() => {
     renderAll();
 
     try {
-      const techniques = collectEnabledTechniques();
+      const techniques = getEnabledTechniques();
       const response = apiSetEnabledTechniques(techniques);
     } catch (e) {
       openCheckModal("Ne eblis sendi la liston de teknikoj al la WASM-solvilo.");
@@ -2736,7 +2514,7 @@ var business_logic = (() => {
     }
 
     try {
-      const techniques = collectEnabledTechniques();
+      const techniques = getEnabledTechniques();
       const response = apiSetEnabledTechniques(techniques);
     } catch (e) {
       openCheckModal("Ne eblis sendi la liston de teknikoj al la WASM-solvilo.");
@@ -2744,7 +2522,7 @@ var business_logic = (() => {
     }
 
     try {
-      const response = apiSolveFull(board.exportToString());
+      const response = apiFullSolve(board.exportToString());
       const solution = response.solution;
       importSudoku(solution);
       appendInfo("WASM plen-solve: finita.");
@@ -2766,7 +2544,7 @@ var business_logic = (() => {
     //  - if pending exists: APPLY it, then clear
     if (!pendingStepEvent) {
       try {
-        const techniques = collectEnabledTechniques();
+        const techniques = getEnabledTechniques();
         const response = apiSetEnabledTechniques(techniques);
       } catch (e) {
         openCheckModal("Ne eblis sendi la liston de teknikoj al la WASM-solvilo.");
@@ -2838,7 +2616,7 @@ var business_logic = (() => {
       return;
     }
 
-    const selectedTechniques = TECHNIQUE_OPTIONS.filter((entry) => enabledTechniques.has(entry));
+    const selectedTechniques = getEnabledTechniques();
     if (selectedTechniques.length === 0) {
       openCheckModal("Neniu tekniko estas aktiva.");
       return;
@@ -3125,9 +2903,9 @@ var business_logic = (() => {
 
   $("btnClearLog").addEventListener("click", () => clearLog());
 
-  $("btnTechAll").addEventListener("click", () => setTechniqueSelection(DEFAULT_TECHNIQUES));
+  $("btnTechAll").addEventListener("click", () => setTechniqueSelection(availableTechniques));
   $("btnTechNone").addEventListener("click", () => setTechniqueSelection([]));
-  $("btnTechDefaults").addEventListener("click", () => setTechniqueSelection(DEFAULT_TECHNIQUES));
+  $("btnTechDefaults").addEventListener("click", () => setTechniqueSelection(availableTechniques));
 
   $("btnStep").addEventListener("click", () => solveOneStep());
   $("btnAllPossibleSteps").addEventListener("click", () => runAllPossibleSteps());
@@ -3146,15 +2924,18 @@ var business_logic = (() => {
   /* =========================================================
    * Init
    * ========================================================= */
-  function init() {
+  async function init() {
     buildDigitPad3x3();
     buildColorPad3x3();
     buildGridUI();
-    buildTechniquePanel();
 
-    setSolverStatus(false, "WASM solvilo ne preta.");
-
-    initWasmSolver();
+    try {
+      setSolverStatus(false, "WASM solvilo ne preta.");
+      await initWasmSolver();
+      buildTechniquePanel();
+    } catch (e) {
+      console.error("WASM malsukcesis:", e);
+    }
 
     setMode("value");
     updateStepButtonLabel();

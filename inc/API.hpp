@@ -13,7 +13,8 @@ enum class ApiCommand {
   ExportBoard,
   Hint,
   AllPossibleSteps,
-  SetEnabledTechniques
+  SetEnabledTechniques,
+  GetTechniques
 };
 
 NLOHMANN_JSON_SERIALIZE_ENUM_STRICT( ApiCommand, {
@@ -25,6 +26,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM_STRICT( ApiCommand, {
   {ApiCommand::Hint, "hint"},
   {ApiCommand::AllPossibleSteps, "allPossibleSteps"},
   {ApiCommand::SetEnabledTechniques, "setEnabledTechniques"},
+  {ApiCommand::GetTechniques, "getTechniques"},
 })
 
 enum class ApiError {

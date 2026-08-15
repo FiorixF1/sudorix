@@ -36,27 +36,31 @@ void Event::addOperation(Cell idx, DigitSet mask) {
   }
 }
 
-std::array<std::vector<Source>, 4> &Event::getSources() {
+std::map<std::string, std::vector<Source>> &Event::getSources() {
   return this->sources;
 }
 
-size_t Event::getNumberOfSources() const {
-  return this->sources[0].size() + this->sources[1].size() + this->sources[2].size() ;
+size_t Event::getNumberOfSources() {
+  size_t size = 0;
+  for (const auto &[name, sourceList] : sources) {
+    size += sourceList.size();
+  }
+  return size;
 }
 
-void Event::addSource(Cell idx, Digit digit, int group) {
-  sources[group].push_back({CellSet({idx}), DigitSet({digit})});
+void Event::addSource(const std::string &name, Cell idx, Digit digit) {
+  sources[name].push_back({CellSet({idx}), DigitSet({digit})});
 }
 
-void Event::addSource(Cell idx, DigitSet mask, int group) {
-  sources[group].push_back({CellSet({idx}), mask});
+void Event::addSource(const std::string &name, Cell idx, DigitSet mask) {
+  sources[name].push_back({CellSet({idx}), mask});
 }
 
-void Event::addSource(CellSet cells, Digit digit, int group) {
-  sources[group].push_back({cells, DigitSet({digit})});
+void Event::addSource(const std::string &name, CellSet cells, Digit digit) {
+  sources[name].push_back({cells, DigitSet({digit})});
 }
 
-void Event::addSource(CellSet cells, DigitSet mask, int group) {
-  sources[group].push_back({cells, mask});
+void Event::addSource(const std::string &name, CellSet cells, DigitSet mask) {
+  sources[name].push_back({cells, mask});
 }
 

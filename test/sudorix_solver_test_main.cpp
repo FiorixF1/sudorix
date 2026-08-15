@@ -36,7 +36,7 @@ static std::string trim(const std::string &s) {
   return s.substr(a, b - a);
 }
 
-static std::string normalize81(const std::string &line, std::string *err) {
+static std::string normalize81(const std::string &line, std::string &err) {
   std::string s = trim(line);
 
   // Allow comments and blank lines
@@ -55,19 +55,15 @@ static std::string normalize81(const std::string &line, std::string *err) {
   }
 
   if (compact.size() != 81) {
-    if (err) {
-      std::ostringstream oss;
-      oss << "Expected 81 chars, got " << compact.size();
-      *err = oss.str();
-    }
+    std::ostringstream oss;
+    oss << "Expected 81 chars, got " << compact.size();
+    err = oss.str();
     return "";
   }
 
   for (char &c : compact) {
     if (!isValidSudokuChar(c)) {
-      if (err) {
-        *err = "Invalid character (allowed: 0-9 or .)";
-      }
+      err = "Invalid character (allowed: 0-9 or .)";
       return "";
     }
     if (c == '.') {
@@ -109,44 +105,36 @@ static void printTechniqueUsageSummary() {
   }
 }
 
-static bool checkUnitMask(const std::vector<int> &idxs, const std::string &out81, std::string *why) {
+static bool checkUnitMask(const std::vector<int> &idxs, const std::string &out81, std::string &why) {
   uint16_t seen = 0;
   for (int idx : idxs) {
     char c = out81[(size_t)idx];
     if (c < '1' || c > '9') {
-      if (why) {
-        std::ostringstream oss;
-        oss << "Non-digit in solution at idx=" << idx << " ('" << c << "')";
-        *why = oss.str();
-      }
+      std::ostringstream oss;
+      oss << "Non-digit in solution at idx=" << idx << " ('" << c << "')";
+      why = oss.str();
       return false;
     }
     int d = c - '0';
     uint16_t b = bitForDigit(d);
     if ((seen & b) != 0) {
-      if (why) {
-        std::ostringstream oss;
-        oss << "Duplicate digit " << d << " in unit";
-        *why = oss.str();
-      }
+      std::ostringstream oss;
+      oss << "Duplicate digit " << d << " in unit";
+      why = oss.str();
       return false;
     }
     seen = static_cast<uint16_t>(seen | b);
   }
   if (seen != 0x01FFu) {
-    if (why) {
-      *why = "Unit does not contain all digits 1..9";
-    }
+    why = "Unit does not contain all digits 1..9";
     return false;
   }
   return true;
 }
 
-static bool validateSolution(const std::string &in81, const std::string &out81, std::string *why) {
+static bool validateSolution(const std::string &in81, const std::string &out81, std::string &why) {
   if (out81.size() != 81) {
-    if (why) {
-      *why = "Output length != 81";
-    }
+    why = "Output length != 81";
     return false;
   }
 
@@ -156,11 +144,9 @@ static bool validateSolution(const std::string &in81, const std::string &out81, 
     char out = out81[(size_t)i];
     if (in >= '1' && in <= '9') {
       if (out != in) {
-        if (why) {
-          std::ostringstream oss;
-          oss << "Given mismatch at idx=" << i << " (in=" << in << ", out=" << out << ")";
-          *why = oss.str();
-        }
+        std::ostringstream oss;
+        oss << "Given mismatch at idx=" << i << " (in=" << in << ", out=" << out << ")";
+        why = oss.str();
         return false;
       }
     }
@@ -189,28 +175,22 @@ static bool validateSolution(const std::string &in81, const std::string &out81, 
   // Check all rows/cols/boxes contain 1..9 exactly once.
   for (int u = 0; u < 9; u++) {
     std::string w;
-    if (!checkUnitMask(rows[(size_t)u], out81, &w)) {
-      if (why) {
-        std::ostringstream oss;
-        oss << "Row " << u << " invalid: " << w;
-        *why = oss.str();
-      }
+    if (!checkUnitMask(rows[(size_t)u], out81, w)) {
+      std::ostringstream oss;
+      oss << "Row " << u << " invalid: " << w;
+      why = oss.str();
       return false;
     }
-    if (!checkUnitMask(cols[(size_t)u], out81, &w)) {
-      if (why) {
-        std::ostringstream oss;
-        oss << "Col " << u << " invalid: " << w;
-        *why = oss.str();
-      }
+    if (!checkUnitMask(cols[(size_t)u], out81, w)) {
+      std::ostringstream oss;
+      oss << "Col " << u << " invalid: " << w;
+      why = oss.str();
       return false;
     }
-    if (!checkUnitMask(boxes[(size_t)u], out81, &w)) {
-      if (why) {
-        std::ostringstream oss;
-        oss << "Box " << u << " invalid: " << w;
-        *why = oss.str();
-      }
+    if (!checkUnitMask(boxes[(size_t)u], out81, w)) {
+      std::ostringstream oss;
+      oss << "Box " << u << " invalid: " << w;
+      why = oss.str();
       return false;
     }
   }
@@ -218,43 +198,31 @@ static bool validateSolution(const std::string &in81, const std::string &out81, 
   return true;
 }
 
-static int runFullSolveOne(const std::string &in81, std::string &out81, std::string *why) {
+static int runFullSolveOne(const std::string &in81, std::string &out81, std::string &why) {
   json request;
-  request["command"] = "solveFull";
+  request["command"] = "fullSolve";
   request["puzzle"] = in81;
   for (int i = 0; i < g_reasonCounts.size(); ++i) request["techniques"].push_back(json(static_cast<ReasonId>(i)));
   json response = sudorix_solver_api(request);
 
   if (response["status"].get<std::string>() == "error") {
-    if (why) {
-      *why = "sudorix_solver_api returned failure";
-    }
+    why = response["error"].get<std::string>();
     return 0;
   }
 
   out81 = response["solution"].get<std::string>();
 
-  std::string w;
-  if (!validateSolution(in81, out81, &w)) {
-    if (why) {
-      *why = w;
-    }
-    return 0;
-  }
-
-  return 1;
+  return validateSolution(in81, out81, why);
 }
 
-static int runStepSolveOne(const std::string &in81, std::string &out81, std::string *why) {
+static int runStepSolveOne(const std::string &in81, std::string &out81, std::string &why) {
   json request;
   request["command"] = "initBoard";
   request["puzzle"] = in81;
   json response = sudorix_solver_api(request);
 
   if (response["status"].get<std::string>() == "error") {
-    if (why) {
-      *why = "sudorix_solver_api returned failure";
-    }
+    why = response["error"].get<std::string>();
     return 0;
   }
 
@@ -280,33 +248,21 @@ static int runStepSolveOne(const std::string &in81, std::string &out81, std::str
   }
 
   if (guard >= guardMax) {
-    if (why) {
-      *why = "Step solve guard limit reached";
-    }
+    why = "Step solve guard limit reached";
     return 0;
   }
 
   request["command"] = "exportBoard";
   response = sudorix_solver_api(request);
   if (response["status"].get<std::string>() == "error") {
-    if (why) {
-      *why = "sudorix_solver_api returned failure";
-    }
+    why = response["error"].get<std::string>();
     return 0;
   }
 
   std::string values = response["board"]["values"].get<std::string>();
   out81 = values;
 
-  std::string w;
-  if (!validateSolution(in81, out81, &w)) {
-    if (why) {
-      *why = w;
-    }
-    return 0;
-  }
-
-  return 1;
+  return validateSolution(in81, out81, why);
 }
 
 static void usage(const char *argv0) {
@@ -393,7 +349,7 @@ int main(int argc, char **argv) {
     lineNo++;
 
     std::string err;
-    std::string in81 = normalize81(line, &err);
+    std::string in81 = normalize81(line, err);
     if (in81.empty()) {
       // Either blank/comment, or invalid. Distinguish:
       std::string t = trim(line);
@@ -472,9 +428,9 @@ int main(int argc, char **argv) {
 
       auto t0 = std::chrono::steady_clock::now();
       if (mode == "full") {
-        ok = runFullSolveOne(tc.input81, out81, &why);
+        ok = runFullSolveOne(tc.input81, out81, why);
       } else {
-        ok = runStepSolveOne(tc.input81, out81, &why);
+        ok = runStepSolveOne(tc.input81, out81, why);
       }
       auto t1 = std::chrono::steady_clock::now();
 

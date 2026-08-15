@@ -94,11 +94,8 @@ AlsNodeID AlsGraphBuilder::get_node_id(const DigitSet &digits, const CellSet &ce
 
 void AlsGraphBuilder::build_links(AlsGraphNodes &nodes,
                                   AlsGraphEdges &links) {
-  for (auto it = nodes.begin(); it != nodes.end(); ++it) {
-    AlsNode &A = it->second;
-    for (auto ot = nodes.begin(); ot != nodes.end(); ++ot) {
-      AlsNode &B = ot->second;
-
+  for (auto &[_, A] : nodes) {
+    for (auto &[_, B] : nodes) {
       if (A.id > B.id) continue;
 
       if (!(A.cellSet & B.cellSet).empty()) {
@@ -122,10 +119,9 @@ void AlsGraphBuilder::build_links(AlsGraphNodes &nodes,
   console_log("ALS GRAPH");
   console_log("Number of nodes: %d", nodes.size());
   console_log("Number of edges: %d", links.size());
-  for (auto &it : links) {
-    AlsNode &from = nodes[it.first];
+  for (auto &[nodeID, edges] : links) {
+    AlsNode &from = nodes[nodeID];
 
-    auto &edges = it.second;
     for (auto &edge : edges) {
       AlsNode &to = nodes[edge.to];
 
@@ -259,8 +255,8 @@ bool AlsSearcher::runSearch(AlsGraph &graph) {
 bool AlsSearcher::als_search_from(AlsGraph &graph) {
   std::deque<AlsSearchNode *> q;
 
-  for (auto it = graph.links.begin(); it != graph.links.end(); ++it) {
-    AlsNodeID start = it->first;
+  for (auto &[nodeID, edges] : graph.links) {
+    AlsNodeID start = nodeID;
     q.push_back(make_node(start, start, 0, 0, nullptr));
   }
 
@@ -411,7 +407,7 @@ std::optional<Event> AlsSearcher::build_circular_elimination_event(AlsPath &path
   // sources: list of ALSs
   for (size_t i = 0; i < path.nodes.size(); ++i) {
     AlsNode &node = path.nodes[i];
-    event.addSource(node.cellSet, node.digitSet, 0);
+    event.addSource("ALS", node.cellSet, node.digitSet);
   }
 
   // sources: list of RCCs
@@ -422,8 +418,8 @@ std::optional<Event> AlsSearcher::build_circular_elimination_event(AlsPath &path
       AlsNode toNode;
       Digit RCC = path.edges[i].rcc;
       deserialize_unitcode(path.edges[i].to, toNode.cellSet, toNode.digitSet, toNode.isGrouped);
-      event.addSource(board.getPositionsOfDigit(fromNode.cellSet, RCC), RCC, 1);
-      event.addSource(board.getPositionsOfDigit(toNode.cellSet, RCC), RCC, 1);
+      event.addSource("RCC", board.getPositionsOfDigit(fromNode.cellSet, RCC), RCC);
+      event.addSource("RCC", board.getPositionsOfDigit(toNode.cellSet, RCC), RCC);
     }
   }
 
@@ -501,7 +497,7 @@ std::optional<Event> AlsSearcher::build_endpoint_elimination_event(AlsPath &path
     // sources: list of ALSs
     for (size_t i = 0; i < path.nodes.size(); ++i) {
       AlsNode &node = path.nodes[i];
-      event.addSource(node.cellSet, node.digitSet, 0);
+      event.addSource("ALS", node.cellSet, node.digitSet);
     }
 
     // sources: list of RCCs
@@ -511,15 +507,15 @@ std::optional<Event> AlsSearcher::build_endpoint_elimination_event(AlsPath &path
       Digit RCC = path.edges[i].rcc;
 
       if (i < path.edges.size()) {
-        event.addSource(board.getPositionsOfDigit(fromNode.cellSet, RCC), RCC, 1);
-        event.addSource(board.getPositionsOfDigit(toNode.cellSet, RCC), RCC, 1);
+        event.addSource("RCC", board.getPositionsOfDigit(fromNode.cellSet, RCC), RCC);
+        event.addSource("RCC", board.getPositionsOfDigit(toNode.cellSet, RCC), RCC);
       }
     }
 
     // sources: list of Z digits
     for (int i = 0; i < validZs.size(); ++i) {
-      event.addSource(startZs[i], validZs[i], 2);
-      event.addSource(endZs[i], validZs[i], 2);
+      event.addSource("Z", startZs[i], validZs[i]);
+      event.addSource("Z", endZs[i], validZs[i]);
     }
 
     // operation: remove Z from peers
