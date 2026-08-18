@@ -106,6 +106,72 @@ void deserialize_unitcode(uint32_t code, CellSet &outCellSet, DigitSet &outDigit
   outIsGrouped = (cellSet.size() > 1);
 }
 
+std::string cellset_to_eureka(const CellSet &cells) {
+  std::string out;
+  const std::vector<int> v = cells.to_vector();
+  if (v.empty()) {
+    return "";
+  }
+
+  int r = -1, c = -1, b = -1;
+  uint32_t mask9 = 0;
+
+  if (cellset_common_row(v, r, mask9)) {
+    out = "r" + std::to_string(r+1) + "c";
+    for (Location c = 0; c < 9; c++) {
+      if (mask9 & (1 << c)) {
+        out += std::to_string(c+1);
+      }
+    }
+    return out;
+  }
+  if (cellset_common_col(v, c, mask9)) {
+    out = "r";
+    for (Location r = 0; r < 9; r++) {
+      if (mask9 & (1 << r)) {
+        out += std::to_string(r+1);
+      }
+    }
+    out += "c" + std::to_string(c+1);
+    return out;
+  }
+  if (cellset_common_box(v, b, mask9)) {
+    out = "b" + std::to_string(b+1) + "p";
+    for (Location p = 0; p < 9; p++) {
+      if (mask9 & (1 << p)) {
+        out += std::to_string(p+1);
+      }
+    }
+    return out;
+  }
+
+  // No single common unit: split by cell
+  std::vector<int> indexes = cells.to_vector();
+  for (int i = 0; i < indexes.size(); ++i) {
+    Location r = SudokuBoard::getRowLocation(indexes[i]);
+    Location c = SudokuBoard::getColumnLocation(indexes[i]);
+    out += 'r' + std::to_string(r) + 'c' + std::to_string(c);
+    if (i < indexes.size()-1) out += ',';
+  }
+  return out;
+
+  // No single common unit: split by box (always possible).
+  /*uint32_t boxMasks[9] = {0};
+  for (int idx : v) {
+    int bb = SudokuBoard::getBoxLocation(idx);
+    int rr = SudokuBoard::getRowLocation(idx) % 3;
+    int cc = SudokuBoard::getColumnLocation(idx) % 3;
+    int pos = rr * 3 + cc;
+    boxMasks[bb] |= (1u << (uint32_t)pos);
+  }
+  for (int bb = 0; bb < 9; bb++) {
+    if (boxMasks[bb]) {
+      out.push_back(encode_unit_cells((uint32_t)(18 + bb), boxMasks[bb]));
+    }
+  }
+  return out;*/
+}
+
 uint32_t encode_unit_cells(uint32_t unitId, uint32_t mask9) {
   return ((mask9 & 0x1FFu) << 5) | (unitId & 0x1Fu);
 }

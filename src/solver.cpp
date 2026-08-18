@@ -1229,9 +1229,9 @@ static void techXYWing(SudokuBoard &board, EventQueue &eventQueue) {
             // XY-Wing spotted
             Event event(EventType::RemoveCandidate, ReasonId::XYWing);
             // the source is the three cells forming the XY-Wing
-            event.addSource("wing", a, DigitSet({x, z}));
-            event.addSource("hinge", b, DigitSet({x, y}));
-            event.addSource("wing", c, DigitSet({y, z}));
+            event.addSource("Wing", a, DigitSet({x, z}));
+            event.addSource("Wing", b, DigitSet({x, y}));
+            event.addSource("Wing", c, DigitSet({y, z}));
             event.addSource("Z", a, DigitSet({z}));
             event.addSource("Z", c, DigitSet({z}));
             // remove instances of Z from peers of extreme cells
@@ -1266,9 +1266,9 @@ static void techXYZWing(SudokuBoard &board, EventQueue &eventQueue) {
             Digit z = *(xz & yz).begin();
             Event event(EventType::RemoveCandidate, ReasonId::XYZWing);
             // the source is the three cells forming the XYZ-Wing
-            event.addSource("wing", a, DigitSet({x, z}));
-            event.addSource("hinge", b, DigitSet({x, y, z}));
-            event.addSource("wing", c, DigitSet({y, z}));
+            event.addSource("Wing", a, DigitSet({x, z}));
+            event.addSource("Wing", b, DigitSet({x, y, z}));
+            event.addSource("Wing", c, DigitSet({y, z}));
             event.addSource("Z", a, DigitSet({z}));
             event.addSource("Z", b, DigitSet({z}));
             event.addSource("Z", c, DigitSet({z}));
@@ -1325,10 +1325,10 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
                   // W-Wing spotted on digit x
                   Event event(EventType::RemoveCandidate, ReasonId::WWing);
                   // the source is the four (or more) cells forming the W-Wing
-                  event.addSource("wing", a, DigitSet({x, y}));
-                  event.addSource("hinge", xInUnit & peers_of_a, DigitSet({x}));
-                  event.addSource("hinge", xInUnit & peers_of_b, DigitSet({x}));
-                  event.addSource("wing", b, DigitSet({x, y}));
+                  event.addSource("Wing", a, DigitSet({x, y}));
+                  event.addSource("Wing", xInUnit & peers_of_a, DigitSet({x}));
+                  event.addSource("Wing", xInUnit & peers_of_b, DigitSet({x}));
+                  event.addSource("Wing", b, DigitSet({x, y}));
                   event.addSource("Z", a, DigitSet({y}));
                   event.addSource("Z", b, DigitSet({y}));
                   // remove instances of Y from peers of extreme cells
@@ -1341,10 +1341,10 @@ static void techWWing(SudokuBoard &board, EventQueue &eventQueue) {
                   // W-Wing spotted on digit y
                   Event event(EventType::RemoveCandidate, ReasonId::WWing);
                   // the source is the four (or more) cells forming the W-Wing
-                  event.addSource("wing", a, DigitSet({x, y}));
-                  event.addSource("hinge", yInUnit & peers_of_a, DigitSet({y}));
-                  event.addSource("hinge", yInUnit & peers_of_b, DigitSet({y}));
-                  event.addSource("wing", b, DigitSet({x, y}));
+                  event.addSource("Wing", a, DigitSet({x, y}));
+                  event.addSource("Wing", yInUnit & peers_of_a, DigitSet({y}));
+                  event.addSource("Wing", yInUnit & peers_of_b, DigitSet({y}));
+                  event.addSource("Wing", b, DigitSet({x, y}));
                   event.addSource("Z", a, DigitSet({x}));
                   event.addSource("Z", b, DigitSet({x}));
                   // remove instances of X from peers of extreme cells
@@ -1747,7 +1747,7 @@ static void techDeathBlossom(SudokuBoard &board, EventQueue &eventQueue) {
       DigitSet accumulator = ALL_DIGITS;
       Digit RCC = 0;
       std::vector<const AlsNode *> petals;
-      search_death_blossom(stem, index, RCC, accumulator, petals);
+      if (search_death_blossom(stem, index, RCC, accumulator, petals)) return;
     }
   }
 }
@@ -1814,9 +1814,9 @@ static void techFireworks(SudokuBoard &board, EventQueue &eventQueue) {
         // Triple Fireworks spotted
         Event event(EventType::RemoveCandidate, ReasonId::Fireworks, ReasonId::TripleFireworks);
         // the source is the three cells forming the pattern and their digits
-        event.addSource("central_firework", i, triple);
+        event.addSource("fireworks_A", i, triple);
         for (Cell idx : totalExternalCells) {
-          event.addSource("external_firework", idx, board.getCandidates(idx) & triple);
+          event.addSource("fireworks_A", idx, board.getCandidates(idx) & triple);
         }
         // remove any digit outside of the triple from the involved cells
         event.addOperation(i, candidates - triple);
@@ -1861,21 +1861,20 @@ static void techFireworks(SudokuBoard &board, EventQueue &eventQueue) {
             const Firework &fireC = fireworks[{j, c}];
             const Firework &fireD = fireworks[{j, d}];
             bool validity = fireA.valid && fireB.valid && fireC.valid && fireD.valid;
-            CellSet totalExternalCells = validity ? (fireA.externalCells | fireB.externalCells) &
-                                                    (fireC.externalCells | fireD.externalCells)
+            CellSet totalExternalCells = validity ? (fireA.externalCells | fireB.externalCells | fireC.externalCells | fireD.externalCells)
                                                   : CellSet();
             // if every firework involves the same cells, then we can apply eliminations
             if (totalExternalCells.size() == 2) {
               // Quadruple Fireworks spotted
               Event event(EventType::RemoveCandidate, ReasonId::Fireworks, ReasonId::QuadrupleFireworks);
               // the source is the two sets of three cells forming the pattern and their digits
-              event.addSource("firework", i, A_pair);
+              event.addSource("fireworks_A", i, A_pair);
               for (Cell idx : (fireA.externalCells | fireB.externalCells)) {
-                event.addSource("external_firework", idx, board.getCandidates(idx) & A_pair);
+                event.addSource("fireworks_A", idx, board.getCandidates(idx) & A_pair);
               }
-              event.addSource("firework", j, B_pair);
+              event.addSource("fireworks_B", j, B_pair);
               for (Cell idx : (fireC.externalCells | fireD.externalCells)) {
-                event.addSource("external_firework", idx, board.getCandidates(idx) & B_pair);
+                event.addSource("fireworks_B", idx, board.getCandidates(idx) & B_pair);
               }
               // remove any digit outside of the pair from the base cells
               event.addOperation(i, A_candidates - A_pair);
@@ -1911,49 +1910,50 @@ typedef void (*TechniqueFn)(SudokuBoard &, EventQueue &);
 struct TechniqueEntry {
   TechniqueFn fn;
   ReasonId reason;
+  Category category;
 };
 
-static constexpr TechniqueEntry TECHNIQUES[] = {
-  {techFullHouse, ReasonId::FullHouse},
-  {techHiddenSinglesBox, ReasonId::HiddenSingle},
-  {techPointingSet, ReasonId::PointingSet},
-  {techBoxLineReduction, ReasonId::BoxLineReduction},
-  {techHiddenSinglesRowColumn, ReasonId::HiddenSingle},
-  {techHiddenPairsBox, ReasonId::HiddenPair},
-  {techHiddenPairsRowColumn, ReasonId::HiddenPair},
-  {techNakedSingles, ReasonId::NakedSingle},
-  {techNakedPairs, ReasonId::NakedPair},
-  {techNakedTriples, ReasonId::NakedTriple},
-  {techHiddenTriples, ReasonId::HiddenTriple},
-  {techBUGPlusOne, ReasonId::BUGPlusOne},
-  {techXWing, ReasonId::XWing},
-  {techXYWing, ReasonId::XYWing},
-  {techSwordfish, ReasonId::Swordfish},
-  {techRemotePair, ReasonId::RemotePair},
-  {techUniqueRectangle, ReasonId::UniqueRectangle},
-  {techWWing, ReasonId::WWing},
-  {techSingleDigitPattern, ReasonId::SingleDigitPattern},
-  {techFinnedXWing, ReasonId::FinnedXWing},
-  {techEmptyRectangle, ReasonId::EmptyRectangle},
-  {techXYZWing, ReasonId::XYZWing},
-  {techSimpleColoring, ReasonId::SimpleColoring},
-  {tech3DMedusa, ReasonId::_3DMedusa},
-  {techXChain, ReasonId::XChain},
-  {techFinnedSwordfish, ReasonId::FinnedSwordfish},
-  {techFireworks, ReasonId::Fireworks},
-  {techHiddenRectangle, ReasonId::HiddenRectangle},
-  {techJellyfish, ReasonId::Jellyfish},
-  {techXYChain, ReasonId::XYChain},
-  {techGroupedXChain, ReasonId::GroupedXChain},
-  {techFinnedJellyfish, ReasonId::FinnedJellyfish},
-  {techAIC, ReasonId::AIC},
-  {techGroupedAIC, ReasonId::GroupedAIC},
-  {techSueDeCoq, ReasonId::SueDeCoq},
-  {techALSXZ, ReasonId::ALSXZ},
-  {techALSXYWing, ReasonId::ALSXYWing},
-  {techALSChain, ReasonId::ALSChain},
-  {techDeathBlossom, ReasonId::DeathBlossom},
-  {techForcingChain, ReasonId::ForcingChain},
+static const TechniqueEntry TECHNIQUES[] = {
+  {techFullHouse,              ReasonId::FullHouse,           Category::Single},
+  {techHiddenSinglesBox,       ReasonId::HiddenSingle,        Category::Single},
+  {techPointingSet,            ReasonId::PointingSet,         Category::Intersection},
+  {techBoxLineReduction,       ReasonId::BoxLineReduction,    Category::Intersection},
+  {techHiddenSinglesRowColumn, ReasonId::HiddenSingle,        Category::Single},
+  {techHiddenPairsBox,         ReasonId::HiddenPair,          Category::NakedHiddenSet},
+  {techHiddenPairsRowColumn,   ReasonId::HiddenPair,          Category::NakedHiddenSet},
+  {techNakedSingles,           ReasonId::NakedSingle,         Category::Single},
+  {techNakedPairs,             ReasonId::NakedPair,           Category::NakedHiddenSet},
+  {techNakedTriples,           ReasonId::NakedTriple,         Category::NakedHiddenSet},
+  {techHiddenTriples,          ReasonId::HiddenTriple,        Category::NakedHiddenSet},
+  {techBUGPlusOne,             ReasonId::BUGPlusOne,          Category::BUG},
+  {techXWing,                  ReasonId::XWing,               Category::Fish},
+  {techXYWing,                 ReasonId::XYWing,              Category::Wing},
+  {techSwordfish,              ReasonId::Swordfish,           Category::Fish},
+  {techRemotePair,             ReasonId::RemotePair,          Category::Coloring},
+  {techUniqueRectangle,        ReasonId::UniqueRectangle,     Category::UR},
+  {techWWing,                  ReasonId::WWing,               Category::Wing},
+  {techSingleDigitPattern,     ReasonId::SingleDigitPattern,  Category::AIC},
+  {techFinnedXWing,            ReasonId::FinnedXWing,         Category::Fish},
+  {techEmptyRectangle,         ReasonId::EmptyRectangle,      Category::AIC},
+  {techXYZWing,                ReasonId::XYZWing,             Category::Wing},
+  {techSimpleColoring,         ReasonId::SimpleColoring,      Category::Coloring}, 
+  {tech3DMedusa,               ReasonId::_3DMedusa,           Category::Coloring},
+  {techXChain,                 ReasonId::XChain,              Category::AIC},
+  {techFinnedSwordfish,        ReasonId::FinnedSwordfish,     Category::Fish},
+  {techFireworks,              ReasonId::Fireworks,           Category::Fireworks},
+  {techHiddenRectangle,        ReasonId::HiddenRectangle,     Category::UR},
+  {techJellyfish,              ReasonId::Jellyfish,           Category::Fish},
+  {techXYChain,                ReasonId::XYChain,             Category::AIC},
+  {techGroupedXChain,          ReasonId::GroupedXChain,       Category::AIC},
+  {techFinnedJellyfish,        ReasonId::FinnedJellyfish,     Category::Fish},
+  {techAIC,                    ReasonId::AIC,                 Category::AIC},
+  {techGroupedAIC,             ReasonId::GroupedAIC,          Category::AIC},
+  {techSueDeCoq,               ReasonId::SueDeCoq,            Category::SDC},
+  {techALSXZ,                  ReasonId::ALSXZ,               Category::ALS},
+  {techALSXYWing,              ReasonId::ALSXYWing,           Category::ALS},
+  {techALSChain,               ReasonId::ALSChain,            Category::ALS},
+  {techDeathBlossom,           ReasonId::DeathBlossom,        Category::Blossom},
+  {techForcingChain,           ReasonId::ForcingChain,        Category::FC},
 };
 
 static bool is_operation_applicable(SudokuBoard &board, EventType type, Operation &op) {
@@ -2009,6 +2009,7 @@ static int drain_event(SudokuBoard &board,
         auto mask = source.mask.to_vector();
         this_source["cells"] = cells;
         this_source["digits"] = mask;
+        this_source["eureka"] = cellset_to_eureka(source.cells);
         this_list.push_back(this_source);
       }
     }
@@ -2098,7 +2099,6 @@ static int compute_next_event(SudokuBoard &board,
 // API implementation
 // =========================================================
 
-static std::string handleRequest(const json &);
 static json json_sudorix_solver_count_solutions(const json &request);
 static json json_sudorix_solver_full(const json &request);
 static json json_sudorix_solver_init_board(const json &request);
@@ -2300,10 +2300,13 @@ static json json_sudorix_solver_set_enabled_techniques(const json &request) {
 static json json_sudorix_solver_get_techniques(const json &request) {
   json response;
 
-  std::vector<ReasonId> techniques;
-
+  json techniques = json::array();
   for (auto &tech : TECHNIQUES) {
-    techniques.push_back(tech.reason);
+    json technique = {
+      {"name", tech.reason},
+      {"category", tech.category}
+    };
+    techniques.push_back(technique);
   }
 
   response["status"] = "ok";

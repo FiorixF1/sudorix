@@ -40,6 +40,10 @@ var business_logic = (() => {
     return enabledTechniques.values().toArray()
   }
 
+  function getTechniqueCategory(tech) {
+    return techniqueToCategory[tech];
+  }
+
   function loadStoredTechnique() {
     try {
       const raw = window.localStorage.getItem(TECHNIQUE_STORAGE_KEY);
@@ -63,16 +67,6 @@ var business_logic = (() => {
       /* localStorage unavailable: keep the in-memory setting only */
     }
   }
-
-  const AIC_TECHNIQUES = [
-    "Single Digit Pattern",
-    "Empty Rectangle",
-    "X-Chain",
-    "XY-Chain",
-    "Alternating Inference Chain",
-    "Grouped X-Chain",
-    "Grouped Alternating Inference Chain",
-  ];
 
   function initWasmSolver() {
     setSolverStatus(false, "WASM solvilo ne preta.");
@@ -194,18 +188,16 @@ var business_logic = (() => {
    * ========================================================= */
   const rowOf = (idx) => Math.floor(idx / 9);
   const colOf = (idx) => idx % 9;
+  const boxOf = (idx) => Math.floor(rowOf(idx)/3)*3 + Math.floor(colOf(idx)/3);
 
-  function idxToRC(idx) {
-    return { r: rowOf(idx) + 1, c: colOf(idx) + 1 };
-  }
-
-  function RCToIdx(r, c) {
-    return r*9 + c;
+  function idxToRCB(idx) {
+    return { r: rowOf(idx) + 1,
+             c: colOf(idx) + 1,
+             b: boxOf(idx) + 1 };
   }
 
   function idxToRef(idx) {
-    const r = Math.floor(idx / 9) + 1;
-    const c = (idx % 9) + 1;
+    const { r, c, b } = idxToRCB(idx);
     return `r${r}c${c}`;
   }
 
@@ -250,28 +242,8 @@ var business_logic = (() => {
     return list && list[digit - 1] ? list[digit - 1] : null;
   }
 
-  // TODO: unire celle che appartengono alla stessa riga/colonna/box
-  function formatEurekaCellCode(source) {
-    if (!source || source.length === 0) {
-      return "";
-    }
-
-    return source.map(idx => idxToRef(idx)).join(",");
-  }
-
-  function normalizeSourceCategory(category) {
-    const n = Number(category) | 0;
-    if (n < 1) {
-      return 1;
-    }
-    if (n > 13) {
-      return ((n - 1) % 13) + 1;
-    }
-    return n;
-  }
-
   function categoryClassName(category) {
-    return `flashCategory${normalizeSourceCategory(category)}`;
+    return `flashCategory${category}`;
   }
 
   function removeSourceCategoryClasses(el) {
@@ -281,16 +253,6 @@ var business_logic = (() => {
     for (let i = 1; i <= 12; i++) {
       el.classList.remove(`flashCategory${i}`);
     }
-  }
-
-  function resolveSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
-    if (typeof getSourceCategoryByReason === "function") {
-      const custom = getSourceCategoryByReason(ev, source, sourceIndex, groupIndex, sourceIndexInGroup);
-      if (custom) {
-        return normalizeSourceCategory(custom);
-      }
-    }
-    return normalizeSourceCategory(groupIndex + 1);
   }
 
   /* =========================================================
@@ -312,7 +274,7 @@ var business_logic = (() => {
 
   function addCandidateFlashMask(idx, kind, digits, sourceCategory) {
     if (kind === "source") {
-      const category = normalizeSourceCategory(sourceCategory || 1);
+      const category = sourceCategory || 1;
       for (const d of digits) {
         candFlashSourceCategory[idx][d - 1] = category;
       }
@@ -328,7 +290,7 @@ var business_logic = (() => {
   }
 
   function setCellSourceFlash(idx, category) {
-    cellFlashSourceCategory[idx] = normalizeSourceCategory(category || 1);
+    cellFlashSourceCategory[idx] = category || 1;
   }
 
   function applyCellFlashClasses(cellEl, idx) {
@@ -382,22 +344,26 @@ var business_logic = (() => {
       return;
     }
 
-    const groups = ev.sources;
-    let sourceIndex = 0;
+    const sources = ev.sources;
 
     // Sources
-    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
-      const group = groups[groupIndex];
-      for (let groupPos = 0; groupPos < group.length; groupPos++) {
-        const s = group[groupPos];
-        const category = resolveSourceCategory(ev, s, sourceIndex, groupIndex, groupPos);
-        sourceIndex++;
+    for (let sourceIndex in sources) {
+      const source = sources[sourceIndex];
+      const name = source.name;
+      const list = source.list;
 
-        if (s.cells && s.cells.length > 0) {
-          for (const idx of s.cells) {
+      for (let groupIndex in list) {
+        const group = list[groupIndex];
+        const cells = group.cells;
+        const digits = group.digits;
+
+        if (cells && cells.length > 0) {
+          for (let cellIndex in cells) {
+            const idx = cells[cellIndex];
+            const category = getSourceCategoryByTechnique(ev, name, +sourceIndex, +groupIndex, +cellIndex);
             setCellSourceFlash(idx, category);
-            addCandidateFlashMask(idx, "source", s.digits, category);
-            for (const d of s.digits) {
+            addCandidateFlashMask(idx, "source", digits, category);
+            for (const d of digits) {
               const el = getCandidateElement(idx, d);
               if (el) {
                 applyCandidateFlashClasses(el, idx, d);
@@ -452,17 +418,17 @@ var business_logic = (() => {
       return;
     }
 
-    if (AIC_TECHNIQUES.indexOf(ev.reason) != -1) {
-      // AIC
-      const groups = ev.sources;
+    if (getTechniqueCategory(ev.reason) == "AIC") {
+      const sources = ev.sources;
 
       // Draw chain from sources
-      for (let group of groups) {
+      for (let group of sources) {
         let i = 0;
         let WANT_STRONG = true;
-        while (i < group.length) {
-          const s = group[i];
-          const t = group[i+1];
+        let list = group.list;
+        while (i < list.length) {
+          const s = list[i];
+          const t = list[i+1];
           if (s && s.cells && s.cells.length > 0 &&
               t && t.cells && t.cells.length > 0) {
             addCandidateLink(s.cells[0],
@@ -480,46 +446,51 @@ var business_logic = (() => {
           ++i;
         }
       }
-    } else if (ev.reason.indexOf("Almost Locked Set") != -1) {
-      // ALS
-      const groups = ev.sources;
+    } else if (getTechniqueCategory(ev.reason) == "ALS") {
+      const sources = ev.sources;
 
       // Draw links between RCCs from sources
-      let i = 0;
-      while (i < groups[1].length) {
-        const s = groups[1][i];
-        const t = groups[1][i+1];
-        if (s && s.cells && s.cells.length > 0 &&
-            t && t.cells && t.cells.length > 0) {
-          addCandidateLink(s.cells[0],
-                           s.digits[0],
-                           t.cells[0],
-                           t.digits[0],
-                           {
-                             dashed: true,
-                             bold: false,
-                             color: null,
-                           }
-          );
+      for (let group of sources) {
+        if (group.name == "RCC") {
+          let i = 0;
+          let list = group.list;
+          while (i < list.length) {
+            const s = list[i];
+            const t = list[i+1];
+            if (s && s.cells && s.cells.length > 0 &&
+                t && t.cells && t.cells.length > 0) {
+              addCandidateLink(s.cells[0],
+                               s.digits[0],
+                               t.cells[0],
+                               t.digits[0],
+                               {
+                                 dashed: true,
+                                 bold: false,
+                                 color: null,
+                               }
+              );
+            }
+            i += 2;
+          }
         }
-        i += 2;
       }
-    } else if (ev.reason.indexOf("Forcing") != -1) {
-      // FC
-      const groups = ev.sources;
+    } else if (getTechniqueCategory(ev.reason) == "FC") {
+      const sources = ev.sources;
 
       // Draw chain from sources
-      for (let idx in groups) {
-        let group = groups[idx];
+      for (let idx in sources) {
+        let group = sources[idx];
         let i = 0;
         let WANT_STRONG = false;  // FC generally starts from a weak link
         if (ev.detailedReason == "Digit Forcing Chain" && idx == 1) {
           // unless you are reading the second chain of a Digit Forcing Chain
+          // TODO: trovare modo per rimuovere dipendenza da indice: esempio aggiungere un campo start_from = weak
           WANT_STRONG = true;
         }
-        while (i < group.length) {
-          const s = group[i];
-          const t = group[i+1];
+        let list = group.list;
+        while (i < list.length) {
+          const s = list[i];
+          const t = list[i+1];
           if (s && s.cells && s.cells.length > 0 &&
               t && t.cells && t.cells.length > 0) {
             addCandidateLink(s.cells[0],
@@ -1190,7 +1161,7 @@ var business_logic = (() => {
             return { ok: false, msg: `Eraro: nevalida valoro en ${label}.` };
           }
           if (seen[v]) {
-            const { r, c } = idxToRC(idx);
+            const { r, c, b } = idxToRCB(idx);
             return { ok: false, msg: `Eraro: duobligo de la numero ${v} en ${label} (ekz. r${r}c${c}).` };
           }
           seen[v] = true;
@@ -1267,6 +1238,7 @@ var business_logic = (() => {
   let activeColorIndex = 0;
   let availableTechniques = new Set();  // all techniques existing in the solver
   let enabledTechniques = new Set(loadStoredTechnique());  // only techniques checked by the user
+  let techniqueToCategory = {};
 
   /* Highlight digit selected by clicking solved cells (when optHighlight enabled) */
   let highlightDigit = 0;
@@ -1381,33 +1353,42 @@ var business_logic = (() => {
     techniqueListEl.innerHTML = "";
     try {
       const response = apiGetTechniques();
-      availableTechniques = response["techniques"];
-      for (const entry of availableTechniques) {
-        const label = document.createElement("label");
-        label.className = "techniqueItem";
+      const manifest = response["techniques"];
+      for (const entry of manifest) {
+        const name = entry.name;
+        const category = entry.category;
 
-        const input = document.createElement("input");
-        input.type = "checkbox";
-        input.checked = enabledTechniques.has(entry);
-        input.dataset.technique = entry;
-        input.addEventListener("change", () => {
-          if (input.checked) {
-            enabledTechniques.add(entry);
-          } else {
-            enabledTechniques.delete(entry);
-          }
-          updateTechniqueSummary();
-          saveStoredTechnique(enabledTechniques);
-          clearPendingStepPreview();
-        });
+        // avoid duplicates
+        if (!availableTechniques.has(name)) {
+          availableTechniques.add(name);
+          techniqueToCategory[name] = category;
 
-        const text = document.createElement("span");
-        text.className = "techniqueItemLabel";
-        text.textContent = entry;
+          const label = document.createElement("label");
+          label.className = "techniqueItem";
 
-        label.appendChild(input);
-        label.appendChild(text);
-        techniqueListEl.appendChild(label);
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.checked = enabledTechniques.has(name);
+          input.dataset.technique = name;
+          input.addEventListener("change", () => {
+            if (input.checked) {
+              enabledTechniques.add(name);
+            } else {
+              enabledTechniques.delete(name);
+            }
+            updateTechniqueSummary();
+            saveStoredTechnique(enabledTechniques);
+            clearPendingStepPreview();
+          });
+
+          const text = document.createElement("span");
+          text.className = "techniqueItemLabel";
+          text.textContent = name;
+
+          label.appendChild(input);
+          label.appendChild(text);
+          techniqueListEl.appendChild(label);
+        }
       }
 
       updateTechniqueSummary();
@@ -1624,7 +1605,7 @@ var business_logic = (() => {
   function formatEventLog(ev) {
     // Returns { title, bodyHtml } for appendLogEntry.
     // Different implementation for each technique, found in formatter.js
-    return formatEventLogByReason(ev);
+    return formatEventLogByTechnique(ev);
   }
 
   // Functions visible to formatter.js
@@ -1632,12 +1613,10 @@ var business_logic = (() => {
     window.SudorixFormatterContext = {
       escapeHtml,
       idxToRef,
-      formatEurekaCellCode,
-      normalizeSourceCategory,
-      resolveSourceCategory,
       addCandidateLink,
       clearCandidateLinks,
       renderChainLinks,
+      getTechniqueCategory,
       palette: PALETTE
     };
   }

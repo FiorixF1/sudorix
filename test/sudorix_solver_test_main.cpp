@@ -96,7 +96,7 @@ static void printTechniqueUsageSummary() {
   std::cout << "TECHNIQUE USAGE:\n";
   for (size_t i = 0; i < g_reasonCounts.size(); i++) {
     printedAny = true;
-    std::cout << "  " << std::left << std::setw(28)
+    std::cout << "  " << std::left << std::setw(32)
               << json(static_cast<ReasonId>(i)).dump()
               << " : " << g_reasonCounts[i] << "\n";
   }

@@ -402,6 +402,40 @@ NLOHMANN_JSON_SERIALIZE_ENUM_STRICT( ReasonId, {
   {ReasonId::QuadrupleFireworks, "Quadruple Fireworks"},
 })
 
+enum class Category : uint8_t {
+  Single = 0,
+  Intersection,
+  NakedHiddenSet,
+  Fish,
+  Wing,
+  BUG,
+  UR,
+  Coloring,
+  AIC,
+  ALS,
+  FC,
+  SDC,
+  Blossom,
+  Fireworks
+};
+
+NLOHMANN_JSON_SERIALIZE_ENUM_STRICT( Category, {
+  {Category::Single, "Single"},
+  {Category::Intersection, "Intersection"},
+  {Category::NakedHiddenSet, "Naked/Hidden Set"},
+  {Category::Fish, "Fish"},
+  {Category::Wing, "Wing"},
+  {Category::BUG, "BUG"},
+  {Category::UR, "UR"},
+  {Category::Coloring, "Coloring"},
+  {Category::AIC, "AIC"},
+  {Category::ALS, "ALS"},
+  {Category::FC, "FC"},
+  {Category::SDC, "SDC"},
+  {Category::Blossom, "Blossom"},
+  {Category::Fireworks, "Fireworks"},
+})
+
 // one operation = set value(s) or remove candidate(s) in a cell
 struct Operation {
   Cell idx;

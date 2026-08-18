@@ -5,36 +5,44 @@
     return (typeof window !== "undefined" && window.SudorixFormatterContext) ? window.SudorixFormatterContext : null;
   }
 
-  const noSourcesFormatter = {
+  const bugFormatter = {
     formatLog(ev, ctx) {
-      const groups = ev.sources;
+      const sources = ev.sources;
       const parts = [];
 
       defaultOperationsFormatter(ctx, ev, parts);
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
-      return (groupIndex % 2) + 1;
+    getSourceCategory(ev, name, sourceIndex, groupIndex, cellIndex) {
+      switch (name) {
+        case "BUG": return 1;
+        case "peers": return 2;
+      }
+      return 1;
     }
   };
-  REGISTRY["BUG+1"] = noSourcesFormatter;
+  REGISTRY["BUG"] = bugFormatter;
 
   const fishFormatter = {
     formatLog(ev, ctx) {
-      const groups = ev.sources;
+      const sources = ev.sources;
       const parts = [];
 
-      const baseSets = [];
-      for (let baseSet of groups[0]) {
-        baseSets.push(ctx.formatEurekaCellCode(baseSet.cells));
-      }
-      const digit = ev.sources[0].digits[0];
-
-      const fins = [];
-      if (groups[1]) {
-        for (let fin of groups[1]) {
-          fins.push(ctx.formatEurekaCellCode(fin.cells));
+      let baseSets = [];
+      let fins = [];
+      let digit = 0;
+      for (let group of sources) {
+        if (group.name == "base") {
+          for (let list of group.list) {
+            baseSets.push(list.eureka);
+            digit = list.digits[0];  // assume there is only one digit
+          }
+        }
+        if (group.name == "fin") {
+          for (let list of group.list) {
+            fins.push(list.eureka);
+          }
         }
       }
 
@@ -48,37 +56,31 @@
       defaultOperationsFormatter(ctx, ev, parts);
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
+    },
+    getSourceCategory(ev, name, sourceIndex, groupIndex, cellIndex) {
+      switch (name) {
+        case "base": return 1;
+        case "fin": return 2;
+      }
+      return 1;
     }
   };
-  REGISTRY["X-Wing"] = fishFormatter;
-  REGISTRY["Swordfish"] = fishFormatter;
-  REGISTRY["Jellyfish"] = fishFormatter;
-  REGISTRY["Finned X-Wing"] = fishFormatter;
-  REGISTRY["Finned Swordfish"] = fishFormatter;
-  REGISTRY["Finned Jellyfish"] = fishFormatter;
-  REGISTRY["Franken X-Wing"] = fishFormatter;
-  REGISTRY["Franken Swordfish"] = fishFormatter;
-  REGISTRY["Franken Jellyfish"] = fishFormatter;
-  REGISTRY["Finned Franken X-Wing"] = fishFormatter;
-  REGISTRY["Finned Franken Swordfish"] = fishFormatter;
-  REGISTRY["Finned Franken Jellyfish"] = fishFormatter;
-  REGISTRY["Mutant X-Wing"] = fishFormatter;
-  REGISTRY["Mutant Swordfish"] = fishFormatter;
-  REGISTRY["Mutant Jellyfish"] = fishFormatter;
-  REGISTRY["Finned Mutant X-Wing"] = fishFormatter;
-  REGISTRY["Finned Mutant Swordfish"] = fishFormatter;
-  REGISTRY["Finned Mutant Jellyfish"] = fishFormatter;
+  REGISTRY["Fish"] = fishFormatter;
 
   const rectangleFormatter = {
     formatLog(ev, ctx) {
-      const groups = ev.sources;
+      const sources = ev.sources;
       const parts = [];
 
       let digitSet = new Set();
       let rectangleSet = [];
-      for (let source of groups[0]) {
-        digitSet = digitSet.union(new Set(source.digits));
-        rectangleSet.push(ctx.formatEurekaCellCode(source.cells));
+      for (let group of sources) {
+        if (group.name == "UR") {
+          for (let list of group.list) {
+            digitSet = digitSet.union(new Set(list.digits));
+            rectangleSet.push(list.eureka);
+          }
+        }
       }
       let digits = digitSet.values().toArray();
 
@@ -87,21 +89,31 @@
       defaultOperationsFormatter(ctx, ev, parts);
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
+    },
+    getSourceCategory(ev, name, sourceIndex, groupIndex, cellIndex) {
+      switch (name) {
+        case "UR": return 1;
+        case "guardian": return 2;
+      }
+      return 1;
     }
   };
-  REGISTRY["Unique Rectangle"] = rectangleFormatter;
-  REGISTRY["Hidden Rectangle"] = rectangleFormatter;
+  REGISTRY["UR"] = rectangleFormatter;
 
   const wingFormatter = {
     formatLog(ev, ctx) {
-      const groups = ev.sources;
+      const sources = ev.sources;
       const parts = [];
 
       let digitSet = new Set();
       let wingSet = [];
-      for (let source of groups[0]) {
-        digitSet = digitSet.union(new Set(source.digits));
-        wingSet.push(ctx.formatEurekaCellCode(source.cells));
+      for (let group of sources) {
+        if (group.name == "Wing") {
+          for (let list of group.list) {
+            digitSet = digitSet.union(new Set(list.digits));
+            wingSet.push(list.eureka);
+          }
+        }
       }
       let digits = digitSet.values().toArray();
 
@@ -110,27 +122,34 @@
       defaultOperationsFormatter(ctx, ev, parts);
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
+    },
+    getSourceCategory(ev, name, sourceIndex, groupIndex, cellIndex) {
+      switch (name) {
+        case "Wing": return 1;
+        case "Z": return 2;
+      }
+      return 1;
     }
   };
-  REGISTRY["XY-Wing"] = wingFormatter;
-  REGISTRY["XYZ-Wing"] = wingFormatter;
-  REGISTRY["W-Wing"] = wingFormatter;
+  REGISTRY["Wing"] = wingFormatter;
 
   const fireworksFormatter = {
     formatLog(ev, ctx) {
-      const groups = ev.sources;
+      const sources = ev.sources;
       const parts = [];
 
-      for (let group of groups) {
+      for (let group of sources) {
         let digitSet = new Set();
-        let fireworks = [];
-        for (let source of group) {
-          digitSet = digitSet.union(new Set(source.digits));
-          fireworks.push(ctx.formatEurekaCellCode(source.cells));
+        let fireworksSet = [];
+        if (group.name.startsWith("firework")) {
+          for (let list of group.list) {
+            digitSet = digitSet.union(new Set(list.digits));
+            fireworksSet.push(list.eureka);
+          }
         }
         let digits = digitSet.values().toArray();
 
-        parts.push(`<div>{${ctx.escapeHtml(digits.join(","))}} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(fireworks)}</span> => </div>`);
+        parts.push(`<div>{${ctx.escapeHtml(digits.join(","))}} en <span class="logCellRef logSourceCategory1">${ctx.escapeHtml(fireworksSet)}</span> => </div>`);
       }
 
       defaultOperationsFormatter(ctx, ev, parts);
@@ -142,48 +161,49 @@
 
   const colorFormatter = {
     formatLog(ev, ctx) {
-      const groups = ev.sources;
+      const sources = ev.sources;
       const parts = [];
 
       defaultOperationsFormatter(ctx, ev, parts);
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
-      if (groupIndex == 0) {
+    getSourceCategory(ev, name, sourceIndex, groupIndex, cellIndex) {
+      if (name == "color_A") {
         // green for first color
         return 1;
-      } else if (groupIndex == 2) {
+      }
+      if (name == "empty") {
         // yellow for emptied cell
         return 4;
-      } else {
-        if (ev.type === "removeCandidate") {
+      }
+      if (name == "color_B") {
+        if (ev.detailedReason.includes("Wrap") || ev.detailedReason.includes("Emptied")) {
+          // red for second color when eliminated
+          return 13;
+        } else {
           // blue for second color
           return 2;
-        } else {
-          // red for second color if it is eliminated
-          return 13;
         }
       }
     }
   };
-  REGISTRY["Remote Pair"] = colorFormatter;
-  REGISTRY["Simple Coloring"] = colorFormatter;
-  REGISTRY["3D Medusa"] = colorFormatter;
+  REGISTRY["Coloring"] = colorFormatter;
 
   const chainFormatter = {
     formatLog(ev, ctx) {
-      const groups = ev.sources;
+      const sources = ev.sources;
       const parts = [];
 
-      for (let group of groups) {
+      for (let group of sources) {
         let digitCounter = new Set();
         let nodes = [];
         let digits = [];
-        for (let node of group) {
-          digitCounter = digitCounter.union(new Set(node.digits));
-          nodes.push(ctx.formatEurekaCellCode(node.cells));
-          digits.push(node.digits[0]);
+
+        for (let list of group.list) {
+          digitCounter = digitCounter.union(new Set(list.digits));
+          nodes.push(list.eureka);
+          digits.push(list.digits[0]);
         }
 
         // stringify chain (Eureka notation)
@@ -247,33 +267,28 @@
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
-      return (sourceIndex % 2) + 1;
+    getSourceCategory(ev, name, sourceIndex, groupIndex, cellIndex) {
+      // alternate color between each node
+      return (groupIndex % 2) + 1;
     }
   };
-  REGISTRY["Single Digit Pattern"] = chainFormatter;
-  REGISTRY["Empty Rectangle"] = chainFormatter;
-  REGISTRY["X-Chain"] = chainFormatter;
-  REGISTRY["XY-Chain"] = chainFormatter;
-  REGISTRY["Alternating Inference Chain"] = chainFormatter;
-  REGISTRY["Grouped X-Chain"] = chainFormatter;
-  REGISTRY["Grouped Alternating Inference Chain"] = chainFormatter;
+  REGISTRY["AIC"] = chainFormatter;
 
   const forcingFormatter = {
     formatLog(ev, ctx) {
-      const groups = ev.sources;
+      const sources = ev.sources;
       const parts = [];
       const detailedReason = ev.detailedReason;
 
-      for (let idx in groups) {
-        let group = groups[idx];
+      for (let idx in sources) {
+        let group = sources[idx];
         let digitCounter = new Set();
         let nodes = [];
         let digits = [];
-        for (let node of group) {
-          digitCounter = digitCounter.union(new Set(node.digits));
-          nodes.push(ctx.formatEurekaCellCode(node.cells));
-          digits.push(node.digits[0]);
+        for (let list of group.list) {
+          digitCounter = digitCounter.union(new Set(list.digits));
+          nodes.push(list.eureka);
+          digits.push(list.digits[0]);
         }
 
         // stringify chain (Eureka notation) - use only multi digit formatting
@@ -281,6 +296,7 @@
         let WANT_STRONG = false;  // FC generally starts from a weak link
         if (detailedReason == "Digit Forcing Chain" && idx == 1) {
           // unless you are reading the second chain of a Digit Forcing Chain
+          // TODO: trovare modo per rimuovere dipendenza da indice: esempio aggiungere un campo start_from = weak
           WANT_STRONG = true;
         }
         let i = 0;
@@ -301,8 +317,8 @@
         }
         // remove trailing space
         if (chainString.endsWith(" ")) {
-            chainString = chainString.slice(0, -1);
-          }
+          chainString = chainString.slice(0, -1);
+        }
         parts.push(`<div><span class="logCellRef logSourceCategory1">${ctx.escapeHtml(chainString)}</span> => </div>`);
       }
 
@@ -310,48 +326,54 @@
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
-      if (ev.detailedReason == "Digit Forcing Chain" && sourceIndexInGroup == 0) {
+    getSourceCategory(ev, name, sourceIndex, groupIndex, cellIndex) {
+      if (ev.detailedReason == "Digit Forcing Chain" && groupIndex == 0) {
         // in the very first digit of a Digit Forcing Chain
         // use yellow since that value is both true and false
         return 4;
-      } else if (ev.detailedReason == "Digit Forcing Chain" && groupIndex == 1) {
+      } else if (ev.detailedReason == "Digit Forcing Chain" && sourceIndex == 1) {
         // in the second chain of a Digit Forcing Chain
         // start from blue and alternate with green
-        return (sourceIndexInGroup + 1) % 2 + 1;
+        // TODO: trovare modo per rimuovere dipendenza da indice: esempio aggiungere un campo start_from = weak
+        return (groupIndex + 1) % 2 + 1;
       } else {
         // default
         // start from green and alternate with blue
-        return (sourceIndexInGroup % 2) + 1;
+        return (groupIndex % 2) + 1;
       }
+
+
     }
   };
-  REGISTRY["Forcing Chain"] = forcingFormatter;
-  REGISTRY["Forcing Net"] = forcingFormatter;
+  REGISTRY["FC"] = forcingFormatter;
 
   const alsFormatter = {
     formatLog(ev, ctx) {
-      const groups = ev.sources;
+      const sources = ev.sources;
       const parts = [];
 
       let alsCellsList = [];
       let alsDigitsList = [];
-      for (let als of groups[0]) {
-        alsCellsList.push(ctx.formatEurekaCellCode(als.cells));
-        alsDigitsList.push(als.digits);
-      }
-
       let rccs = [];
-      for (let rcc of groups[1]) {
-        rccs.push(rcc.digits[0]);
-      }
-
       let zs = [];
-      if (groups[2]) {
-        for (let z of groups[2]) {
-          let digit = z.digits[0];
-          if (zs.indexOf(digit) == -1) {
-            zs.push(digit);
+      for (let group of sources) {
+        if (group.name == "ALS") {
+          for (let list of group.list) {
+            alsCellsList.push(list.eureka);
+            alsDigitsList.push(list.digits);
+          }
+        }
+        if (group.name == "RCC") {
+          for (let list of group.list) {
+            rccs.push(list.digits);
+          }
+        }
+        if (group.name == "Z") {
+          for (let list of group.list) {
+            let digit = list.digits[0];
+            if (zs.indexOf(digit) == -1) {
+              zs.push(digit);
+            }
           }
         }
       }
@@ -374,38 +396,32 @@
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
-      if (groupIndex == 0) {
+    getSourceCategory(ev, name, sourceIndex, groupIndex, cellIndex) {
+      switch (name) {
         // use a different color for each ALS
-        return (sourceIndex % 9) + 4;
-      } else if (groupIndex == 1) {
+        case "ALS": return (groupIndex % 9) + 4;
         // purple for RCCs
-        return 3;
-      } else {
+        case "RCC": return 3;
         // blue for Z
-        return 2;
+        case "Z": return 2;
       }
+      return 1;
     }
   };
-  REGISTRY["Almost Locked Set XZ"] = alsFormatter;
-  REGISTRY["Almost Locked Set XY-Wing"] = alsFormatter;
-  REGISTRY["Almost Locked Set Chain"] = alsFormatter;
+  REGISTRY["ALS"] = alsFormatter;
 
   const sdcFormatter = {
     formatLog(ev, ctx) {
-      const groups = ev.sources;
+      const sources = ev.sources;
       const parts = [];
 
-      let sdcCellsList = [];
-      let sdcDigitsList = [];
-
       parts.push(`<div>`);
-      for (let i in groups[0]) {
-        let sdc = groups[0][i];
-        sdcCellsList.push(ctx.formatEurekaCellCode(sdc.cells));
-        sdcDigitsList.push(sdc.digits);
-        parts.push(`{${sdc.digits}} en <span class="logSourceCategory${i == 0 ? 2 : i == 1 ? 3 : 6}">${ctx.formatEurekaCellCode(sdc.cells)}</span>`);
-        if (i == groups[0].length-1) {
+      for (let idx in sources) {
+        let group = sources[idx];
+        let sdc = group.list[0];
+        let name = group.name;
+        parts.push(`{${sdc.digits}} en <span class="logSourceCategory${name == "line" ? 2 : idx == "box" ? 3 : 6}">${sdc.eureka}</span>`);
+        if (idx == sources.length-1) {
           parts.push(` => </div>`);
         } else {
           parts.push(`</br>`);
@@ -416,47 +432,42 @@
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
-      if (groupIndex == 0) {
-        if (sourceIndex == 0) {
-          // blue
-          return 2;
-        } else if (sourceIndex == 1) {
-          // purple
-          return 3;
-        } else if (sourceIndex == 2) {
-          // orange
-          return 6;
-        }
+    getSourceCategory(ev, name, sourceIndex, groupIndex, cellIndex) {
+      switch (name) {
+        case "line": return 2;  // blue
+        case "box": return 3;   // purple
+        case "extra": return 6; // orange
       }
+      return 1;
     }
   };
-  REGISTRY["Sue de Coq"] = sdcFormatter;
+  REGISTRY["SDC"] = sdcFormatter;
 
   const blossomFormatter = {
     formatLog(ev, ctx) {
-      const groups = ev.sources;
+      const sources = ev.sources;
       const parts = [];
 
-      let blossomCellsList = [];
-      let blossomDigitsList = [];
-
       parts.push(`<div>`);
-      for (let i in groups[0]) {
-        let blossom = groups[0][i];
-        blossomCellsList.push(ctx.formatEurekaCellCode(blossom.cells));
-        blossomDigitsList.push(blossom.digits);
-        // stem vs petal
-        if (i == 0) {
-          parts.push(`Tigo en <span class="logSourceCategory${(i % 9) + 2}">${ctx.formatEurekaCellCode(blossom.cells)}</span> kun {${blossom.digits}}`);
-        } else {
-          parts.push(`{${blossom.digits}} en <span class="logSourceCategory${(i % 9) + 2}">${ctx.formatEurekaCellCode(blossom.cells)}</span>`);
+      for (let group of sources) {
+        if (group.name == "stem") {
+          let blossom = group.list[0];
+          parts.push(`Tigo en <span class="logCellRef logSourceCategory1">${blossom.eureka}</span> kun {${blossom.digits}}</br>`);
         }
-        // last set
-        if (i == groups[0].length-1) {
-          parts.push(` => </div>`);
-        } else {
-          parts.push(`</br>`);
+      }
+
+      for (let group of sources) {
+        if (group.name == "petal") {
+          for (let idx in group.list) {
+            let petal = group.list[idx];
+            parts.push(`{${petal.digits}} en <span class="logSourceCategory${(idx % 9) + 3}">${petal.eureka}</span>`);
+            // last set
+            if (idx == group.list.length-1) {
+              parts.push(` => </div>`);
+            } else {
+              parts.push(`</br>`);
+            }
+          }
         }
       }
 
@@ -464,66 +475,69 @@
 
       return { title: ev.detailedReason, bodyHtml: parts.join("") };
     },
-    getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
-      if (groupIndex == 0) {
-        return sourceIndex + 2;
+    getSourceCategory(ev, name, sourceIndex, groupIndex, cellIndex) {
+      switch (name) {
+        case "stem": return 2;
+        case "petal": return (groupIndex % 9) + 3;
       }
+      return 1;
     }
   };
-  REGISTRY["Death Blossom"] = blossomFormatter;
+  REGISTRY["Blossom"] = blossomFormatter;
 
   window.SudorixFormatterRegistry = REGISTRY;
 
-  window.formatEventLogByReason = function (ev) {
+  window.formatEventLogByTechnique = function (ev) {
     const ctx = getCtx();
-    const fmt = REGISTRY[ev.reason];
+    const fmt = REGISTRY[ctx.getTechniqueCategory(ev.reason)];
     if (!ctx || !fmt || typeof fmt.formatLog !== "function") {
       return defaultFormatter(ev, ctx);
     }
     return fmt.formatLog(ev, ctx);
   };
 
-  window.getSourceCategoryByReason = function (ev, source, sourceIndex, groupIndex, sourceIndexInGroup) {
-    const fmt = REGISTRY[ev.reason];
-    if (!fmt || typeof fmt.getSourceCategory !== "function") {
+  window.getSourceCategoryByTechnique = function (ev, name, sourceIndex, groupIndex, cellIndex) {
+    const ctx = getCtx();
+    const fmt = REGISTRY[ctx.getTechniqueCategory(ev.reason)];
+    if (!ctx || !fmt || typeof fmt.getSourceCategory !== "function") {
       return 0;
     }
-    return fmt.getSourceCategory(ev, source, sourceIndex, groupIndex, sourceIndexInGroup);
+    return fmt.getSourceCategory(ev, name, sourceIndex, groupIndex, cellIndex);
   };
 
   window.defaultFormatter = function (ev, ctx) {
-    const groups = ev.sources;
+    const sources = ev.sources;
     const parts = [];
 
-    defaultSourcesFormatter(ctx, ev, parts, groups);
+    defaultSourcesFormatter(ctx, ev, parts, sources);
     defaultOperationsFormatter(ctx, ev, parts);
 
     return { title: ev.detailedReason || "Solver", bodyHtml: parts.join("") };
   }
 
-  // works well for basic techniques (naked/hidden sets and intersections)
-  window.defaultSourcesFormatter = function (ctx, ev, parts, groups) {
-    if (groups.length > 0) {
-      let sourceIndex = 0;
-      for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
-        const group = groups[groupIndex];
-        if (groups.length > 1) {
-          parts.push(`<div class="logSourceCategory${ctx.normalizeSourceCategory(groupIndex + 1)}"><b>Group ${groupIndex + 1}</b></div>`);
-        }
-        for (let groupPos = 0; groupPos < group.length; groupPos++) {
-          const s = group[groupPos];
-          const category = ctx.resolveSourceCategory(ev, s, sourceIndex, groupIndex, groupPos);
-          sourceIndex++;
-          const digs = s.digits;
-          if (s.cells && s.cells.length > 0) {
-            const ref = ctx.formatEurekaCellCode(s.cells);
-            if (digs.length > 1) {
-              parts.push(`<div>{${ctx.escapeHtml(digs.join(","))}} en <span class="logCellRef logSourceCategory${category}">${ctx.escapeHtml(ref)}</span> => </div>`);
+  // works well for basic techniques (singles, naked/hidden sets and intersections)
+  window.defaultSourcesFormatter = function (ctx, ev, parts, sources) {
+    if (sources.length > 0) {
+      for (let sourceIndex in sources) {
+        const source = sources[sourceIndex];
+        const name = source.name;
+        const list = source.list;
+
+        for (let groupIndex in list) {
+          const group = list[groupIndex];
+          const cells = group.cells;
+          const digits = group.digits;
+          const category = getSourceCategoryByTechnique(ev, name, +sourceIndex, +groupIndex, 0);
+
+          if (cells && cells.length > 0) {
+            const ref = group.eureka;
+            if (digits.length > 1) {
+              parts.push(`<div>{${ctx.escapeHtml(digits.join(","))}} en <span class="logCellRef logSourceCategory${category}">${ctx.escapeHtml(ref)}</span> => </div>`);
             } else {
-              parts.push(`<div>${ctx.escapeHtml(digs.join(","))} en <span class="logCellRef logSourceCategory${category}">${ctx.escapeHtml(ref)}</span> => </div>`);
+              parts.push(`<div>${ctx.escapeHtml(digits.join(","))} en <span class="logCellRef logSourceCategory${category}">${ctx.escapeHtml(ref)}</span> => </div>`);
             }
-          } else if (digs.length > 0) {
-            parts.push(`<div><span class="logCellRef logSourceCategory${category}">{${ctx.escapeHtml(digs.join(","))}}</span></div>`);
+          } else if (digits.length > 0) {
+            parts.push(`<div><span class="logCellRef logSourceCategory${category}">{${ctx.escapeHtml(digits.join(","))}}</span></div>`);
           }
         }
       }

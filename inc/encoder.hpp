@@ -21,4 +21,8 @@ std::vector<uint32_t> serialize_cellset_to_unitcodes(const CellSet &cells);
 // Extra encoding: bits[16..24] for digit mask
 void deserialize_unitcode(uint32_t code, CellSet &outCellSet, DigitSet &outDigitSet, bool &outIsGrouped);
 
+// Convert a CellSet to a string in Eureka notation
+// If no common unit is found, split by single cells
+std::string cellset_to_eureka(const CellSet &cells);
+
 #endif // ENCODER_HPP
