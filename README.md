@@ -113,42 +113,7 @@ Aldonu novajn teknikojn en `solver.cpp` per realigo de funkcio kun la sekva sign
 - atribui valoron al ĉeloj
 - forigi kandidatojn el ĉeloj
 
-Eventoj estas priskribataj per `uint32_t out[1024]`:
-
-- `out[0]` = tipo (`EventType::SetValue` aŭ `EventType::RemoveCandidate`)
-- `out[1]` = reasonId (ekzemple `ReasonId::NakedSingle`)
-- `out[2]` = detailedReasonId (ekzemple `ReasonId::SimpleColoringColorTrap` kiam reasonId estas `ReasonId::SimpleColoring`)
-- `out[3]` = nombro da operacioj
-- `out[4]` = nombro da fontoj
-- listo de fontoj esprimitaj kiel duopo **(ĉelaro, cifermasko)**
-- listo de operacioj esprimitaj kiel duopo **(indekso, cifermasko)**
-
-La **cifermasko** estas masko por prezenti unu aŭ plurajn ciferojn per naŭ bitoj. Ekzemploj:
-
-- `000000001` = cifero 1
-- `000000010` = cifero 2
-- `001000111` = ciferoj {1, 2, 3, 7}
-
-La **indekso** estas nombro inter 0 kaj 80 por indiki unu ĉelon el la krado, ekzemple 0 por r1c1, 80 por r9c9, 9 por r2c1, 50 por r6c6 ktp
-
-La **ĉelaro** estas kunmetita dateno por prezenti unu aŭ plurajn ĉelojn el unuo. La lastaj kvin bitoj kodas nombron, kiu indikas unuon laŭ tiu ĉi dispartigo:
-
-- `0..8` = Vico
-- `9..17` = Kolumno
-- `18..26` = Bloko
-
-La sekvantaj naŭ bitoj estas masko por indiki la ĉelojn de tiu unuo. Ekzemplo:
-
-```
-0000000000000000000 11000000 01101
-                    |        ^ 01101 = 13 = kvina kolumno
-                    ^ 11000000 = oka kaj naŭa ĉelo de la unuo
-```
-
-Tiu ĉi nombro prezentas la okan kaj naŭan ĉelon de la kvina kolumno, aŭ **r89c5** en eŭreka simbolaro.
-La masko por ĉeloj povas esti malplena kaj tiukaze ĝi prezentas malplenan aron. Tiu speciala valoro estas ofte uzata por disigi logike malsamajn grupojn de fontoj.
-
-Pluraj informoj pri la interfacoj, funkcioj kaj datenspecoj estas en dediĉita [dokumento](API.md).
+La komunikado inter la fasado kaj la internaĵo okazas per JSON-objektoj. Vizitu la [dokumentaron](API.md) por pliaj detaloj.
 
 ## Interesaj fontoj
 
@@ -157,3 +122,4 @@ Ege interesaj retejoj kaj solviloj estas enlistigitaj ĉi tie. Sur tiuj ĉi labo
 * [SudokuWiki](https://www.sudokuwiki.org/) el Andrew Stuart
 * [HoDoKu](https://hodoku.sourceforge.net/)
 * [r/Sudoku Wiki](https://www.reddit.com/r/sudoku/wiki/) el strmckr
+* [Sudoku.Coach](https://sudoku.coach/) kaj ĝia [Discord-kanalo](https://discord.gg/p2YKqXrktA)

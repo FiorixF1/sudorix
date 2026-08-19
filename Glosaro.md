@@ -21,7 +21,7 @@
 | - Naked / Hidden triple                   | - Nuda / Kaŝita triopo                    |
 | - Naked / Hidden quad                     | - Nuda / Kaŝita kvaropo                   |
 | Intersection removal                      | Intersekca forigo                         |
-| - Pointing pair / triple                  | - Celuma duopo / tripo                    |
+| - Pointing pair / triple                  | - Celuma duopo / triopo                   |
 | - Claiming pair / triple                  | - Postula duopo / triopo                  |
 | - Box/Line Reduction                      | - Bloklinia redukto                       |
 | Fish                                      | Fiŝo                                      |
@@ -37,7 +37,7 @@
 | Wing                                      | Flugilo                                   |
 | - XY-Wing                                 | - XY-Flugilo                              |
 | - XYZ-Wing                                | - XYZ-Flugilo                             |
-| - W-Wing                                  | - W-Flugilo                             |
+| - W-Wing                                  | - W-Flugilo                               |
 | - Pivot                                   | - Pivoto                                  |
 | Chain                                     | Ĉeno                                      |
 | - Skyscraper                              | - Ĉielskrapanto                           |

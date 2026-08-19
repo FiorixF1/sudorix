@@ -202,15 +202,14 @@ static int runFullSolveOne(const std::string &in81, std::string &out81, std::str
   json request;
   request["command"] = "fullSolve";
   request["puzzle"] = in81;
-  for (int i = 0; i < g_reasonCounts.size(); ++i) request["techniques"].push_back(json(static_cast<ReasonId>(i)));
-  json response = sudorix_solver_api(request);
 
-  if (response["status"].get<std::string>() == "error") {
-    why = response["error"].get<std::string>();
+  json response = sudorix_solver_api(request);
+  if (response.at("status") == "error") {
+    why = response.at("error");
     return 0;
   }
 
-  out81 = response["solution"].get<std::string>();
+  out81 = response.at("solution");
 
   return validateSolution(in81, out81, why);
 }
@@ -221,8 +220,8 @@ static int runStepSolveOne(const std::string &in81, std::string &out81, std::str
   request["puzzle"] = in81;
   json response = sudorix_solver_api(request);
 
-  if (response["status"].get<std::string>() == "error") {
-    why = response["error"].get<std::string>();
+  if (response.at("status") == "error") {
+    why = response.at("error");
     return 0;
   }
 
@@ -236,13 +235,13 @@ static int runStepSolveOne(const std::string &in81, std::string &out81, std::str
     json request;
     request["command"] = "nextStep";
     json response = sudorix_solver_api(request);
-    if (response["status"].get<std::string>() == "error") {
+    if (response.at("status") == "error") {
       break;
     }
 
     if (response.contains("step")) {
-      ReasonId reason = response["step"]["reason"];
-      ReasonId detailedReason = response["step"]["detailedReason"];
+      ReasonId reason = response["step"].at("reason");
+      ReasonId detailedReason = response["step"].at("detailedReason");
       recordReasonId(static_cast<uint32_t>(reason), static_cast<uint32_t>(detailedReason));
     }
   }
@@ -254,12 +253,12 @@ static int runStepSolveOne(const std::string &in81, std::string &out81, std::str
 
   request["command"] = "exportBoard";
   response = sudorix_solver_api(request);
-  if (response["status"].get<std::string>() == "error") {
-    why = response["error"].get<std::string>();
+  if (response.at("status") == "error") {
+    why = response.at("error");
     return 0;
   }
 
-  std::string values = response["board"]["values"].get<std::string>();
+  std::string values = response["board"].at("values");
   out81 = values;
 
   return validateSolution(in81, out81, why);
@@ -403,7 +402,11 @@ int main(int argc, char **argv) {
   request["command"] = "setEnabledTechniques";
   request["techniques"] = json::array();
   for (int i = 0; i < g_reasonCounts.size(); ++i) request["techniques"].push_back(json(static_cast<ReasonId>(i)));
-  sudorix_solver_api(request);
+  json response = sudorix_solver_api(request);
+  if (response.at("status") == "error") {
+    std::cerr << "Error when setting techniques: " << response.at("error") << "\n";
+    return -1;
+  }
 
   auto worker = [&]() {
     while (true) {
