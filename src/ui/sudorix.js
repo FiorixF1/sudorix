@@ -24,15 +24,8 @@ var business_logic = (() => {
   ];
 
   /* =========================================================
-   * WASM solver bridge (C++/Emscripten)
-   *
-   * Expects Emscripten output:
-   *   - solver_wasm.js
-   *   - solver_wasm.wasm
+   * Technique utilities
    * ========================================================= */
-  let wasmModule = null;
-  let wasmSolverAPI = null;
-
   const TECHNIQUE_STORAGE_KEY = "sudorix.enabledTechniques.v1";
 
   function getEnabledTechniques() {
@@ -65,121 +58,6 @@ var business_logic = (() => {
       window.localStorage.setItem(TECHNIQUE_STORAGE_KEY, JSON.stringify(Array.from(techs)));
     } catch (_) {
       /* localStorage unavailable: keep the in-memory setting only */
-    }
-  }
-
-  function initWasmSolver() {
-    setSolverStatus(false, "WASM solvilo ne preta.");
-
-    // createSudorixSolver is defined by solver_wasm.js (Emscripten output)
-    if (typeof createSudorixSolver !== "function") {
-      setSolverStatus(false, "solver_wasm.js ne ŝargita. Solvilo ne disponebla.");
-      return Promise.reject(
-        new Error("createSudorixSolver ne disponebla")
-      );
-    }
-
-    wasmReady = createSudorixSolver({
-      locateFile: (path) => path  // keep .wasm next to .js
-    }).then((Module) => {
-      wasmModule = Module;
-      wasmSolverAPI = wasmModule.cwrap("sudorix_solver_api", "string", ["string"]);
-      setSolverStatus(true, "WASM solvilo preta.");
-      return Module;
-    }).catch((e) => {
-      setSolverStatus(false, "WASM malsukcesis: " + (e && e.message ? e.message : String(e)));
-      wasmModule = null;
-      wasmSolverAPI = null;
-      throw e;
-    });
-
-    return wasmReady;
-  }
-
-  // General API
-  function solverApi(request) {
-    if (!wasmModule || !wasmSolverAPI) {
-      throw new Error("Funkcio sudorix_solver_api ne disponeblas en tiu ĉi WASM build.");
-    }
-
-    // JS object to string
-    const requestStr = JSON.stringify(request);
-
-    // Call WASM engine
-    const responseStr = wasmSolverAPI(requestStr);
-
-    // Convert the result to JS object
-    const response = JSON.parse(responseStr);
-
-    // Error handling
-    if (response.status !== "ok") {
-      throw new Error(response.error || "Unknown solver error");
-    }
-
-    return response;
-  }
-
-  // API wrapper
-  {
-    function apiCountSolutions(puzzle) {
-      return solverApi({
-        command: "countSolutions",
-        puzzle: puzzle
-      });
-    }
-
-    function apiFullSolve(puzzle) {
-      return solverApi({
-        command: "fullSolve",
-        puzzle: puzzle
-      });
-    }
-
-    function apiInitBoard(puzzle) {
-      return solverApi({
-        command: "initBoard",
-        puzzle: puzzle
-      });
-    }
-
-    function apiNextStep() {
-      return solverApi({
-        command: "nextStep"
-      });
-    }
-
-    function apiHint(values, candidates) {
-      return solverApi({
-        command: "hint",
-        board: {
-          values: values,
-          candidates: candidates
-        }
-      });
-    }
-  
-    function apiAllPossibleStepsForTechnique(technique, values, candidates) {
-      return solverApi({
-        command: "allPossibleSteps",
-        technique: technique,
-        board: {
-          values: values,
-          candidates: candidates
-        }
-      });
-    }
-
-    function apiSetEnabledTechniques(techniques) {
-      return solverApi({
-        command: "setEnabledTechniques",
-        techniques: techniques
-      });
-    }
-
-    function apiGetTechniques() {
-      return solverApi({
-        command: "getTechniques"
-      });
     }
   }
 
@@ -1352,7 +1230,7 @@ var business_logic = (() => {
 
     techniqueListEl.innerHTML = "";
     try {
-      const response = apiGetTechniques();
+      const response = API.getTechniques();
       const manifest = response["techniques"];
       for (const entry of manifest) {
         const name = entry.name;
@@ -1393,7 +1271,7 @@ var business_logic = (() => {
 
       updateTechniqueSummary();
     } catch (e) {
-      openCheckModal("Ne eblis ricevi la liston de teknikoj el la WASM-solvilo.");
+      openErrorModal(e);
       return;
     }
   }
@@ -1430,7 +1308,7 @@ var business_logic = (() => {
   }
 
   function setControlsDuringPreview(disabled) {
-    const ids = ["btnStep", "btnSolve", "btnSolveWasmFull", "btnAllPossibleSteps"];
+    const ids = ["btnStep", "btnSolve", "btnFullSolve", "btnAllPossibleSteps"];
     for (const id of ids) {
       const b = $(id);
       if (b) {
@@ -1635,6 +1513,10 @@ var business_logic = (() => {
   /* =========================================================
    * Modals
    * ========================================================= */
+  function openErrorModal(e) {
+    openCheckModal("ERROR: " + e.cause + " - " + e.message);
+  }
+
   function openCheckModal(msg) {
     modalMsgCheck.textContent = msg;
     modalOverlayCheck.classList.add("open");
@@ -2180,9 +2062,6 @@ var business_logic = (() => {
     }
   }
 
-  /* =========================================================
-   * Solver: event queue architecture (techniques enqueue events)
-   * ========================================================= */
   function flashCell(idx, type) {
     if (idx < 0) {
       return;
@@ -2314,7 +2193,7 @@ var business_logic = (() => {
 
       for (const op of ev.operations) {
         const idx = op.cell;
-        const digit = op.digits[0];  // TODO: nell'API potrei fare che digits è una singola cifra e non una lista per SetValue
+        const digit = op.digits[0];
 
         const wasSolved = board.isSolved(idx);
         const res = board.setManualValue(idx, digit); /* solver uses same setter but not user log */
@@ -2360,7 +2239,7 @@ var business_logic = (() => {
   }
 
   function ensureWasmReadyOrNotify() {
-    if (wasmModule && wasmSolverAPI) {
+    if (isWasmReady()) {
       return true;
     }
 
@@ -2381,10 +2260,14 @@ var business_logic = (() => {
     }
 
     try {
-      const response = apiNextStep();
+      const response = API.nextStep();
       ev = response["step"];
     } catch (e) {
-      callbackDone(false);
+      if (e.cause == "NO_STEP") {
+        callbackDone(false);
+      } else {
+        openErrorModal(e);
+      }
       return;
     }
 
@@ -2436,16 +2319,16 @@ var business_logic = (() => {
 
     try {
       const techniques = getEnabledTechniques();
-      const response = apiSetEnabledTechniques(techniques);
+      const response = API.setEnabledTechniques(techniques);
     } catch (e) {
-      openCheckModal("Ne eblis sendi la liston de teknikoj al la WASM-solvilo.");
+      openErrorModal(e);
       return;
     }
 
     try {
-      apiInitBoard(board.exportToString());
+      API.initBoard(board.exportToString());
     } catch (e) {
-      openCheckModal(e.message);
+      openErrorModal(e);
       return;
     }
 
@@ -2485,7 +2368,7 @@ var business_logic = (() => {
     startSolving();
   }
 
-  function solveWasmFull() {
+  function runFullSolve() {
     stopSolving();
 
     if (!ensureWasmReadyOrNotify()) {
@@ -2494,20 +2377,24 @@ var business_logic = (() => {
 
     try {
       const techniques = getEnabledTechniques();
-      const response = apiSetEnabledTechniques(techniques);
+      const response = API.setEnabledTechniques(techniques);
     } catch (e) {
-      openCheckModal("Ne eblis sendi la liston de teknikoj al la WASM-solvilo.");
+      openErrorModal(e);
       return;
     }
 
     try {
-      const response = apiFullSolve(board.exportToString());
+      const response = API.fullSolve(board.exportToString());
       const solution = response.solution;
       importSudoku(solution);
       appendInfo("WASM plen-solve: finita.");
     } catch (e) {
-      openCheckModal("WASM plen-solve malsukcesis (neniu rezulto).");
-      appendInfo("WASM plen-solve: malsukceso.");
+      if (e.cause == "NO_STEP") {
+        openCheckModal("WASM plen-solve malsukcesis (neniu rezulto).");
+        appendInfo("WASM plen-solve: malsukceso.");
+      } else {
+        openErrorModal(e);
+      }
     }
   }
 
@@ -2524,9 +2411,9 @@ var business_logic = (() => {
     if (!pendingStepEvent) {
       try {
         const techniques = getEnabledTechniques();
-        const response = apiSetEnabledTechniques(techniques);
+        const response = API.setEnabledTechniques(techniques);
       } catch (e) {
-        openCheckModal("Ne eblis sendi la liston de teknikoj al la WASM-solvilo.");
+        openErrorModal(e);
         return;
       }
 
@@ -2542,11 +2429,15 @@ var business_logic = (() => {
       try {
         const values = board.exportToString();
         const candidates = board.exportCandidates();
-        const response = apiHint(values, candidates);
+        const response = API.hint(values, candidates);
         ev = response["step"];
       } catch (e) {
-        appendInfo("Neniu plia evento.");
-        updateStepButtonLabel();
+        if (e.cause == "NO_STEP") {
+          appendInfo("Neniu plia evento.");
+          updateStepButtonLabel();
+        } else {
+          openErrorModal(e);
+        }
         return;
       }
 
@@ -2622,7 +2513,8 @@ var business_logic = (() => {
       }
       updateAllPossibleStepsButtonState();
 
-      appendInfo(`Ĉiuj eblaj paŝoj: ${totalEvents} eventoj trovitaj.`);
+      let j = (totalEvents > 1) ? "j" : "";
+      appendInfo(`Ĉiuj eblaj paŝoj: ${totalEvents} evento${j} trovita${j}.`);
     };
 
     const scanNextTechnique = () => {
@@ -2642,16 +2534,20 @@ var business_logic = (() => {
         try {
           const values = board.exportToString();
           const candidates = board.exportCandidates();
-          const response = apiAllPossibleStepsForTechnique(technique, values, candidates);
+          const response = API.allPossibleStepsForTechnique(technique, values, candidates);
           events = response["steps"];
         } catch (e) {
-          //appendInfo(`${technique}: ${events.error || "eraro"}`);
-          scanNextTechnique();
+          if (e.cause == "NO_STEP") {
+            scanNextTechnique();
+          } else {
+            openErrorModal(e);
+          }
           return;
         }
 
         if (events.length > 0) {
-          appendInfo(`${technique}: ${events.length} eblaj paŝoj.`);
+          let j = (events.length > 1) ? "j" : "";
+          appendInfo(`${technique}: ${events.length} ebla${j} paŝo${j}.`);
           for (const ev of events) {
             logEventOnce(ev);
           }
@@ -2861,7 +2757,7 @@ var business_logic = (() => {
   $("btnCountSolutions").addEventListener("click", () => {
     // Count solutions on the current grid (values only)
     try {
-      const response = apiCountSolutions(board.exportToString());
+      const response = API.countSolutions(board.exportToString());
       const solutions = response.solutions;
       if (solutions === -1) {
         openCheckModal("Eraro: malvalida Sudoku-ĉeno (kodiga eraro).");
@@ -2873,12 +2769,12 @@ var business_logic = (() => {
         openCheckModal("Rezulto: pluraj solvoj (" + solutions + ").");
       }
     } catch (e) {
-      openCheckModal(e.message);
+      openErrorModal(e);
     }
   });
 
   $("btnSolve").addEventListener("click", () => toggleSolving());
-  $("btnSolveWasmFull").addEventListener("click", () => solveWasmFull());
+  $("btnFullSolve").addEventListener("click", () => runFullSolve());
 
   $("btnClearLog").addEventListener("click", () => clearLog());
 
@@ -2911,9 +2807,10 @@ var business_logic = (() => {
     try {
       setSolverStatus(false, "WASM solvilo ne preta.");
       await initWasmSolver();
+      setSolverStatus(true, "WASM solvilo preta.");
       buildTechniquePanel();
     } catch (e) {
-      console.error("WASM malsukcesis:", e);
+      setSolverStatus(false, "WASM malsukcesis: " + (e && e.message ? e.message : String(e)));
     }
 
     setMode("value");

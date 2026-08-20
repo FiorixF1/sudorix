@@ -34,7 +34,7 @@ endif
 # Flags
 COMMON_FLAGS    := -std=c++20 -I$(INC_DIR) $(DEBUG_FLAG)
 CXXFLAGS        := -O3 $(COMMON_FLAGS)
-EMCCFLAGS       := -O3 $(COMMON_FLAGS)
+EMCCFLAGS       := -O3 $(COMMON_FLAGS) -fexceptions
 
 # Automatic dependency generation
 DEPFLAGS        := -MMD -MP

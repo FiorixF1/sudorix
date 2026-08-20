@@ -1979,9 +1979,7 @@ static int drain_event(SudokuBoard &board,
                        bool apply) {
   Event first;
   if (!eventQueue.peek(first)) {
-    // TODO: trovare modo migliore per indicare l'assenza di step
-    response["status"] = "error";
-    response["step"] = 0;
+    response = api_error(ApiError::NoStep, "No step found");
     return 0;
   }
 
@@ -2284,6 +2282,15 @@ static json json_sudorix_solver_set_enabled_techniques(const json &request) {
 
   json response;
   std::vector<ReasonId> techniques = request.at("techniques").get<std::vector<ReasonId>>();
+
+  // validate techniques
+  for (auto &tech : techniques) {
+    try {
+      uint32_t id = static_cast<uint32_t>(tech);
+    } catch (const json::exception &e) {
+      return api_error(ApiError::InvalidTechnique, e.what());
+    }
+  }
 
   for (bool &enabled : g_solverConfig.enabledTechniques) {
     enabled = false;
