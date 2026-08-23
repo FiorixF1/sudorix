@@ -82,13 +82,19 @@ static inline uint16_t bitForDigit(int d) {
 static constexpr size_t kReasonCount = static_cast<size_t>(ReasonId::QuadrupleFireworks) + 1;
 static std::vector<uint64_t> g_reasonCounts(kReasonCount, 0);
 
+static void recordReasonId(std::vector<uint64_t> &reasonCounts,
+                           uint32_t reasonIdRaw,
+                           uint32_t detailedReasonIdRaw) {
+  if (reasonIdRaw < reasonCounts.size()) {
+    reasonCounts[reasonIdRaw]++;
+  }
+  if (detailedReasonIdRaw != reasonIdRaw && detailedReasonIdRaw < reasonCounts.size()) {
+    reasonCounts[detailedReasonIdRaw]++;
+  }
+}
+
 static void recordReasonId(uint32_t reasonIdRaw, uint32_t detailedReasonIdRaw) {
-  if (reasonIdRaw < g_reasonCounts.size()) {
-    g_reasonCounts[reasonIdRaw]++;
-  }
-  if (detailedReasonIdRaw != reasonIdRaw && detailedReasonIdRaw < g_reasonCounts.size()) {
-    g_reasonCounts[detailedReasonIdRaw]++;
-  }
+  recordReasonId(g_reasonCounts, reasonIdRaw, detailedReasonIdRaw);
 }
 
 static void printTechniqueUsageSummary() {
@@ -198,7 +204,10 @@ static bool validateSolution(const std::string &in81, const std::string &out81, 
   return true;
 }
 
-static int runFullSolveOne(const std::string &in81, std::string &out81, std::string &why) {
+static int runFullSolveOne(const std::string &in81,
+                           std::string &out81,
+                           std::string &why,
+                           std::vector<uint64_t> &reasonCounts) {
   json request;
   request["command"] = "fullSolve";
   request["puzzle"] = in81;
@@ -207,6 +216,23 @@ static int runFullSolveOne(const std::string &in81, std::string &out81, std::str
   if (response.at("status") == "error") {
     why = response.at("error");
     return 0;
+  }
+
+  // Full solve now returns the complete sequence of events.  Keep the
+  // technique counters local to the calling worker so full mode remains
+  // completely lock-free while multiple threads execute the solver.
+  if (response.contains("steps") && response["steps"].is_array()) {
+    for (const auto &step : response["steps"]) {
+      if (!step.is_object() || !step.contains("reason") || !step.contains("detailedReason")) {
+        continue;
+      }
+
+      ReasonId reason = step.at("reason");
+      ReasonId detailedReason = step.at("detailedReason");
+      recordReasonId(reasonCounts,
+                     static_cast<uint32_t>(reason),
+                     static_cast<uint32_t>(detailedReason));
+    }
   }
 
   out81 = response.at("solution");
@@ -395,6 +421,15 @@ int main(int argc, char **argv) {
 
   std::vector<TestResult> results(cases.size());
   std::vector<uint64_t> solveTimesUs(cases.size(), 0);
+
+  // In full mode the solver is thread-safe, so each worker keeps its own
+  // technique counters.  Every thread writes to a distinct vector, and the
+  // vectors are merged only after all workers have joined.  No lock is needed.
+  std::vector<std::vector<uint64_t>> threadReasonCounts;
+  if (mode == "full") {
+    threadReasonCounts.assign(threads, std::vector<uint64_t>(kReasonCount, 0));
+  }
+
   std::atomic<size_t> nextIndex{0};
 
   // set allowed techniques - default all
@@ -408,7 +443,14 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  auto worker = [&]() {
+  auto worker = [&](unsigned int workerId) {
+    // Full mode is thread-safe.  Keep all technique accounting local to this
+    // worker and merge it into the global report after the pool has finished.
+    std::vector<uint64_t> localReasonCounts;
+    if (mode == "full") {
+      localReasonCounts.assign(kReasonCount, 0);
+    }
+
     while (true) {
       size_t i = nextIndex.fetch_add(1);
       if (i >= cases.size()) {
@@ -431,7 +473,7 @@ int main(int argc, char **argv) {
 
       auto t0 = std::chrono::steady_clock::now();
       if (mode == "full") {
-        ok = runFullSolveOne(tc.input81, out81, why);
+        ok = runFullSolveOne(tc.input81, out81, why, localReasonCounts);
       } else {
         ok = runStepSolveOne(tc.input81, out81, why);
       }
@@ -450,15 +492,30 @@ int main(int argc, char **argv) {
       }
       results[i] = std::move(r);
     }
+
+    if (mode == "full") {
+      threadReasonCounts[workerId] = std::move(localReasonCounts);
+    }
   };
 
   std::vector<std::thread> pool;
   pool.reserve(threads);
   for (unsigned int t = 0; t < threads; t++) {
-    pool.emplace_back(worker);
+    pool.emplace_back(worker, t);
   }
   for (auto &th : pool) {
     th.join();
+  }
+
+  // Merge per-thread technique counters only after all workers have stopped.
+  // This is intentionally outside the worker threads, so the hot path never
+  // contends on the global report data.
+  if (mode == "full") {
+    for (const auto &localCounts : threadReasonCounts) {
+      for (size_t i = 0; i < g_reasonCounts.size(); i++) {
+        g_reasonCounts[i] += localCounts[i];
+      }
+    }
   }
 
   size_t total = 0;
@@ -499,7 +556,7 @@ int main(int argc, char **argv) {
   std::cout << "Average time: " << avgTimeUs/1000.0 << " ms\n";
   std::cout << "Maximum time: " << maxTimeUs/1000.0 << " ms\n\n";
 
-  if (singleThreadMode) printTechniqueUsageSummary();
+  printTechniqueUsageSummary();
 
   return 0;
 }

@@ -2098,7 +2098,7 @@ static int compute_next_event(SudokuBoard &board,
 // =========================================================
 
 static json json_sudorix_solver_count_solutions(const json &request);
-static json json_sudorix_solver_full(const json &request);
+static json json_sudorix_solver_full_solve(const json &request);
 static json json_sudorix_solver_init_board(const json &request);
 static json json_sudorix_solver_next_step(const json &request);
 static json json_sudorix_solver_export_board(const json &request);
@@ -2125,7 +2125,7 @@ static json json_sudorix_solver_count_solutions(const json &request) {
   return response;
 }
 
-static json json_sudorix_solver_full(const json &request) {
+static json json_sudorix_solver_full_solve(const json &request) {
   ensure_solver_config_initialized();
 
   json response;
@@ -2145,12 +2145,15 @@ static json json_sudorix_solver_full(const json &request) {
   int guard = 0;
   const int guardMax = 200000;
 
-  json fake;
+  response["steps"] = json::array();
+
   while (guard++ < guardMax) {
-    const int ok = compute_next_event(board, queue, fake);
+    json step;
+    int ok = compute_next_event(board, queue, step);
     if (!ok) {
       break;
     }
+    response["steps"].push_back(step["step"]);
   }
 
   // Export
@@ -2360,7 +2363,7 @@ extern "C"
           response = json_sudorix_solver_count_solutions(request);
           break;
         case ApiCommand::FullSolve:
-          response = json_sudorix_solver_full(request);
+          response = json_sudorix_solver_full_solve(request);
           break;
         case ApiCommand::InitBoard:
           response = json_sudorix_solver_init_board(request);

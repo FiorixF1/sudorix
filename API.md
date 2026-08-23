@@ -101,7 +101,7 @@ Ricevas Sudokuon kiel ĉenon kaj liveras la nombron da eblaj solvoj.
 
 ## fullSolve
 
-Ricevas Sudokuon kiel ĉenon kaj solvas ĝin en unu paŝo.
+Ricevas Sudokuon kiel ĉenon kaj solvas ĝin en unu paŝo liverante ĉiujn solvopaŝojn.
 
 ### Ekzempla enigo
 
@@ -117,7 +117,34 @@ Ricevas Sudokuon kiel ĉenon kaj solvas ĝin en unu paŝo.
 ```
 {
   "status": "ok",
-  "solution": "000806029260010074009720016006000201300200600020060700937085062652000087814672953"
+  "solution": "000806029260010074009720016006000201300200600020060700937085062652000087814672953",
+  "steps": [
+    {
+      "reason": "Hidden Single",
+      "detailedReason": "Hidden Single",
+      "type": "setValue",
+      "operations": [
+        {
+          "cell": 74,
+          "digits": [6]
+        }
+      ],
+      "sources": []
+    },
+    {
+      "reason": "Hidden Single",
+      "detailedReason": "Hidden Single",
+      "type": "setValue",
+      "operations": [
+        {
+          "cell": 54,
+          "digits": [7]
+        }
+      ],
+      "sources": []
+    },
+    ...
+  ]
 }
 ```
 
