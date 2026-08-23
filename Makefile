@@ -20,7 +20,7 @@ MODE            ?= full   # full|step (step is stub in current test main)
 
 # Tools
 CXX             ?= g++
-EMCC            ?= emcc
+EMCC            ?= em++
 PYTHON          ?= python3
 
 # Debug toggle:
@@ -115,9 +115,9 @@ run: test
 # -----------
 wasm: $(WASM_JS) $(WASM_WASM)
 
-# NOTE: for WASM we compile/link all src/*.cpp in one emcc invocation.
+# NOTE: for WASM we compile/link all src/*.cpp in one em++ invocation.
 $(WASM_JS) $(WASM_WASM): $(SRCS) | $(WEB_DIR)
-	@command -v $(EMCC) >/dev/null 2>&1 || (echo "ERROR: emcc not found. Activate emsdk first (source emsdk_env.sh)." && exit 1)
+	@command -v $(EMCC) >/dev/null 2>&1 || (echo "ERROR: em++ not found. Activate emsdk first (source emsdk_env.sh)." && exit 1)
 	$(EMCC) $(SRCS) \
 	  $(EMCCFLAGS) \
 	  -sWASM=1 \
